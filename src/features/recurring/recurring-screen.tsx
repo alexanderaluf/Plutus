@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, AppState, Pressable, ScrollView, View } from "react-native";
+import { Alert, Animated, AppState, Pressable, View } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -28,6 +28,11 @@ import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
+import {
+  CollapsingHeader,
+  CollapsingHeaderSpacer,
+  useCollapsingHeader,
+} from "@/shared/ui/collapsing-header";
 import { RecurringCard } from "./components/recurring-card";
 import {
   MoneyLines,
@@ -152,28 +157,14 @@ export function RecurringScreen() {
     );
   }
   const error = actions.error || recurringError || retryError;
+  const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
     <SafeAreaView
       edges={["top"]}
       style={{ flex: 1, backgroundColor: c.background }}
     >
-      <BudgetHeader title={t("recurring.title")}>
-        <Button
-          variant="ghost"
-          isIconOnly
-          accessibilityLabel={t("recurring.info")}
-          onPress={() =>
-            Alert.alert(
-              t("recurring.info"),
-              `${t("recurring.infoBody")}\n\n${t(recurringBackgroundAvailable ? "recurring.background" : "recurring.foreground")}`,
-            )
-          }
-        >
-          <FilledIcon name="help" size={26} />
-        </Button>
-      </BudgetHeader>
       <BlurTargetView ref={target} style={{ flex: 1 }}>
-        <ScrollView
+        <Animated.ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: 12,
@@ -181,7 +172,10 @@ export function RecurringScreen() {
             paddingBottom: 160 + insets.bottom,
             gap: 16,
           }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
         >
+          <CollapsingHeaderSpacer />
           <View className="gap-1 px-2">
             <Text className="font-manrope-semibold text-lg text-accent">
               {t("recurring.monthly")}
@@ -484,8 +478,30 @@ export function RecurringScreen() {
               ))}
             </>
           )}
-        </ScrollView>
+        </Animated.ScrollView>
       </BlurTargetView>
+      <CollapsingHeader
+        horizontalInset={12}
+        headerHidden={headerHidden}
+        scrollY={scrollY}
+        topInset={insets.top}
+      >
+        <BudgetHeader title={t("recurring.title")} horizontalPadding={0}>
+          <Button
+            variant="ghost"
+            isIconOnly
+            accessibilityLabel={t("recurring.info")}
+            onPress={() =>
+              Alert.alert(
+                t("recurring.info"),
+                `${t("recurring.infoBody")}\n\n${t(recurringBackgroundAvailable ? "recurring.background" : "recurring.foreground")}`,
+              )
+            }
+          >
+            <FilledIcon name="help" size={26} />
+          </Button>
+        </BudgetHeader>
+      </CollapsingHeader>
       <RecurringScrim />
       {view === "all" && (
         <View

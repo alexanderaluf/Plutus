@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Animated, Pressable, View } from "react-native";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -26,6 +26,11 @@ import { TransactionDetailSheet } from "@/features/transactions/transaction-deta
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import {
+  CollapsingHeader,
+  CollapsingHeaderSpacer,
+  useCollapsingHeader,
+} from "@/shared/ui/collapsing-header";
 import {
   MoneyLines,
   RecurringBadge,
@@ -110,64 +115,22 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
           ),
         )
       : 0;
+  const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
     <SafeAreaView
       edges={["top"]}
       style={{ flex: 1, backgroundColor: c.background }}
     >
-      <BudgetHeader title={t("recurring.details")} disabled={busy}>
-        {item && (
-          <>
-            <Button
-              isIconOnly
-              variant="ghost"
-              isDisabled={busy}
-              accessibilityLabel={t("recurring.delete")}
-              onPress={() =>
-                Alert.alert(t("recurring.delete"), t("recurring.deleteBody"), [
-                  { text: t("recurring.cancel"), style: "cancel" },
-                  {
-                    text: t("recurring.confirm"),
-                    style: "destructive",
-                    onPress: () => {
-                      void change("delete");
-                    },
-                  },
-                ])
-              }
-            >
-              <FilledIcon name="delete" size={26} tone="danger" />
-            </Button>
-            <Button
-              isIconOnly
-              variant="ghost"
-              isDisabled={busy}
-              accessibilityLabel={t(
-                item.record.archived === true
-                  ? "recurring.restore"
-                  : "recurring.archive",
-              )}
-              onPress={() => {
-                void change("archive");
-              }}
-            >
-              <FilledIcon
-                name={
-                  item.record.archived === true ? "backup" : "database-import"
-                }
-                size={26}
-              />
-            </Button>
-          </>
-        )}
-      </BudgetHeader>
-      <ScrollView
+      <Animated.ScrollView
         contentContainerStyle={{
           padding: 14,
           gap: 22,
           paddingBottom: 120 + insets.bottom,
         }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
+        <CollapsingHeaderSpacer />
         {!item ? (
           <Text className="p-8 text-muted">{t("recurring.missing")}</Text>
         ) : (
@@ -446,7 +409,68 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
             ))}
           </>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
+      <CollapsingHeader
+        horizontalInset={14}
+        headerHidden={headerHidden}
+        scrollY={scrollY}
+        topInset={insets.top}
+      >
+        <BudgetHeader
+          title={t("recurring.details")}
+          disabled={busy}
+          horizontalPadding={0}
+        >
+          {item && (
+            <>
+              <Button
+                isIconOnly
+                variant="ghost"
+                isDisabled={busy}
+                accessibilityLabel={t("recurring.delete")}
+                onPress={() =>
+                  Alert.alert(
+                    t("recurring.delete"),
+                    t("recurring.deleteBody"),
+                    [
+                      { text: t("recurring.cancel"), style: "cancel" },
+                      {
+                        text: t("recurring.confirm"),
+                        style: "destructive",
+                        onPress: () => {
+                          void change("delete");
+                        },
+                      },
+                    ],
+                  )
+                }
+              >
+                <FilledIcon name="delete" size={26} tone="danger" />
+              </Button>
+              <Button
+                isIconOnly
+                variant="ghost"
+                isDisabled={busy}
+                accessibilityLabel={t(
+                  item.record.archived === true
+                    ? "recurring.restore"
+                    : "recurring.archive",
+                )}
+                onPress={() => {
+                  void change("archive");
+                }}
+              >
+                <FilledIcon
+                  name={
+                    item.record.archived === true ? "backup" : "database-import"
+                  }
+                  size={26}
+                />
+              </Button>
+            </>
+          )}
+        </BudgetHeader>
+      </CollapsingHeader>
       <RecurringScrim />
       {item && (
         <View

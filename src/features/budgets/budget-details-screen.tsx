@@ -11,20 +11,25 @@ import { useRouter } from "expo-router";
 import { BottomSheet, Button } from "heroui-native";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlatList, I18nManager, View } from "react-native";
+import { Animated, I18nManager, View } from "react-native";
 import {
-    SafeAreaView,
-    useSafeAreaInsets,
+  SafeAreaView,
+  useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import {
-    BudgetBadge,
-    BudgetChart,
-    BudgetHeader,
-    BudgetPanel,
-    BudgetProgress,
-    BudgetSummary,
-    BudgetToggle,
+  BudgetBadge,
+  BudgetChart,
+  BudgetHeader,
+  BudgetPanel,
+  BudgetProgress,
+  BudgetSummary,
+  BudgetToggle,
 } from "./components/budget-ui";
+import {
+  CollapsingHeader,
+  CollapsingHeaderSpacer,
+  useCollapsingHeader,
+} from "@/shared/ui/collapsing-header";
 
 export function BudgetDetailsScreen({ id }: { id: string }) {
   const { t, i18n } = useTranslation();
@@ -45,6 +50,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
     sheet === "delete",
   );
   const saving = useRef(false);
+  const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   async function mutate(action: "delete" | "home", value?: boolean) {
     if (saving.current) return;
     saving.current = true;
@@ -104,31 +110,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
       edges={["top"]}
       style={{ flex: 1, backgroundColor: c.background }}
     >
-      <BudgetHeader title={t("budgets.details.title")} disabled={busy}>
-        <Button
-          isDisabled={busy}
-          variant="ghost"
-          isIconOnly
-          accessibilityLabel={t("budgets.details.addTransaction")}
-          onPress={() =>
-            router.push({
-              pathname: "/transactions/create",
-              params: { budgetId: b.id },
-            })
-          }
-        >
-          <FilledIcon name="plus" size={26} />
-        </Button>
-        <Button
-          isDisabled={busy}
-          variant="ghost"
-          accessibilityLabel={t("budgets.details.deleteAccessibility")}
-          onPress={() => setSheet("delete")}
-        >
-          <FilledIcon name="delete" size={25} tone="danger" />
-        </Button>
-      </BudgetHeader>
-      <FlatList
+      <Animated.FlatList
         data={b.transactions}
         keyExtractor={(t) => t.id}
         contentContainerStyle={{
@@ -136,8 +118,11 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
           paddingBottom: 100 + insets.bottom,
           gap: 12,
         }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         ListHeaderComponent={
           <View className="gap-3 pb-3 pt-3">
+            <CollapsingHeaderSpacer />
             <BudgetSummary budget={b} />
             <BudgetPanel>
               <BudgetToggle
@@ -249,6 +234,40 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
           </Text>
         }
       />
+      <CollapsingHeader
+        headerHidden={headerHidden}
+        scrollY={scrollY}
+        topInset={insets.top}
+      >
+        <BudgetHeader
+          title={t("budgets.details.title")}
+          disabled={busy}
+          horizontalPadding={0}
+        >
+          <Button
+            isDisabled={busy}
+            variant="ghost"
+            isIconOnly
+            accessibilityLabel={t("budgets.details.addTransaction")}
+            onPress={() =>
+              router.push({
+                pathname: "/transactions/create",
+                params: { budgetId: b.id },
+              })
+            }
+          >
+            <FilledIcon name="plus" size={26} />
+          </Button>
+          <Button
+            isDisabled={busy}
+            variant="ghost"
+            accessibilityLabel={t("budgets.details.deleteAccessibility")}
+            onPress={() => setSheet("delete")}
+          >
+            <FilledIcon name="delete" size={25} tone="danger" />
+          </Button>
+        </BudgetHeader>
+      </CollapsingHeader>
       <View
         style={{
           position: "absolute",

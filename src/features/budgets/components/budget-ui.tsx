@@ -57,11 +57,19 @@ export function BudgetHeader({
   title,
   children,
   disabled = false,
-}: PropsWithChildren<{ title: string; disabled?: boolean }>) {
+  horizontalPadding = 12,
+}: PropsWithChildren<{
+  title: string;
+  disabled?: boolean;
+  horizontalPadding?: number;
+}>) {
   const router = useRouter();
   const { t } = useTranslation();
   return (
-    <View className="flex-row items-center gap-2 px-3 py-2">
+    <View
+      className="flex-row items-center gap-2 py-2"
+      style={{ paddingHorizontal: horizontalPadding }}
+    >
       <Button
         variant="ghost"
         isIconOnly

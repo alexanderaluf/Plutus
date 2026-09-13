@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { BlurTargetView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { BottomSheet, Button } from "heroui-native";
-import { FlatList, I18nManager, Pressable, View } from "react-native";
+import { Animated, I18nManager, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import {
   SafeAreaView,
@@ -19,14 +19,19 @@ import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import {
+  CollapsingHeader,
+  CollapsingHeaderSpacer,
+  useCollapsingHeader,
+} from "@/shared/ui/collapsing-header";
+import {
   BudgetHeader,
   BudgetOption,
   BudgetPanel,
   BudgetRing,
   BudgetSheet,
-  BudgetSummary,
   useBudgetLabels,
 } from "./components/budget-ui";
+import { BudgetOverviewCard } from "@/features/home/components/budget-card";
 
 type BudgetSort = "newest" | "name" | "mostUsed";
 
@@ -101,13 +106,13 @@ export function BudgetsScreen() {
   const { t, i18n } = useTranslation();
   const labels = useBudgetLabels();
   const { document } = useLocalData(),
-    now = useCategoryClock();
+    now = useCategoryClock(document);
   const router = useRouter(),
     insets = useSafeAreaInsets(),
     c = useAppThemeColors();
   const target = useRef<View | null>(null);
-  const [type, setType] = useState(0),
-    [compact, setCompact] = useState(false);
+  const [type, setType] = useState(0);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<BudgetSort>("newest"),
     [sheet, setSheet] = useState<"info" | "sort" | null>(null);
   const all = useMemo(() => selectBudgets(document, now), [document, now]);
@@ -132,48 +137,36 @@ export function BudgetsScreen() {
       };
     },
   );
+  const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
     <SafeAreaView
       edges={["top"]}
       style={{ flex: 1, backgroundColor: c.background }}
     >
       <BlurTargetView ref={target} style={{ flex: 1 }}>
-        <BudgetHeader title={t("budgets.list.title")}>
-          <Button
-            isIconOnly
-            variant="ghost"
-            accessibilityLabel={t("budgets.list.about")}
-            onPress={() => setSheet("info")}
-          >
-            <FilledIcon name="help" size={25} />
-          </Button>
-        </BudgetHeader>
-        <FlatList
+        <Animated.FlatList
           data={budgets}
           keyExtractor={(b) => b.id}
+          extraData={expandedId}
           contentContainerStyle={{
             paddingHorizontal: 16,
             paddingBottom: 190 + insets.bottom,
             gap: 12,
           }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           renderItem={({ item }) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("budgets.list.openBudget", {
-                name: item.name,
-              })}
-              onPress={() =>
-                router.push({
-                  pathname: "/budgets/[id]",
-                  params: { id: item.id },
-                })
+            <BudgetOverviewCard
+              budget={item}
+              expanded={expandedId === item.id}
+              onToggle={() =>
+                setExpandedId(expandedId === item.id ? null : item.id)
               }
-            >
-              <BudgetSummary budget={item} compact={compact} />
-            </Pressable>
+            />
           )}
           ListHeaderComponent={
             <View className="gap-5 pb-2 pt-4">
+              <CollapsingHeaderSpacer />
               {totals.map((total) => (
                 <View
                   key={total.currency}
@@ -216,18 +209,6 @@ export function BudgetsScreen() {
                   <Button
                     isIconOnly
                     variant="secondary"
-                    accessibilityLabel={
-                      compact
-                        ? t("budgets.list.showExpandedCards")
-                        : t("budgets.list.showCompactCards")
-                    }
-                    onPress={() => setCompact((v) => !v)}
-                  >
-                    <FilledIcon name="tune" size={22} />
-                  </Button>
-                  <Button
-                    isIconOnly
-                    variant="secondary"
                     accessibilityLabel={t("budgets.list.sortAccessibility")}
                     onPress={() => setSheet("sort")}
                   >
@@ -256,6 +237,22 @@ export function BudgetsScreen() {
           }
         />
       </BlurTargetView>
+      <CollapsingHeader
+        headerHidden={headerHidden}
+        scrollY={scrollY}
+        topInset={insets.top}
+      >
+        <BudgetHeader title={t("budgets.list.title")} horizontalPadding={0}>
+          <Button
+            isIconOnly
+            variant="ghost"
+            accessibilityLabel={t("budgets.list.about")}
+            onPress={() => setSheet("info")}
+          >
+            <FilledIcon name="help" size={25} />
+          </Button>
+        </BudgetHeader>
+      </CollapsingHeader>
       <LinearGradient
         pointerEvents="none"
         colors={

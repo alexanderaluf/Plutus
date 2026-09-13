@@ -2,8 +2,8 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { AppState } from "react-native";
 
-// Recompute on every entry, foreground transition, and local midnight.
-export function useCategoryClock() {
+// Recompute on entry, foreground, midnight, and optionally after a data commit.
+export function useCategoryClock(refreshKey?: unknown) {
   const [now, setNow] = useState(() => new Date());
   useFocusEffect(
     useCallback(() => {
@@ -30,7 +30,9 @@ export function useCategoryClock() {
         clearTimeout(timer);
         listener.remove();
       };
-    }, []),
+      // This is an intentional invalidation key, not a value read by the timer.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [refreshKey]),
   );
   return now;
 }

@@ -202,6 +202,7 @@ export function selectBudgets(document: BackupDocument, now = new Date()) {
       const tracked = current.reduce((total, t) => total + t.amount, 0);
       const remaining = limit - tracked;
       const active = now >= range.start && now < range.end;
+      const periodDays = Math.max(1, ordinal(range.end) - ordinal(range.start));
       const daysLeft = active
         ? Math.max(
             1,
@@ -266,6 +267,13 @@ export function selectBudgets(document: BackupDocument, now = new Date()) {
         percent: limit > 0 ? (tracked / limit) * 100 : 0,
         daysLeft,
         active,
+        periodDays,
+        dailyPlan: limit / periodDays,
+        periodStatus: active
+          ? ("active" as const)
+          : now < range.start
+            ? ("upcoming" as const)
+            : ("ended" as const),
         dailyAllowance: daysLeft ? Math.max(0, remaining) / daysLeft : 0,
         transactions: current,
         breakdown,

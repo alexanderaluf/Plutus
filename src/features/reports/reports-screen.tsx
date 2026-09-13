@@ -24,22 +24,25 @@ export function ReportsScreen() {
   const dailyAverage = summary.spent / Math.max(new Date().getDate(), 1);
 
   return (
-    <TabPage>
-      <PageHeader
-        action={
-          <Chip color="default" size="sm" variant="secondary">
-            <Chip.Label className="font-manrope-bold">
-              {new Date().toLocaleDateString(i18n.resolvedLanguage, {
-                month: "long",
-              })}
-            </Chip.Label>
-          </Chip>
-        }
-        description={t("reports.description")}
-        eyebrow={t("reports.eyebrow")}
-        title={t("reports.title")}
-      />
-
+    <TabPage
+      headerHeight={112}
+      header={
+        <PageHeader
+          action={
+            <Chip color="default" size="sm" variant="secondary">
+              <Chip.Label className="font-manrope-bold">
+                {new Date().toLocaleDateString(i18n.resolvedLanguage, {
+                  month: "long",
+                })}
+              </Chip.Label>
+            </Chip>
+          }
+          description={t("reports.description")}
+          eyebrow={t("reports.eyebrow")}
+          title={t("reports.title")}
+        />
+      }
+    >
       <SpendingChartCard
         changePercent={0}
         dailyAverage={dailyAverage}

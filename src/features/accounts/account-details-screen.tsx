@@ -1,39 +1,36 @@
 import { useLocalData } from "@/data/local-data-provider";
 import { deleteAccountFromDocument } from "@/data/model/account-record";
 import {
-    accountPeriodRange,
-    filterAccountTransactions,
-    selectAccounts,
-    selectAccountTransactions,
+  accountPeriodRange,
+  filterAccountTransactions,
+  selectAccounts,
+  selectAccountTransactions,
 } from "@/data/selectors/document-selectors";
 import { formatCurrency } from "@/shared/lib/currency";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { useAppLocalization } from "@/localization/localization-provider";
-import {
-  colorWithAlpha,
-  useAppThemeColors,
-} from "@/shared/theme/app-theme";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurTargetView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BottomSheet, Button } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Animated, Pressable, StyleSheet, View } from "react-native";
 import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
-import {
-    SafeAreaView,
-    useSafeAreaInsets,
+  SafeAreaView,
+  useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { AccountCard } from "./components/account-card";
 import { AccountPeriodSelector } from "./components/account-period-selector";
 import type { AccountPeriod } from "./types";
 import { Text } from "@/shared/ui/app-text";
+import {
+  CollapsingHeader,
+  CollapsingHeaderSpacer,
+  useCollapsingHeader,
+} from "@/shared/ui/collapsing-header";
 
 export function AccountDetailsScreen() {
   const { t, i18n } = useTranslation();
@@ -149,6 +146,7 @@ export function AccountDetailsScreen() {
       setDeleting(false);
     }
   }
+  const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
 
   if (!account)
     return (
@@ -176,183 +174,162 @@ export function AccountDetailsScreen() {
       style={[styles.screen, { backgroundColor: theme.background }]}
     >
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-        <View style={styles.header}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("accounts.common.backToAccounts")}
-          onPress={() => router.dismissTo("/accounts")}
-          style={styles.iconButton}
-        >
-          <FilledIcon name="arrow-left" size={26} />
-        </Pressable>
-        <Text
-          accessibilityRole="header"
-          className="flex-1 font-manrope-bold text-xl text-foreground"
-        >
-          {t("accounts.details.title")}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t("accounts.details.options")}
-          onPress={() => setMenu("actions")}
-          style={styles.iconButton}
-        >
-          <Text style={{ color: theme.foreground, fontSize: 30 }}>⋮</Text>
-        </Pressable>
-        </View>
-        <FlatList
-        data={visible}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingBottom: 110 + insets.bottom,
-        }}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={{ gap: 20 }}>
-            <AccountCard account={account} />
+        <Animated.FlatList
+          data={visible}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingBottom: 110 + insets.bottom,
+          }}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={{ gap: 20 }}>
+              <CollapsingHeaderSpacer />
+              <AccountCard account={account} />
+              <View
+                style={[styles.summary, { backgroundColor: theme.surface }]}
+              >
+                <Text className="font-manrope-bold text-base text-accent">
+                  {allTime
+                    ? t("accounts.details.allTime")
+                    : t("accounts.details.activity", { period: periodLabel })}
+                </Text>
+                {(totals.length
+                  ? totals
+                  : [{ currency: account.currencyCode, income: 0, expense: 0 }]
+                ).map((total) => (
+                  <View key={total.currency} style={styles.row}>
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Text className="text-sm text-muted">
+                        {t("accounts.details.incomeCurrency", {
+                          currency: total.currency,
+                        })}
+                      </Text>
+                      <Text className="font-manrope-bold text-lg text-[#82d6a1]">
+                        {formatCurrency(total.income, total.currency)}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, gap: 6 }}>
+                      <Text className="text-sm text-muted">
+                        {t("accounts.details.expenseCurrency", {
+                          currency: total.currency,
+                        })}
+                      </Text>
+                      <Text className="font-manrope-bold text-lg text-[#ef8175]">
+                        {formatCurrency(total.expense, total.currency)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.row}>
+                <Text
+                  accessibilityRole="header"
+                  className="flex-1 font-manrope-bold text-lg text-foreground"
+                >
+                  {t("accounts.details.transactions", {
+                    count: visible.length,
+                  })}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: allTime }}
+                  onPress={() => setAllTime(true)}
+                  style={styles.iconButton}
+                >
+                  <Text className="font-manrope-semibold text-sm text-accent">
+                    {t("accounts.details.allHistory")}
+                  </Text>
+                </Pressable>
+              </View>
+              <View style={[styles.row, { marginBottom: 12 }]}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("accounts.details.previousPeriod")}
+                  onPress={() => movePeriod(-1)}
+                  style={styles.iconButton}
+                >
+                  <Text className="text-xl text-foreground">
+                    {isRTL ? "›" : "‹"}
+                  </Text>
+                </Pressable>
+                <Text className="flex-1 text-center font-sans text-sm text-muted">
+                  {dateLabel}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("accounts.details.nextPeriod")}
+                  onPress={() => movePeriod(1)}
+                  style={styles.iconButton}
+                >
+                  <Text className="text-xl text-foreground">
+                    {isRTL ? "‹" : "›"}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          }
+          renderItem={({ item }) => (
             <View
-              style={[styles.summary, { backgroundColor: theme.surface }]}
+              style={[styles.transaction, { borderBottomColor: theme.border }]}
             >
-              <Text className="font-manrope-bold text-base text-accent">
-                {allTime
-                  ? t("accounts.details.allTime")
-                  : t("accounts.details.activity", { period: periodLabel })}
-              </Text>
-              {(totals.length
-                ? totals
-                : [{ currency: account.currencyCode, income: 0, expense: 0 }]
-              ).map((total) => (
-                <View key={total.currency} style={styles.row}>
-                  <View style={{ flex: 1, gap: 6 }}>
-                    <Text className="text-sm text-muted">
-                      {t("accounts.details.incomeCurrency", {
-                        currency: total.currency,
-                      })}
-                    </Text>
-                    <Text className="font-manrope-bold text-lg text-[#82d6a1]">
-                      {formatCurrency(total.income, total.currency)}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, gap: 6 }}>
-                    <Text className="text-sm text-muted">
-                      {t("accounts.details.expenseCurrency", {
-                        currency: total.currency,
-                      })}
-                    </Text>
-                    <Text className="font-manrope-bold text-lg text-[#ef8175]">
-                      {formatCurrency(total.expense, total.currency)}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-            <View style={styles.row}>
+              <FilledIcon
+                name={
+                  item.type === "income"
+                    ? "arrow-bottom-left"
+                    : item.type === "expense"
+                      ? "arrow-top-right"
+                      : "swap-horizontal"
+                }
+                color={
+                  item.type === "income"
+                    ? "#82d6a1"
+                    : item.type === "expense"
+                      ? theme.danger
+                      : theme.accent
+                }
+                size={24}
+              />
+              <View style={{ flex: 1, gap: 5 }}>
+                <Text className="font-manrope-semibold text-base text-foreground">
+                  {item.name}
+                </Text>
+                <Text className="font-sans text-xs text-muted">
+                  {item.type === "transfer"
+                    ? t("accounts.details.transfer")
+                    : item.category}{" "}
+                  ·{" "}
+                  {item.timestamp == null
+                    ? t("accounts.details.unknownDate")
+                    : new Date(item.timestamp).toLocaleDateString(
+                        i18n.resolvedLanguage,
+                      )}
+                </Text>
+              </View>
               <Text
-                accessibilityRole="header"
-                className="flex-1 font-manrope-bold text-lg text-foreground"
+                className="font-manrope-bold text-sm"
+                style={{
+                  color: item.type === "income" ? "#82d6a1" : theme.foreground,
+                }}
               >
-                {t("accounts.details.transactions", {
-                  count: visible.length,
-                })}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityState={{ selected: allTime }}
-                onPress={() => setAllTime(true)}
-                style={styles.iconButton}
-              >
-                <Text className="font-manrope-semibold text-sm text-accent">
-                  {t("accounts.details.allHistory")}
-                </Text>
-              </Pressable>
-            </View>
-            <View style={[styles.row, { marginBottom: 12 }]}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("accounts.details.previousPeriod")}
-                onPress={() => movePeriod(-1)}
-                style={styles.iconButton}
-              >
-                <Text className="text-xl text-foreground">
-                  {isRTL ? "›" : "‹"}
-                </Text>
-              </Pressable>
-              <Text className="flex-1 text-center font-sans text-sm text-muted">
-                {dateLabel}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("accounts.details.nextPeriod")}
-                onPress={() => movePeriod(1)}
-                style={styles.iconButton}
-              >
-                <Text className="text-xl text-foreground">
-                  {isRTL ? "‹" : "›"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        }
-        renderItem={({ item }) => (
-          <View
-            style={[styles.transaction, { borderBottomColor: theme.border }]}
-          >
-            <FilledIcon
-              name={
-                item.type === "income"
-                  ? "arrow-bottom-left"
+                {item.type === "income"
+                  ? "+"
                   : item.type === "expense"
-                    ? "arrow-top-right"
-                    : "swap-horizontal"
-              }
-              color={
-                item.type === "income"
-                  ? "#82d6a1"
-                  : item.type === "expense"
-                    ? theme.danger
-                    : theme.accent
-              }
-              size={24}
-            />
-            <View style={{ flex: 1, gap: 5 }}>
-              <Text className="font-manrope-semibold text-base text-foreground">
-                {item.name}
-              </Text>
-              <Text className="font-sans text-xs text-muted">
-                {item.type === "transfer"
-                  ? t("accounts.details.transfer")
-                  : item.category} ·{" "}
-                {item.timestamp == null
-                  ? t("accounts.details.unknownDate")
-                  : new Date(item.timestamp).toLocaleDateString(
-                      i18n.resolvedLanguage,
-                    )}
+                    ? "−"
+                    : ""}
+                {formatCurrency(item.amount, item.currencyCode)}
               </Text>
             </View>
-            <Text
-              className="font-manrope-bold text-sm"
-              style={{
-                color:
-                  item.type === "income" ? "#82d6a1" : theme.foreground,
-              }}
-            >
-              {item.type === "income"
-                ? "+"
-                : item.type === "expense"
-                  ? "−"
-                  : ""}
-              {formatCurrency(item.amount, item.currencyCode)}
+          )}
+          ListEmptyComponent={
+            <Text className="py-10 text-center font-sans text-base text-muted">
+              {transactions.length
+                ? t("accounts.details.emptyPeriod")
+                : t("accounts.details.emptyAccount")}
             </Text>
-          </View>
-        )}
-        ListEmptyComponent={
-          <Text className="py-10 text-center font-sans text-base text-muted">
-            {transactions.length
-              ? t("accounts.details.emptyPeriod")
-              : t("accounts.details.emptyAccount")}
-          </Text>
-        }
+          }
         />
         <LinearGradient
           pointerEvents="none"
@@ -364,6 +341,36 @@ export function AccountDetailsScreen() {
           style={[styles.scrim, { height: 110 + insets.bottom }]}
         />
       </BlurTargetView>
+      <CollapsingHeader
+        headerHidden={headerHidden}
+        scrollY={scrollY}
+        topInset={insets.top}
+      >
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("accounts.common.backToAccounts")}
+            onPress={() => router.dismissTo("/accounts")}
+            style={styles.iconButton}
+          >
+            <FilledIcon name="arrow-left" size={26} />
+          </Pressable>
+          <Text
+            accessibilityRole="header"
+            className="flex-1 font-manrope-bold text-xl text-foreground"
+          >
+            {t("accounts.details.title")}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("accounts.details.options")}
+            onPress={() => setMenu("actions")}
+            style={styles.iconButton}
+          >
+            <Text style={{ color: theme.foreground, fontSize: 30 }}>⋮</Text>
+          </Pressable>
+        </View>
+      </CollapsingHeader>
       <View style={[styles.dock, { bottom: Math.max(insets.bottom, 10) }]}>
         <AccountPeriodSelector
           blurTarget={blurTargetRef}
@@ -505,7 +512,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 12,
     paddingVertical: 12,
   },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },

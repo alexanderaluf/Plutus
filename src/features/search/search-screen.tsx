@@ -24,12 +24,16 @@ export function SearchScreen() {
   );
 
   return (
-    <TabPage>
-      <PageHeader
-        description={t("search.description")}
-        eyebrow={t("search.eyebrow")}
-        title={t("search.title")}
-      />
+    <TabPage
+      headerHeight={112}
+      header={
+        <PageHeader
+          description={t("search.description")}
+          eyebrow={t("search.eyebrow")}
+          title={t("search.title")}
+        />
+      }
+    >
       <TransactionSearchField value={query} onChange={setQuery} />
       {!query ? (
         <RecentSearches queries={recentQueries} onSelect={setQuery} />

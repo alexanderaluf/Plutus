@@ -1,5 +1,7 @@
 import { ACCOUNT_ICONS } from "@/features/accounts/account-options";
 import { selectBudgets } from "./budget-selectors";
+import { selectExchangeQuote } from "./exchange-rate-selectors";
+import { selectRecurrings, selectRecurringEvents } from "./recurring-selectors";
 import type {
     Account,
     AccountPeriod,
@@ -387,6 +389,102 @@ export function selectAccountTotalsByCurrency(accounts: Account[]) {
       ),
     }),
   );
+}
+
+/** Home projections only use device records and saved currency quotes. */
+export function selectHomeOverview(document: BackupDocument, currencyCode: string, now = new Date()) {
+  const currency = currencyCode.toUpperCase();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const upcomingEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30);
+  const accounts = selectAccounts(document).filter(account => !account.isExcluded);
+  const includedAccountIds = new Set(accounts.map(account => account.id));
+  const rates = new Map<string, { rate: number; date: string } | null>();
+  function quote(code: string) {
+    if (!rates.has(code)) {
+      const direct = selectExchangeQuote(document, code, currency, now);
+      const inverse = direct ? null : selectExchangeQuote(document, currency, code, now);
+      rates.set(code, direct ?? (inverse ? { rate: 1 / inverse.rate, date: inverse.date } : null));
+    }
+    return rates.get(code) ?? null;
+  }
+  function sum(values: { amount: number; currencyCode: string }[]) {
+    let amount = 0;
+    const unconverted = new Map<string, number>();
+    const rateDates = new Set<string>();
+    for (const value of values) {
+      if (!Number.isFinite(value.amount) || value.amount === 0) continue;
+      const code = value.currencyCode.toUpperCase();
+      if (code === currency) amount += value.amount;
+      else {
+        const rate = quote(code);
+        if (rate && Number.isFinite(value.amount * rate.rate)) {
+          amount += value.amount * rate.rate;
+          rateDates.add(rate.date);
+        } else {
+          unconverted.set(code, (unconverted.get(code) ?? 0) + value.amount);
+        }
+      }
+    }
+    return {
+      amount,
+      currencyCode: currency,
+      unconverted: [...unconverted].map(([currencyCode, amount]) => ({ currencyCode, amount })),
+      rateDate: [...rateDates].sort()[0] ?? null,
+    };
+  }
+  const monthly = selectTransactions(document).filter(transaction => {
+    const date = new Date(transaction.occurredAtIso);
+    return transaction.type !== 2 && date >= monthStart && date <= now &&
+      (!transaction.accountId || includedAccountIds.has(transaction.accountId));
+  });
+  // Account amounts retain the conversion used when a transaction was recorded.
+  const recordedMoney = (type: number) => monthly.filter(t => t.type === type).map(t => ({
+    amount: t.accountAmount, currencyCode: t.accountCurrencyCode,
+  }));
+  const income = recordedMoney(1), expense = recordedMoney(0);
+  const recurrings = selectRecurrings(document, now).filter(recurring => {
+    const account = document.accounts.find(a => references(a, recurring.record.account));
+    return !account || (belongsToProfile(document, account) && account.isExcluded !== true);
+  });
+  const upcoming = selectRecurringEvents(recurrings, today, upcomingEnd)
+    .filter(event => event.status === "pending");
+  const upcomingExpense = upcoming.filter(event => event.type === 0);
+  const upcomingIncome = upcoming.filter(event => event.type === 1);
+  const next = upcoming[0];
+  return {
+    currencyCode: currency,
+    accountCount: accounts.length,
+    balance: sum(accounts.map(a => ({ amount: a.balance, currencyCode: a.currencyCode }))),
+    assets: sum(accounts.map(a => ({ amount: Math.max(0, a.balance), currencyCode: a.currencyCode }))),
+    debt: sum(accounts.map(a => ({ amount: Math.abs(Math.min(0, a.balance)), currencyCode: a.currencyCode }))),
+    income: sum(income),
+    expense: sum(expense),
+    net: sum([...income, ...expense.map(value => ({ ...value, amount: -value.amount }))]),
+    dailyExpense: sum(expense.map(value => ({ ...value, amount: value.amount / now.getDate() }))),
+    transactionCount: monthly.length,
+    upcomingExpense: sum(upcomingExpense),
+    upcomingIncome: sum(upcomingIncome),
+    upcomingNet: sum([...upcomingIncome, ...upcomingExpense.map(value => ({ ...value, amount: -value.amount }))]),
+    upcomingCount: upcoming.length,
+    overdueCount: recurrings.filter(r => !r.archived && r.valid && r.next && r.next < today).length,
+    next: next ? { name: next.recurring.name, date: next.date } : null,
+  };
+}
+
+export type HomeOverview = ReturnType<typeof selectHomeOverview>;
+export type HomeMoney = HomeOverview["balance"];
+
+/** Active expense budgets that are over budget or below their daily plan come first. */
+export function selectTrackedBudgets(document: BackupDocument, now = new Date()) {
+  const priority = (budget: ReturnType<typeof selectBudgets>[number]) => {
+    if (!budget.active) return 0;
+    if (budget.transactionType !== 0) return 1;
+    if (budget.remaining < 0) return 4;
+    return budget.dailyAllowance < budget.dailyPlan ? 3 : 2;
+  };
+  return selectBudgets(document, now).filter(budget => budget.showOnHome)
+    .sort((a, b) => priority(b) - priority(a) || b.percent - a.percent || a.id.localeCompare(b.id));
 }
 
 // Exclusion affects calculations; records remain visible in activity and search.
