@@ -26,7 +26,7 @@ export const LANGUAGE_OPTIONS: readonly LanguageOption[] = [
   {
     code: "ru",
     direction: "ltr",
-    isAvailable: false,
+    isAvailable: true,
     nameKey: "language.russian",
     nativeName: "Русский",
   },

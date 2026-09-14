@@ -13,6 +13,32 @@ export const he = {
     unknownDate: "תאריך לא ידוע",
     untitledTransaction: "עסקה ללא שם",
   },
+  credits: {
+    developedBy: "פותח על ידי",
+    inCollaborationWith: "בשיתוף פעולה עם",
+    openInBrowser: "נפתח בדפדפן שלך",
+    openLinkError: {
+      description: "נסה שוב מאוחר יותר.",
+      title: "לא ניתן לפתוח את הקישור",
+    },
+    links: {
+      alexanderAluf: {
+        accessibilityLabel: "פרופיל GitHub של אלכסנדר אלוף",
+        subtitle: "@alexanderaluf",
+        title: "אלכסנדר אלוף",
+      },
+      plutus: {
+        accessibilityLabel: "קוד המקור של Plutus ב-GitHub",
+        subtitle: "צפייה בקוד המקור",
+        title: "Plutus",
+      },
+      projectAurora: {
+        accessibilityLabel: "פרופיל GitHub של Project Aurora LTD",
+        subtitle: "@ReWhite-io",
+        title: "Project Aurora LTD",
+      },
+    },
+  },
   iconPicker: {
     title: "בחירת סמל",
     close: "סגירת בורר הסמלים",
@@ -1125,14 +1151,25 @@ export const he = {
     transactionAccessibility: "פתיחת העסקה אצל {{merchant}}",
     recentActivity: {
       title: "פעילות אחרונה",
+      allTitle: "כל העסקאות",
       description: "התנועות האחרונות בחשבונות שלך",
       showLess: "הצגת פחות",
       seeAll: "הצגת הכול",
       empty: "עדיין אין פעילות אחרונה.",
     },
+    sectionSelector: {
+      accessibilityLabel: "בחירת תוכן דף הבית",
+      budgets: "תקציבים",
+      categories: "קטגוריות",
+      transactions: "עסקאות",
+    },
+    categories: {
+      empty: "עדיין אין קטגוריות.",
+    },
     budgets: {
       title: "התקציבים שלך",
       seeAll: "הצגת הכול",
+      manage: "ניהול תקציבים",
       open: "פתיחת התקציב {{name}}",
       more: "הרחבה",
       less: "צמצום",
@@ -1242,6 +1279,8 @@ export const he = {
     },
     list: {
       title: "קטגוריות",
+      seeAll: "הצגת הכול",
+      manage: "ניהול קטגוריות",
       about: "על קטגוריות",
       aboutDescription:
         "ארגנו עסקאות של הוצאות, הכנסות והעברות. הסכומים החודשיים כוללים גם תת־קטגוריות. פתחו קטגוריה כדי לראות את ההיסטוריה שלה או לנהל את תת־הקטגוריות שלה.",

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useRouter } from "expo-router";
+import { Button } from "heroui-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 import Animated, {
@@ -223,7 +224,13 @@ export function BudgetOverviewCard({
     </Animated.View>
   );
 }
-export function BudgetCard({ budgets }: { budgets: Budget[] }) {
+export function BudgetCard({
+  budgets,
+  showAll = false,
+}: {
+  budgets: Budget[];
+  showAll?: boolean;
+}) {
   const router = useRouter();
   const { t } = useTranslation();
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -236,18 +243,18 @@ export function BudgetCard({ budgets }: { budgets: Budget[] }) {
           </Text>
           <Text className="text-xs text-muted">{budgets.length}</Text>
         </View>
-        <Pressable
+        <Button
+          size="sm"
+          variant="outline"
           onPress={() => router.push("/budgets")}
-          accessibilityRole="button"
-          className="min-h-11 flex-row items-center gap-1"
         >
-          <Text className="font-manrope-semibold text-xs text-accent">
-            {t("home.budgets.seeAll")}
-          </Text>
-          <FilledIcon name="chevron-right" size={16} tone="accent" />
-        </Pressable>
+          <FilledIcon name="plus" size={16} tone="accent" />
+          <Button.Label className="font-manrope-semibold text-accent">
+            {t("home.budgets.manage")}
+          </Button.Label>
+        </Button>
       </View>
-      {budgets.slice(0, 3).map((b) => (
+      {(showAll ? budgets : budgets.slice(0, 3)).map((b) => (
         <BudgetOverviewCard
           key={b.id}
           budget={b}
@@ -255,7 +262,7 @@ export function BudgetCard({ budgets }: { budgets: Budget[] }) {
           onToggle={() => setExpandedId(expandedId === b.id ? null : b.id)}
         />
       ))}
-      {budgets.length > 3 && (
+      {!showAll && budgets.length > 3 && (
         <Pressable
           onPress={() => router.push("/budgets")}
           accessibilityRole="button"

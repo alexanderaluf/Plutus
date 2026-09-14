@@ -1,13 +1,15 @@
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, ScrollView, View } from "react-native";
 import Animated, {
-    Easing,
-    FadeInDown,
-    ReduceMotion,
+  Easing,
+  FadeInDown,
+  ReduceMotion,
 } from "react-native-reanimated";
 
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+
+import { CreditsFooter } from "./credits-footer";
 
 type SettingsItem = {
   id: string;
@@ -229,6 +231,9 @@ export function ProfileSettingsPage({
       </Animated.View>
       <Animated.View entering={createRevealAnimation(130)}>
         <SettingsGroup items={toolSettings} onOpenConverter={onOpenConverter} />
+      </Animated.View>
+      <Animated.View entering={createRevealAnimation(205)}>
+        <CreditsFooter />
       </Animated.View>
     </ScrollView>
   );

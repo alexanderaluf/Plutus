@@ -13,6 +13,32 @@ export const en = {
     unknownDate: "Unknown date",
     untitledTransaction: "Untitled transaction",
   },
+  credits: {
+    developedBy: "Developed by",
+    inCollaborationWith: "In collaboration with",
+    openInBrowser: "Opens in your browser",
+    openLinkError: {
+      description: "Please try again later.",
+      title: "Unable to open link",
+    },
+    links: {
+      alexanderAluf: {
+        accessibilityLabel: "Alexander Aluf's GitHub profile",
+        subtitle: "@alexanderaluf",
+        title: "Alexander Aluf",
+      },
+      plutus: {
+        accessibilityLabel: "Plutus source code on GitHub",
+        subtitle: "View source code",
+        title: "Plutus",
+      },
+      projectAurora: {
+        accessibilityLabel: "Project Aurora LTD's GitHub profile",
+        subtitle: "@ReWhite-io",
+        title: "Project Aurora LTD",
+      },
+    },
+  },
   iconPicker: {
     title: "Choose icon",
     close: "Close icon picker",
@@ -1149,14 +1175,25 @@ export const en = {
     transactionAccessibility: "Open {{merchant}} transaction",
     recentActivity: {
       title: "Recent activity",
+      allTitle: "All transactions",
       description: "Your latest account movements",
       showLess: "Show less",
       seeAll: "See all",
       empty: "No recent activity yet.",
     },
+    sectionSelector: {
+      accessibilityLabel: "Choose home content",
+      budgets: "Budgets",
+      categories: "Categories",
+      transactions: "Transactions",
+    },
+    categories: {
+      empty: "No categories yet.",
+    },
     budgets: {
       title: "Your budgets",
       seeAll: "See all",
+      manage: "Manage budgets",
       open: "Open {{name}} budget",
       more: "Expand",
       less: "Collapse",
@@ -1269,6 +1306,8 @@ export const en = {
     },
     list: {
       title: "Categories",
+      seeAll: "See all",
+      manage: "Manage categories",
       about: "About categories",
       aboutDescription:
         "Organize expense, income, and transfer transactions. Monthly totals include children. Open a category to view its history or manage its children.",
