@@ -9,6 +9,10 @@ export function formatCurrency(value: number, currency = "USD") {
 }
 
 export function formatSignedCurrency(value: number, currency = "USD") {
-  const prefix = value >= 0 ? "+" : "-";
-  return `${prefix}${formatCurrency(value, currency)}`;
+  return new Intl.NumberFormat(i18n.resolvedLanguage ?? "en", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: currency === "USD" ? 2 : undefined,
+    signDisplay: "always",
+  }).format(value);
 }

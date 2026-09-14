@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Animated, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { selectHomeOverview } from "@/data/selectors/document-selectors";
 import { BudgetHeader } from "@/features/budgets/components/budget-ui";
@@ -25,6 +25,7 @@ export function InsightsScreen() {
   const [visible, setVisible] = useState(hidden !== "1");
   const { document } = useLocalData();
   const { activeProfile } = useProfiles();
+  const insets = useSafeAreaInsets();
   const now = useCategoryClock(document);
   const overview = useMemo(
     () => selectHomeOverview(document, activeProfile.currencyCode, now),
@@ -55,6 +56,7 @@ export function InsightsScreen() {
         horizontalInset={20}
         headerHidden={headerHidden}
         scrollY={scrollY}
+        topInset={insets.top}
       >
         <BudgetHeader title={t("home.overview.allInsights")} horizontalPadding={0}>
           <OverviewPrivacyButton

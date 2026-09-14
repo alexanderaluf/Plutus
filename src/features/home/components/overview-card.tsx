@@ -5,7 +5,7 @@ import type {
   HomeMoney,
   HomeOverview,
 } from "@/data/selectors/document-selectors";
-import { formatCurrency } from "@/shared/lib/currency";
+import { formatCurrency, formatSignedCurrency } from "@/shared/lib/currency";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
@@ -134,14 +134,14 @@ function Money({
         style={{ fontVariant: ["tabular-nums"] }}
       >
         {visible
-          ? `${value.rateDate || value.unconverted.length ? "≈ " : ""}${value.amount < 0 ? "−" : ""}${formatCurrency(value.amount, value.currencyCode)}`
+          ? `${value.rateDate || value.unconverted.length ? "≈ " : ""}${value.amount < 0 ? formatSignedCurrency(value.amount, value.currencyCode) : formatCurrency(value.amount, value.currencyCode)}`
           : "••••••"}
       </Text>
       {visible &&
         value.unconverted.map((item) => (
           <Text key={item.currencyCode} className="text-xs text-muted">
-            {item.amount < 0 ? "−" : "+"}
-            {formatCurrency(item.amount, item.currencyCode)} {item.currencyCode}
+            {formatSignedCurrency(item.amount, item.currencyCode)}{" "}
+            {item.currencyCode}
           </Text>
         ))}
     </View>
