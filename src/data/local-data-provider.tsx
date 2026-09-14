@@ -28,6 +28,7 @@ import type {
   BackupDocument,
 } from "./model/backup-document";
 import { createDefaultBackup } from "./model/default-backup";
+import { getSetupStatus } from "./model/onboarding";
 import {
   selectDueCardPayments,
   settleDueCardPayments,
@@ -80,6 +81,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   const [background, accent] = useThemeColor(["background", "accent"]);
   const [document, setDocument] = useState(createDefaultBackup);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [hydrationError, setHydrationError] = useState<Error | null>(null);
   const documentRef = useRef(document);
   const writeQueue = useRef(Promise.resolve());
   const [paymentError, setPaymentError] = useState("");
@@ -94,7 +96,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   const recurringWork = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
-    if (!isHydrated) return;
+    if (!isHydrated || getSetupStatus(document) !== "ready") return;
     const timer = setTimeout(() => {
       void syncRecurringReminders(document)
         .then(() => setReminderError(""))
@@ -110,7 +112,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   }, [document, isHydrated]);
 
   useEffect(() => {
-    if (!isHydrated) return;
+    if (!isHydrated || getSetupStatus(document) !== "ready") return;
     const run = () => {
       void reconcileRecurringPayments().catch(() =>
         setRecurringError(
@@ -135,7 +137,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
       clearInterval(timer);
       subscription.remove();
     };
-  }, [isHydrated]);
+  }, [isHydrated, document.users.length]);
 
   function recurringStore() {
     return {
@@ -147,7 +149,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
     };
   }
   async function reconcileRecurringPayments() {
-    if (!hydrationRef.current) return;
+    if (!hydrationRef.current || getSetupStatus(documentRef.current) !== "ready") return;
     if (recurringWork.current) return recurringWork.current;
     recurringWork.current = reconcileRecurring(recurringStore())
       .then((result) => {
@@ -181,7 +183,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   }
 
   useEffect(() => {
-    void refresh();
+    void refresh().catch(error => setHydrationError(error instanceof Error ? error : new Error("Could not open local data.")));
   }, []);
 
   useEffect(() => {
@@ -238,7 +240,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   }
 
   async function reconcileCardPayments() {
-    if (!hydrationRef.current) return;
+    if (!hydrationRef.current || getSetupStatus(documentRef.current) !== "ready") return;
     if (settlementWork.current) return settlementWork.current;
     const work = async () => {
       const now = new Date();
@@ -378,6 +380,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
     }));
   }
 
+  if (hydrationError) throw hydrationError;
   if (!isHydrated) {
     return (
       <View

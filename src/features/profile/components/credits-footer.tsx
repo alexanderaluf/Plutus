@@ -3,8 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
 
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
-import { FilledIcon } from "@/shared/ui/filled-icon";
 import { Text } from "@/shared/ui/app-text";
+import { FilledIcon } from "@/shared/ui/filled-icon";
 
 type CreditLink = {
   accessibilityLabelKey:
@@ -27,7 +27,7 @@ type CreditLink = {
 const developerLinks: CreditLink[] = [
   {
     accessibilityLabelKey: "credits.links.alexanderAluf.accessibilityLabel",
-    image: require("../../../../assets/icons-android/alexander-aluf.png"),
+    image: require("../../../../assets/icons-android/alexander-aluf.jpg"),
     subtitleKey: "credits.links.alexanderAluf.subtitle",
     titleKey: "credits.links.alexanderAluf.title",
     url: "https://github.com/alexanderaluf",
@@ -44,7 +44,7 @@ const developerLinks: CreditLink[] = [
 
 const collaborationLink: CreditLink = {
   accessibilityLabelKey: "credits.links.projectAurora.accessibilityLabel",
-  image: require("../../../../assets/icons-android/project-aurora.png"),
+  image: require("../../../../assets/icons-android/project-aurora.jpg"),
   subtitleKey: "credits.links.projectAurora.subtitle",
   titleKey: "credits.links.projectAurora.title",
   url: "https://github.com/ReWhite-io",

@@ -1,6 +1,8 @@
+import { onboardingEn } from "./onboarding";
 import { recurringEn } from "./recurring";
 
 export const en = {
+  onboarding: onboardingEn,
   recurring: recurringEn,
   common: {
     back: "Go back",
@@ -243,6 +245,19 @@ export const en = {
       create: "Create profile",
       select: "Select {{name}}",
       edit: "Edit {{name}}",
+      delete: {
+        accessibility: "Delete {{name}}",
+        title: "Delete {{name}}?",
+        description:
+          "This permanently deletes this profile and all of its accounts, transactions, budgets, recurring payments, categories, saved templates, and other related records. This cannot be undone.",
+        lastProfile:
+          "This is your only profile. After deletion, Plutus will return to initial setup with only the base categories.",
+        cancel: "Cancel",
+        confirm: "Delete profile",
+        deleting: "Deleting…",
+        error: "The profile could not be deleted. Your data was not changed.",
+        missing: "This profile no longer exists.",
+      },
       roles: {
         personal: "Personal",
         sharedBudget: "Shared budget",

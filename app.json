@@ -3,21 +3,23 @@
     "name": "Plutus",
     "slug": "plutus",
     "version": "1.0.0",
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "platforms": ["ios", "android"],
     "orientation": "portrait",
     "backgroundColor": "#DCE7E0",
     "scheme": "plutus",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.plutus.budgettracker",
+      "icon": "./assets/plutus.icon"
     },
     "android": {
       "package": "com.plutus.budgettracker",
       "backgroundColor": "#DCE7E0",
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icons-android/adaptive-icon.png",
+        "backgroundColor": "#DCE7E0"
+      }
     },
     "plugins": [
       "expo-router",
@@ -42,7 +44,13 @@
         {
           "backgroundColor": "#DCE7E0",
           "image": "./assets/splash-logo.png",
-          "imageWidth": 100
+          "imageWidth": 100,
+          "android": {
+            "image": "./assets/icons-android/splash-icon-light.png",
+            "dark": {
+              "image": "./assets/icons-android/splash-icon-dark.png"
+            }
+          }
         }
       ],
       "expo-sqlite",
@@ -53,14 +61,8 @@
         {
           "supportsRTL": true,
           "supportedLocales": {
-            "ios": [
-              "en",
-              "he"
-            ],
-            "android": [
-              "en",
-              "he"
-            ]
+            "ios": ["en", "he"],
+            "android": ["en", "he"]
           }
         }
       ],

@@ -6,10 +6,8 @@ import { selectSearchResults } from "@/data/selectors/document-selectors";
 import { PageHeader } from "@/shared/ui/page-header";
 import { TabPage } from "@/shared/ui/tab-page";
 
-import { RecentSearches } from "./components/recent-searches";
 import { SearchResults } from "./components/search-results";
 import { TransactionSearchField } from "./components/transaction-search-field";
-import { recentQueryKeys } from "./data/search-data";
 import { filterTransactions } from "./lib/filter-transactions";
 
 export function SearchScreen() {
@@ -19,9 +17,6 @@ export function SearchScreen() {
   const deferredQuery = useDeferredValue(query);
   const searchableTransactions = selectSearchResults(document);
   const results = filterTransactions(searchableTransactions, deferredQuery);
-  const recentQueries = recentQueryKeys.map((key) =>
-    t(`search.recent.queries.${key}`),
-  );
 
   return (
     <TabPage
@@ -35,9 +30,6 @@ export function SearchScreen() {
       }
     >
       <TransactionSearchField value={query} onChange={setQuery} />
-      {!query ? (
-        <RecentSearches queries={recentQueries} onSelect={setQuery} />
-      ) : null}
       <SearchResults query={deferredQuery} results={results} />
     </TabPage>
   );

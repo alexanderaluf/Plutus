@@ -20,6 +20,7 @@ type LocalizationContextValue = {
   direction: AppDirection;
   isRTL: boolean;
   language: AppLanguage;
+  setPreviewLanguage: (language: AppLanguage | null) => void;
 };
 
 const nativeIsRTL = I18nManager.isRTL;
@@ -27,6 +28,7 @@ const LocalizationContext = createContext<LocalizationContextValue>({
   direction: nativeIsRTL ? "rtl" : "ltr",
   isRTL: nativeIsRTL,
   language: i18n.resolvedLanguage === "he" ? "he" : "en",
+  setPreviewLanguage: () => undefined,
 });
 const DirectionalView = View as ComponentType<
   ViewProps & { dir?: AppDirection }
@@ -34,7 +36,8 @@ const DirectionalView = View as ComponentType<
 
 export function LocalizationProvider({ children }: PropsWithChildren) {
   const { document } = useLocalData();
-  const language = document._local.appLanguage;
+  const [previewLanguage, setPreviewLanguage] = useState<AppLanguage | null>(null);
+  const language = previewLanguage ?? document._local.appLanguage;
   const isRTL = language === "he";
   const direction: AppDirection = isRTL ? "rtl" : "ltr";
   const [isLanguageReady, setIsLanguageReady] = useState(
@@ -46,7 +49,6 @@ export function LocalizationProvider({ children }: PropsWithChildren) {
 
     async function applyLanguage() {
       if (i18n.resolvedLanguage !== language) {
-        setIsLanguageReady(false);
         await i18n.changeLanguage(language);
       }
       if (active) setIsLanguageReady(true);
@@ -68,7 +70,7 @@ export function LocalizationProvider({ children }: PropsWithChildren) {
 
   return (
     <I18nextProvider i18n={i18n}>
-      <LocalizationContext.Provider value={{ direction, isRTL, language }}>
+      <LocalizationContext.Provider value={{ direction, isRTL, language, setPreviewLanguage }}>
         <DirectionalView dir={direction} style={{ direction, flex: 1 }}>
           {children}
         </DirectionalView>

@@ -19,7 +19,7 @@ require.extensions[".ts"] = (module, filename) => {
     );
   module._compile(source, filename);
 };
-const { createDefaultBackup } = require("../src/data/model/default-backup.ts");
+const { createLegacyDevelopmentBackup: createDefaultBackup } = require("./fixtures/legacy-development-backup.ts");
 const {
   normalizeBackupDocument,
 } = require("../src/data/model/normalize-backup.ts");
@@ -413,6 +413,7 @@ test("v7-to-v13 migration preserves imported category data and survives SQLite r
   let sqlite = new DatabaseSync(filename);
   const adapter = {
     execAsync: async (sql) => sqlite.exec(sql),
+    getAllAsync: async (sql, ...params) => sqlite.prepare(sql).all(...params),
     getFirstAsync: async (sql, ...params) => sqlite.prepare(sql).get(...params),
     runAsync: async (sql, ...params) => sqlite.prepare(sql).run(...params),
     withExclusiveTransactionAsync: async (work) => {
@@ -451,8 +452,8 @@ test("v7-to-v13 migration preserves imported category data and survives SQLite r
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 16);
-    assert.equal(restored._local.schemaVersion, 16);
+    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 17);
+    assert.equal(restored._local.schemaVersion, 17);
     assert.equal(restored.categories.length, 1);
     assert.equal(restored.categories[0].parentId, null);
     assert.deepEqual(restored.categories[0].custom, { keep: true });
@@ -468,7 +469,7 @@ test("v7-to-v13 migration preserves imported category data and survives SQLite r
   }
 });
 
-test("v9 migration refreshes an untouched legacy default category set and re-points its transactions and budgets", async () => {
+test("upgrades preserve legacy categories and their transaction and budget relationships", async () => {
   const os = require("node:os");
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "budget-categories-refresh-"),
@@ -477,6 +478,7 @@ test("v9 migration refreshes an untouched legacy default category set and re-poi
   let sqlite = new DatabaseSync(filename);
   const adapter = {
     execAsync: async (sql) => sqlite.exec(sql),
+    getAllAsync: async (sql, ...params) => sqlite.prepare(sql).all(...params),
     getFirstAsync: async (sql, ...params) => sqlite.prepare(sql).get(...params),
     runAsync: async (sql, ...params) => sqlite.prepare(sql).run(...params),
     withExclusiveTransactionAsync: async (work) => {
@@ -543,21 +545,10 @@ test("v9 migration refreshes an untouched legacy default category set and re-poi
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(restored.categories.length, 18);
-    assert.ok(
-      restored.categories.some((category) => category.uuid === "category-food"),
-    );
-    assert.ok(
-      restored.categories.some(
-        (category) => category.uuid === "category-salary",
-      ),
-    );
-    const salaryTx = restored.transactions.find((t) => t.uuid === "tx-salary");
-    assert.equal(salaryTx.category, "category-salary");
-    assert.equal(salaryTx.categoryName, "Salary");
-    const coffeeTx = restored.transactions.find((t) => t.uuid === "tx-coffee");
-    assert.equal(coffeeTx.category, "category-food");
-    assert.equal(coffeeTx.categoryName, "Food");
+    assert.deepEqual(restored.categories.map(c => c.uuid), document.categories.map(c => c.uuid));
+    assert.deepEqual(restored.budgets[0].categories, ["category-dining", "category-coffee"]);
+    assert.equal(restored.transactions[0].category, "category-income");
+    assert.equal(restored.transactions[1].category, "category-coffee");
   } finally {
     sqlite.close();
     assert.equal(
@@ -571,7 +562,7 @@ test("v9 migration refreshes an untouched legacy default category set and re-poi
   }
 });
 
-test("v10 migration drops an untouched v9-era Project Aurora category and re-points its transactions", async () => {
+test("upgrades preserve a legacy Project Aurora category and its transaction references", async () => {
   const os = require("node:os");
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "budget-categories-aurora-"),
@@ -580,6 +571,7 @@ test("v10 migration drops an untouched v9-era Project Aurora category and re-poi
   let sqlite = new DatabaseSync(filename);
   const adapter = {
     execAsync: async (sql) => sqlite.exec(sql),
+    getAllAsync: async (sql, ...params) => sqlite.prepare(sql).all(...params),
     getFirstAsync: async (sql, ...params) => sqlite.prepare(sql).get(...params),
     runAsync: async (sql, ...params) => sqlite.prepare(sql).run(...params),
     withExclusiveTransactionAsync: async (work) => {
@@ -633,15 +625,15 @@ test("v10 migration drops an untouched v9-era Project Aurora category and re-poi
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(restored.categories.length, 18);
+    assert.equal(restored.categories.length, 19);
     assert.ok(
-      !restored.categories.some(
+      restored.categories.some(
         (category) => category.uuid === "category-project-aurora",
       ),
     );
     const auroraTx = restored.transactions.find((t) => t.uuid === "tx-aurora");
-    assert.equal(auroraTx.category, "category-others");
-    assert.equal(auroraTx.categoryName, "Others");
+    assert.equal(auroraTx.category, "category-project-aurora");
+    assert.equal(auroraTx.categoryName, "Project Aurora");
   } finally {
     sqlite.close();
     assert.equal(
@@ -653,7 +645,7 @@ test("v10 migration drops an untouched v9-era Project Aurora category and re-poi
   }
 });
 
-test("a device already stuck at the current PRAGMA user_version still gets stale default categories refreshed", async () => {
+test("partially migrated databases preserve legacy and custom categories", async () => {
   const os = require("node:os");
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "budget-categories-stuck-"),
@@ -662,6 +654,7 @@ test("a device already stuck at the current PRAGMA user_version still gets stale
   let sqlite = new DatabaseSync(filename);
   const adapter = {
     execAsync: async (sql) => sqlite.exec(sql),
+    getAllAsync: async (sql, ...params) => sqlite.prepare(sql).all(...params),
     getFirstAsync: async (sql, ...params) => sqlite.prepare(sql).get(...params),
     runAsync: async (sql, ...params) => sqlite.prepare(sql).run(...params),
     withExclusiveTransactionAsync: async (work) => {
@@ -713,11 +706,11 @@ test("a device already stuck at the current PRAGMA user_version still gets stale
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 16);
-    assert.equal(restored.categories.length, 19);
-    assert.equal(restored._local.defaultCategoriesRevision, 1);
+    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 17);
+    assert.equal(restored.categories.length, 7);
+    assert.equal(restored._local.defaultCategoriesRevision, 0);
     assert.ok(
-      !restored.categories.some(
+      restored.categories.some(
         (category) => category.uuid === "category-dining",
       ),
     );
@@ -727,8 +720,8 @@ test("a device already stuck at the current PRAGMA user_version still gets stale
       ),
     );
     const salaryTx = restored.transactions.find((t) => t.uuid === "tx-salary");
-    assert.equal(salaryTx.category, "category-salary");
-    assert.equal(salaryTx.categoryName, "Salary");
+    assert.equal(salaryTx.category, "category-income");
+    assert.equal(salaryTx.categoryName, "Income");
   } finally {
     sqlite.close();
     assert.equal(

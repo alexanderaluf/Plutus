@@ -2,19 +2,21 @@ import { normalizeAccountRecord } from "./account-record";
 import { normalizeRecurringRecord } from "./recurring-record";
 import { normalizeBudgetRecord } from "./budget-record";
 import {
-    ACCENT_COLOR_IDS,
+  ACCENT_COLOR_IDS,
   APP_LANGUAGES,
-    BACKUP_COLLECTION_KEYS,
-    BACKUP_VERSION,
+  DATE_FORMATS,
+  type AppDateFormat,
+  BACKUP_COLLECTION_KEYS,
+  BACKUP_VERSION,
   DEFAULT_APP_LANGUAGE,
-    DEFAULT_ACCENT_COLOR,
-    LOCAL_SCHEMA_VERSION,
-    THEME_MODES,
-    type AccentColorId,
-    type AppLanguage,
-    type AttachmentManifest,
-    type BackupDocument,
-    type ThemeMode,
+  DEFAULT_ACCENT_COLOR,
+  LOCAL_SCHEMA_VERSION,
+  THEME_MODES,
+  type AccentColorId,
+  type AppLanguage,
+  type AttachmentManifest,
+  type BackupDocument,
+  type ThemeMode,
 } from "./backup-document";
 import { normalizeCategoryRecord } from "./category-record";
 import { RATE_SOURCE } from "./exchange-rate";
@@ -47,8 +49,7 @@ function isAccentColor(value: unknown): value is AccentColorId {
 
 function isAppLanguage(value: unknown): value is AppLanguage {
   return (
-    typeof value === "string" &&
-    APP_LANGUAGES.includes(value as AppLanguage)
+    typeof value === "string" && APP_LANGUAGES.includes(value as AppLanguage)
   );
 }
 
@@ -118,6 +119,14 @@ export function normalizeBackupDocument(value: unknown): BackupDocument {
 
   for (const key of BACKUP_COLLECTION_KEYS) {
     const collection = value[key];
+    if (
+      collection !== undefined &&
+      (!Array.isArray(collection) || !collection.every(isJsonObject))
+    ) {
+      throw new Error(
+        `The ${key} collection is damaged or uses an unsupported format. The original data has been retained.`,
+      );
+    }
     document[key] = Array.isArray(collection)
       ? collection.filter(isJsonObject)
       : [];
@@ -166,6 +175,38 @@ export function normalizeBackupDocument(value: unknown): BackupDocument {
       : DEFAULT_ACCENT_COLOR,
     attachments: normalizeAttachments(local.attachments),
     cloudProvider: null,
+    onboardingCompletedAt:
+      typeof local.onboardingCompletedAt === "string"
+        ? local.onboardingCompletedAt
+        : null,
+    dataMode:
+      local.dataMode === "demo" || local.dataMode === "restored"
+        ? local.dataMode
+        : "fresh",
+    mainCurrency:
+      typeof local.mainCurrency === "string" &&
+      /^[A-Z]{3}$/.test(local.mainCurrency)
+        ? local.mainCurrency
+        : typeof document.users[0]?.currency === "string"
+          ? document.users[0].currency
+          : "USD",
+    dateFormat: DATE_FORMATS.includes(local.dateFormat as AppDateFormat)
+      ? (local.dateFormat as AppDateFormat)
+      : "DD/MM/YYYY",
+    monthStartDay:
+      typeof local.monthStartDay === "number" &&
+      Number.isInteger(local.monthStartDay) &&
+      local.monthStartDay >= 1 &&
+      local.monthStartDay <= 31
+        ? local.monthStartDay
+        : 1,
+    weekStartDay:
+      typeof local.weekStartDay === "number" &&
+      Number.isInteger(local.weekStartDay) &&
+      local.weekStartDay >= 0 &&
+      local.weekStartDay <= 6
+        ? local.weekStartDay
+        : 0,
   };
 
   return document;
@@ -180,6 +221,24 @@ export function parseBackupDocument(json: string): BackupDocument {
     }
     throw error;
   }
+}
+
+/** Persisted canonical documents have already passed import normalization.
+ * Missing envelope fields here indicate damage, not an incomplete import. */
+export function parseStoredDocument(json: string): BackupDocument {
+  const raw: unknown = JSON.parse(json);
+  if (
+    !isJsonObject(raw) ||
+    !Array.isArray(raw.users) ||
+    !isJsonObject(raw._local) ||
+    typeof raw.backupVersion !== "number" ||
+    typeof raw._local.schemaVersion !== "number"
+  ) {
+    throw new Error(
+      "The saved document has an unsupported structure. Existing data has not been reset.",
+    );
+  }
+  return normalizeBackupDocument(raw);
 }
 
 export function cloneBackupDocument(document: BackupDocument) {

@@ -1,11 +1,21 @@
 import type { JsonObject, JsonValue } from "./json";
 
 export const BACKUP_VERSION = 3;
-export const LOCAL_SCHEMA_VERSION = 16;
+export const LOCAL_SCHEMA_VERSION = 17;
 export const DEFAULT_CATEGORIES_REVISION = 1;
 
 export const APP_LANGUAGES = ["en", "he", "ru"] as const;
 export type AppLanguage = (typeof APP_LANGUAGES)[number];
+export const DATE_FORMATS = [
+  "DD/MM/YY",
+  "DD/MM/YYYY",
+  "MM/DD/YY",
+  "MM/DD/YYYY",
+  "YYYY/MM/DD",
+  "YYYY-MM-DD",
+  "DD.MM.YYYY",
+] as const;
+export type AppDateFormat = (typeof DATE_FORMATS)[number];
 export const DEFAULT_APP_LANGUAGE: AppLanguage = "en";
 
 export const THEME_MODES = ["system", "light", "dark"] as const;
@@ -65,6 +75,12 @@ export interface LocalBackupMetadata extends JsonObject {
   accentColor: AccentColorId;
   attachments: AttachmentManifest[];
   cloudProvider: null;
+  onboardingCompletedAt: string | null;
+  dataMode: "fresh" | "demo" | "restored";
+  mainCurrency: string;
+  dateFormat: AppDateFormat;
+  monthStartDay: number;
+  weekStartDay: number;
 }
 
 export interface BackupDocument extends JsonObject {

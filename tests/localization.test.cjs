@@ -64,7 +64,9 @@ test("Hebrew catalog preserves interpolation tokens and protected literals", () 
   const english = flattenCatalog(en);
   const hebrew = flattenCatalog(he);
   const interpolationToken = /{{[^{}]+}}/g;
-  const protectedLiteral = /YYYY-MM-DD|→|·|…|\.\.\.|–|#[0-9A-Fa-f]{6}|\+|%/g;
+  // Sentence punctuation and arrow direction can change in RTL translations.
+  // Protect machine-readable formats, colors and mathematical literals.
+  const protectedLiteral = /YYYY-MM-DD|#[0-9A-Fa-f]{6}|\+|%/g;
 
   for (const [keyPath, englishValue] of english) {
     const hebrewValue = hebrew.get(keyPath);

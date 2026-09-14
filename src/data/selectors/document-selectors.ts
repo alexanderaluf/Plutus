@@ -24,6 +24,7 @@ import {
 } from "../model/savings-account";
 
 import type { BackupDocument } from "../model/backup-document";
+import { formatAppDate } from "../model/onboarding";
 import type { JsonObject, JsonValue } from "../model/json";
 
 export { selectBudgets, selectBudgetCurrency } from "./budget-selectors";
@@ -37,6 +38,11 @@ export {
 } from "./category-selectors";
 
 const colors = ["#70d2eb", "#b89cf5", "#f2c66d", "#ef8175"];
+
+export function selectAppPreferences(document: BackupDocument) {
+  const { appLanguage, mainCurrency, dateFormat, monthStartDay, weekStartDay } = document._local;
+  return { appLanguage, mainCurrency, dateFormat, monthStartDay, weekStartDay };
+}
 
 function text(value: JsonValue | undefined, fallback = "") {
   return typeof value === "string" ? value : fallback;
@@ -79,15 +85,12 @@ function categoryIcon(category: string): FilledIconName {
   return "cash";
 }
 
-function transactionDate(record: JsonObject) {
+function transactionDate(record: JsonObject, document: BackupDocument) {
   const value = text(record.date, text(record.createdAt));
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? i18n.t("common.unknownDate")
-    : date.toLocaleDateString(i18n.resolvedLanguage, {
-        month: "short",
-        day: "numeric",
-      });
+    : formatAppDate(date, document._local.dateFormat);
 }
 
 function relatedName(
@@ -539,7 +542,7 @@ export function selectTransactions(document: BackupDocument): Transaction[] {
         description: text(record.description),
         category,
         categoryId: categoryRecord ? identity(categoryRecord) : "",
-        occurredAt: transactionDate(record),
+        occurredAt: transactionDate(record, document),
         occurredAtIso,
         amount: type === 1 ? absoluteAmount : -absoluteAmount,
         absoluteAmount,
@@ -621,7 +624,7 @@ export function selectSearchResults(document: BackupDocument): SearchResult[] {
       title: text(record.name, i18n.t("common.untitledTransaction")),
       category,
       account,
-      date: transactionDate(record),
+      date: transactionDate(record, document),
       amount: transactionAmount(record),
       currencyCode: /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : "USD",
       icon: categoryIcon(category),

@@ -4,11 +4,11 @@ import { Huninn_400Regular } from "@expo-google-fonts/huninn/400Regular";
 import { useFonts } from "expo-font";
 import { NavigationBar } from "expo-navigation-bar";
 import {
-    DarkTheme,
-    DefaultTheme,
-    Stack,
-    ThemeProvider,
-    type Theme,
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider,
+  type Theme,
 } from "expo-router";
 import { SQLiteProvider } from "expo-sqlite";
 import { StatusBar } from "expo-status-bar";
@@ -19,7 +19,9 @@ import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { LayoutDirection, useUniwind } from "uniwind";
 
-import { migrateLocalDatabase } from "@/data/database/migrations";
+import { initializeLocalDatabase } from "@/data/database/safe-startup";
+import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
+import { StorageBoundary } from "@/features/onboarding/storage-recovery-screen";
 import { LocalDataProvider } from "@/data/local-data-provider";
 import { ProfileProvider } from "@/features/profile/profile-provider";
 import {
@@ -27,8 +29,8 @@ import {
   useAppLocalization,
 } from "@/localization/localization-provider";
 import {
-    AppThemeController,
-    useAppThemeColors,
+  AppThemeController,
+  useAppThemeColors,
 } from "@/shared/theme/app-theme";
 
 const ROOT_BACKGROUNDS = {
@@ -41,9 +43,7 @@ function LocalizedHeroUIProvider({ children }: PropsWithChildren) {
 
   return (
     <LayoutDirection rtl={isRTL}>
-      <HeroUINativeProvider config={{ isRTL }}>
-        {children}
-      </HeroUINativeProvider>
+      <HeroUINativeProvider config={{ isRTL }}>{children}</HeroUINativeProvider>
     </LayoutDirection>
   );
 }
@@ -102,21 +102,25 @@ export default function RootLayout() {
         backgroundColor: ROOT_BACKGROUNDS[theme === "dark" ? "dark" : "light"],
       }}
     >
-      <SQLiteProvider
-        databaseName="budget-manager.db"
-        onInit={migrateLocalDatabase}
-      >
-        <LocalDataProvider>
-          <LocalizationProvider>
-            <LocalizedHeroUIProvider>
-              <AppThemeController />
-              <ProfileProvider>
-                <AppNavigation />
-              </ProfileProvider>
-            </LocalizedHeroUIProvider>
-          </LocalizationProvider>
-        </LocalDataProvider>
-      </SQLiteProvider>
+      <StorageBoundary>
+        <SQLiteProvider
+          databaseName="budget-manager.db"
+          onInit={initializeLocalDatabase}
+        >
+          <LocalDataProvider>
+            <LocalizationProvider>
+              <LocalizedHeroUIProvider>
+                <AppThemeController />
+                <OnboardingGate>
+                  <ProfileProvider>
+                    <AppNavigation />
+                  </ProfileProvider>
+                </OnboardingGate>
+              </LocalizedHeroUIProvider>
+            </LocalizationProvider>
+          </LocalDataProvider>
+        </SQLiteProvider>
+      </StorageBoundary>
     </GestureHandlerRootView>
   );
 }

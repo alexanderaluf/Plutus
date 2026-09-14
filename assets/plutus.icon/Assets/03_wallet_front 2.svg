@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <path d="M204 420
+           C234 447 278 456 329 456
+           H715
+           C780 456 823 495 823 552
+           V756
+           C823 811 785 842 730 842
+           H286
+           C231 842 196 808 196 754
+           V462
+           C196 444 199 431 204 420 Z"
+        fill="#FFFFFF" stroke="#000000" stroke-width="28" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

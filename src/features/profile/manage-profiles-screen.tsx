@@ -1,10 +1,12 @@
 import { useRouter } from "expo-router";
+import { useState } from "react";
 import { ScrollView } from "react-native";
 import { useTranslation } from "react-i18next";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 
 import { ProfileList } from "./components/profile-list";
+import { ProfileDeleteSheet } from "./components/profile-delete-sheet";
 import { ProfileScreenHeader } from "./components/profile-screen-header";
 import { useProfiles } from "./profile-provider";
 import type { UserProfile } from "./types";
@@ -14,6 +16,9 @@ export function ManageProfilesScreen() {
   const router = useRouter();
   const theme = useAppThemeColors();
   const { profiles, activeProfileId, selectProfile } = useProfiles();
+  const [profileToDelete, setProfileToDelete] = useState<UserProfile | null>(
+    null,
+  );
 
   function openEditor(profile?: UserProfile) {
     router.push({
@@ -39,10 +44,16 @@ export function ManageProfilesScreen() {
           activeProfileId={activeProfileId}
           profiles={profiles}
           onCreate={() => openEditor()}
+          onDelete={setProfileToDelete}
           onEdit={openEditor}
           onSelect={selectProfile}
         />
       </ScrollView>
+      <ProfileDeleteSheet
+        profile={profileToDelete}
+        isOpen={profileToDelete !== null}
+        onDismiss={() => setProfileToDelete(null)}
+      />
     </SafeAreaView>
   );
 }

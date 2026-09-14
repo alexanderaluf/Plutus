@@ -4,6 +4,14 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 
 # Local-First Data Architecture
 
+Before changing startup, persisted schemas, database paths, or profile creation,
+read `docs/storage-upgrades.md`. Never treat unreadable/missing established data
+as a fresh installation. Foreground and background startup must use
+`initializeLocalDatabase`, retain pre-upgrade checkpoints, and stop for recovery
+on unsupported layouts. Production defaults contain only base categories;
+demo generation requires explicit onboarding. New migrations must retain the
+independent `app_storage_identity` guard and pass the onboarding/migration tests.
+
 This application has no backend. Do not add API calls, remote databases,
 authentication servers, analytics uploads, or network persistence. Every user
 record must work offline and remain on the device.

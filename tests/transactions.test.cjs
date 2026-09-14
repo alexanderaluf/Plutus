@@ -21,7 +21,7 @@ require.extensions[".ts"] = (module, filename) => {
   module._compile(source, filename);
 };
 
-const { createDefaultBackup } = require("../src/data/model/default-backup.ts");
+const { createLegacyDevelopmentBackup: createDefaultBackup } = require("./fixtures/legacy-development-backup.ts");
 const {
   normalizeBackupDocument,
 } = require("../src/data/model/normalize-backup.ts");

@@ -1,6 +1,8 @@
+import { onboardingHe } from "./onboarding";
 import { recurringHe } from "./recurring";
 
 export const he = {
+  onboarding: onboardingHe,
   recurring: recurringHe,
   common: {
     back: "חזרה",
@@ -232,6 +234,19 @@ export const he = {
       create: "יצירת פרופיל",
       select: "בחירת {{name}}",
       edit: "עריכת {{name}}",
+      delete: {
+        accessibility: "מחיקת {{name}}",
+        title: "למחוק את {{name}}?",
+        description:
+          "פעולה זו תמחק לצמיתות את הפרופיל ואת כל החשבונות, העסקאות, התקציבים, התשלומים הקבועים, הקטגוריות, התבניות השמורות ושאר הרשומות הקשורות אליו. לא ניתן לבטל את הפעולה.",
+        lastProfile:
+          "זהו הפרופיל היחיד. לאחר המחיקה Plutus יחזור להגדרה הראשונית, עם קטגוריות הבסיס בלבד.",
+        cancel: "ביטול",
+        confirm: "מחיקת הפרופיל",
+        deleting: "מוחק…",
+        error: "לא ניתן למחוק את הפרופיל. הנתונים לא השתנו.",
+        missing: "הפרופיל הזה כבר לא קיים.",
+      },
       roles: {
         personal: "אישי",
         sharedBudget: "תקציב משותף",

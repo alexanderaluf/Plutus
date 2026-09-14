@@ -2,7 +2,7 @@ import * as BackgroundTask from "expo-background-task";
 import * as TaskManager from "expo-task-manager";
 import { openDatabaseAsync } from "expo-sqlite";
 import { mutateDocument, readDocument } from "../database/document-repository";
-import { migrateLocalDatabase } from "../database/migrations";
+import { initializeLocalDatabase } from "../database/safe-startup";
 import { settleDueCardPayments } from "../model/card-payment";
 import { reconcileRecurring } from "./recurring-service";
 import { syncRecurringReminders } from "./recurring-reminders";
@@ -15,7 +15,7 @@ if (!TaskManager.isTaskDefined(TASK))
       useNewConnection: true,
     });
     try {
-      await migrateLocalDatabase(database);
+      await initializeLocalDatabase(database);
       const result = await reconcileRecurring(
         {
           read: () => readDocument(database),
@@ -34,7 +34,7 @@ if (!TaskManager.isTaskDefined(TASK))
     } catch {
       return BackgroundTask.BackgroundTaskResult.Failed;
     } finally {
-      await database.closeAsync();
+      await database.closeAsync().catch(() => undefined);
     }
   });
 

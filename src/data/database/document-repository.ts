@@ -1,8 +1,12 @@
 import type { SQLiteDatabase } from "expo-sqlite";
 
 import type { BackupDocument } from "../model/backup-document";
-import { createDefaultBackup } from "../model/default-backup";
-import { normalizeBackupDocument } from "../model/normalize-backup";
+import {
+  normalizeBackupDocument,
+  parseStoredDocument,
+} from "../model/normalize-backup";
+import { STORAGE_RECOVERY_MESSAGE } from "./migrations";
+import { getSetupStatus } from "../model/onboarding";
 
 type DocumentRow = {
   document_json: string;
@@ -25,6 +29,16 @@ export async function mutateDocument(
       JSON.stringify(next),
       new Date().toISOString(),
     );
+    await transaction.runAsync(
+      "UPDATE app_storage_identity SET had_profile = ? WHERE id = 1",
+      next.users.length > 0
+        ? 1
+        : current._local.dataMode === "demo" && getSetupStatus(next) === "setup"
+          ? 0
+          : current.users.length > 0
+            ? 1
+            : 0,
+    );
     committed = next;
   });
   return committed!;
@@ -35,8 +49,14 @@ export async function readDocument(database: SQLiteDatabase) {
     "SELECT document_json FROM app_document WHERE id = 1",
   );
 
-  if (!row) return createDefaultBackup();
-  return normalizeBackupDocument(JSON.parse(row.document_json));
+  if (!row) throw new Error(STORAGE_RECOVERY_MESSAGE);
+  const document = parseStoredDocument(row.document_json);
+  const identity = await database.getFirstAsync<{ had_profile: number }>(
+    "SELECT had_profile FROM app_storage_identity WHERE id = 1",
+  );
+  if (!identity || (identity.had_profile && document.users.length === 0))
+    throw new Error(STORAGE_RECOVERY_MESSAGE);
+  return document;
 }
 
 export async function writeDocument(
@@ -46,6 +66,7 @@ export async function writeDocument(
   const normalized = normalizeBackupDocument(document);
 
   await database.withExclusiveTransactionAsync(async (transaction) => {
+    await readDocument(transaction);
     await transaction.runAsync(
       `INSERT INTO app_document (id, schema_version, document_json, updated_at)
        VALUES (1, ?, ?, ?)
@@ -56,6 +77,10 @@ export async function writeDocument(
       normalized._local.schemaVersion,
       JSON.stringify(normalized),
       new Date().toISOString(),
+    );
+    await transaction.runAsync(
+      "UPDATE app_storage_identity SET had_profile = ? WHERE id = 1",
+      normalized.users.length > 0 ? 1 : 0,
     );
   });
 }

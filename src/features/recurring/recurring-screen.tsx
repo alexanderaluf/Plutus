@@ -10,12 +10,14 @@ import {
 } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { localDateKey } from "@/data/model/recurring-record";
+import { getCalendarOffset } from "@/data/model/onboarding";
 import {
   selectRecurrings,
   selectRecurringEvents,
   selectRecurringSummary,
   recurringTotals,
   selectTransactions,
+  selectAppPreferences,
 } from "@/data/selectors/document-selectors";
 import {
   BudgetHeader,
@@ -70,6 +72,7 @@ export function RecurringScreen() {
   const target = useRef<View | null>(null),
     now = useRecurringClock(),
     actions = useRecurringActions();
+  const { weekStartDay } = selectAppPreferences(document);
   const [view, setView] = useState<"all" | "calendar">("all"),
     [status, setStatus] = useState<"active" | "due" | "archived">("active");
   const [compact, setCompact] = useState(false),
@@ -328,7 +331,7 @@ export function RecurringScreen() {
                     style={{ width: "14.2857%", paddingVertical: 12 }}
                   >
                     <Text className="text-center text-xs text-muted">
-                      {new Date(2026, 8, 6 + i).toLocaleDateString(
+                      {new Date(2026, 8, 6 + ((i + weekStartDay) % 7)).toLocaleDateString(
                         i18n.resolvedLanguage,
                         { weekday: "short" },
                       )}
@@ -338,7 +341,7 @@ export function RecurringScreen() {
                 {Array.from(
                   {
                     length:
-                      month.getDay() +
+                      getCalendarOffset(month, weekStartDay) +
                       new Date(
                         month.getFullYear(),
                         month.getMonth() + 1,
@@ -346,7 +349,7 @@ export function RecurringScreen() {
                       ).getDate(),
                   },
                   (_, index) => {
-                    const date = index - month.getDay() + 1;
+                    const date = index - getCalendarOffset(month, weekStartDay) + 1;
                     if (date <= 0)
                       return <View key={index} style={{ width: "14.2857%" }} />;
                     const current = new Date(

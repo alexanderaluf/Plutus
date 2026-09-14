@@ -14,6 +14,7 @@ type ProfileListProps = {
   activeProfileId: string;
   onSelect: (profileId: string) => void;
   onEdit: (profile: UserProfile) => void;
+  onDelete: (profile: UserProfile) => void;
   onCreate: () => void;
 };
 
@@ -22,6 +23,7 @@ export function ProfileList({
   activeProfileId,
   onSelect,
   onEdit,
+  onDelete,
   onCreate,
 }: ProfileListProps) {
   const { t } = useTranslation();
@@ -61,38 +63,42 @@ export function ProfileList({
           const isActive = profile.id === activeProfileId;
 
           return (
-            <Pressable
+            <View
               key={profile.id}
-              accessibilityLabel={t("profile.manage.select", {
-                name: profile.name,
-              })}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
               className={`flex-row items-center py-3 ${
                 index < profiles.length - 1 ? "border-b border-border" : ""
               }`}
-              onPress={() => onSelect(profile.id)}
             >
-              <ProfileAvatar
-                color={profile.color}
-                imageUri={profile.imageUri}
-                initials={profile.initials}
-                size="md"
-              />
-              <View className="ms-3 flex-1">
-                <Text className="font-manrope-bold text-sm text-foreground">
-                  {profile.name}
-                </Text>
-                <Text className="mt-0.5 font-sans text-xs text-muted">
-                  {getRoleLabel(profile.role)}
-                </Text>
-              </View>
-
-              {isActive ? (
-                <View className="me-2 size-7 items-center justify-center rounded-full bg-accent/15">
-                  <FilledIcon name="check" size={18} tone="accent" />
+              <Pressable
+                accessibilityLabel={t("profile.manage.select", {
+                  name: profile.name,
+                })}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                className="flex-1 flex-row items-center"
+                onPress={() => onSelect(profile.id)}
+              >
+                <ProfileAvatar
+                  color={profile.color}
+                  imageUri={profile.imageUri}
+                  initials={profile.initials}
+                  size="md"
+                />
+                <View className="ms-3 flex-1">
+                  <Text className="font-manrope-bold text-sm text-foreground">
+                    {profile.name}
+                  </Text>
+                  <Text className="mt-0.5 font-sans text-xs text-muted">
+                    {getRoleLabel(profile.role)}
+                  </Text>
                 </View>
-              ) : null}
+
+                {isActive ? (
+                  <View className="me-1 size-7 items-center justify-center rounded-full bg-accent/15">
+                    <FilledIcon name="check" size={18} tone="accent" />
+                  </View>
+                ) : null}
+              </Pressable>
               <Button
                 accessibilityLabel={t("profile.manage.edit", {
                   name: profile.name,
@@ -104,7 +110,18 @@ export function ProfileList({
               >
                 <FilledIcon name="pencil" size={18} tone="muted" />
               </Button>
-            </Pressable>
+              <Button
+                accessibilityLabel={t("profile.manage.delete.accessibility", {
+                  name: profile.name,
+                })}
+                isIconOnly
+                size="sm"
+                variant="ghost"
+                onPress={() => onDelete(profile)}
+              >
+                <FilledIcon name="delete" size={18} tone="danger" />
+              </Button>
+            </View>
           );
         })}
       </Card.Body>

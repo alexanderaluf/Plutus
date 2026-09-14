@@ -1,494 +1,155 @@
 import type { SQLiteDatabase } from "expo-sqlite";
-
-import { DEFAULT_CATEGORIES_REVISION } from "../model/backup-document";
+import { LOCAL_SCHEMA_VERSION } from "../model/backup-document";
 import { createDefaultBackup } from "../model/default-backup";
-import type { JsonValue } from "../model/json";
-import { normalizeBackupDocument } from "../model/normalize-backup";
+import {
+  normalizeBackupDocument,
+  parseStoredDocument,
+} from "../model/normalize-backup";
+import { getSetupStatus } from "../model/onboarding";
 
-const DATABASE_VERSION = 16;
-// Superseded default category uuids from the pre-v9 seed (Groceries/Housing/Dining/Coffee/Income/Savings goals).
-const LEGACY_DEFAULT_CATEGORY_UUIDS = new Set([
-  "category-groceries",
-  "category-housing",
-  "category-dining",
-  "category-coffee",
-  "category-income",
-  "category-goals",
-]);
-const LEGACY_CATEGORY_RENAMES: Record<string, string> = {
-  "category-income": "category-salary",
-  "category-dining": "category-food",
-  "category-coffee": "category-food",
-};
-// The v9 default set, still including the since-removed Project Aurora category.
-const V9_DEFAULT_CATEGORY_UUIDS = new Set([
-  "category-groceries",
-  "category-bills",
-  "category-rent",
-  "category-travel",
-  "category-food",
-  "category-car",
-  "category-shopping",
-  "category-entertainment",
-  "category-health",
-  "category-education",
-  "category-utilities",
-  "category-housing",
-  "category-others",
-  "category-business",
-  "category-investments",
-  "category-savings",
-  "category-salary",
-  "category-project-aurora",
-  "category-gifts",
-]);
-const ALL_SUPERSEDED_DEFAULT_CATEGORY_UUIDS = new Set([
-  ...LEGACY_DEFAULT_CATEGORY_UUIDS,
-  ...V9_DEFAULT_CATEGORY_UUIDS,
-]);
+export const DATABASE_VERSION = 17;
+export const STORAGE_RECOVERY_MESSAGE =
+  "Your saved data could not be opened safely. Nothing has been reset. Keep this installation and export a recovery copy before seeking help.";
 
-export async function migrateLocalDatabase(database: SQLiteDatabase) {
-  await database.execAsync(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
-    CREATE TABLE IF NOT EXISTS app_document (
-      id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
-      schema_version INTEGER NOT NULL,
-      document_json TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    );
-  `);
-
-  const row = await database.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) AS count FROM app_document WHERE id = 1",
+/** Versions 1?16 share the same document envelope. The normalizers provide
+ * additive forward migrations. Historical development reseeding is retired:
+ * recognizing a sample UUID is never permission to replace user records. */
+export async function migrateLocalDatabase(
+  database: SQLiteDatabase,
+  installationExists = false,
+) {
+  const version =
+    (
+      await database.getFirstAsync<{ user_version: number }>(
+        "PRAGMA user_version",
+      )
+    )?.user_version ?? 0;
+  if (version > DATABASE_VERSION) throw new Error(STORAGE_RECOVERY_MESSAGE);
+  const check = await database.getFirstAsync<{ quick_check: string }>(
+    "PRAGMA quick_check",
   );
-
-  if (!row?.count) {
-    const document = createDefaultBackup();
-    await database.runAsync(
-      `INSERT INTO app_document (id, schema_version, document_json, updated_at)
-       VALUES (1, ?, ?, ?)`,
-      document._local.schemaVersion,
-      JSON.stringify(document),
-      new Date().toISOString(),
-    );
-  }
-
-  const versionRow = await database.getFirstAsync<{ user_version: number }>(
-    "PRAGMA user_version",
+  if (check?.quick_check !== "ok") throw new Error(STORAGE_RECOVERY_MESSAGE);
+  const tables = await database.getAllAsync<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
   );
-  const currentVersion = versionRow?.user_version ?? 0;
-
-  if (currentVersion < 2 && row?.count) {
-    const stored = await database.getFirstAsync<{ document_json: string }>(
-      "SELECT document_json FROM app_document WHERE id = 1",
-    );
-    if (stored) {
-      const document = normalizeBackupDocument(
-        JSON.parse(stored.document_json),
+  const hasDocument = tables.some((table) => table.name === "app_document");
+  if (
+    !hasDocument &&
+    (version !== 0 || tables.length > 0 || installationExists)
+  )
+    throw new Error(STORAGE_RECOVERY_MESSAGE);
+  if (
+    version >= 17 &&
+    !tables.some((table) => table.name === "app_storage_identity")
+  )
+    throw new Error(STORAGE_RECOVERY_MESSAGE);
+  await database.execAsync(
+    "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;",
+  );
+  await database.withExclusiveTransactionAsync(async (transaction) => {
+    if (!hasDocument) {
+      await transaction.execAsync(
+        "CREATE TABLE app_document (id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1), schema_version INTEGER NOT NULL, document_json TEXT NOT NULL, updated_at TEXT NOT NULL);",
       );
-      const isOriginalSeed = document.users.some(
-        (user) => user.uuid === "alex-personal",
+      const document = createDefaultBackup();
+      await transaction.runAsync(
+        "INSERT INTO app_document (id, schema_version, document_json, updated_at) VALUES (1, ?, ?, ?)",
+        LOCAL_SCHEMA_VERSION,
+        JSON.stringify(document),
+        new Date().toISOString(),
       );
-      if (isOriginalSeed && document.budgets.length === 0) {
-        const defaults = createDefaultBackup();
-        document.budgets = defaults.budgets;
-        document.categories = defaults.categories;
-        document.transactions = defaults.transactions;
-        document._local.schemaVersion = defaults._local.schemaVersion;
-        await database.runAsync(
-          `UPDATE app_document
-           SET schema_version = ?, document_json = ?, updated_at = ?
-           WHERE id = 1`,
-          document._local.schemaVersion,
+    } else {
+      const stored = await transaction.getFirstAsync<{
+        schema_version: number;
+        document_json: string;
+      }>("SELECT schema_version, document_json FROM app_document WHERE id = 1");
+      if (!stored || stored.schema_version > LOCAL_SCHEMA_VERSION)
+        throw new Error(STORAGE_RECOVERY_MESSAGE);
+      // No writes before successful parse and validation.
+      const document = parseStoredDocument(stored.document_json);
+      // Before v17 every installation was initialized with a profile. An
+      // established older database cannot legitimately be a new empty install.
+      if (version < 17 && document.users.length === 0)
+        throw new Error(STORAGE_RECOVERY_MESSAGE);
+      // Preserve the historical v5 additive account conversion without
+      // replacing collections, balances, custom fields or existing metadata.
+      if (
+        version < 5 &&
+        document.users.some((user) => user.uuid === "alex-personal")
+      ) {
+        document.accounts = document.accounts.map((account) => {
+          if (
+            account.uuid === "account-checking" &&
+            account.name === "Everyday checking" &&
+            account.bankName === "Northstar Bank" &&
+            account.cardCompany == null &&
+            account.cardLastFour == null
+          )
+            return {
+              ...account,
+              accountType: account.accountType ?? "bank",
+              type: 3,
+            };
+          if (
+            account.uuid === "account-credit" &&
+            account.name === "Everyday rewards" &&
+            account.cardCompany === "Mastercard"
+          )
+            return {
+              ...account,
+              linkedBankAccountId:
+                account.linkedBankAccountId ?? "account-checking",
+              paymentDay: account.paymentDay ?? 10,
+            };
+          return account;
+        });
+      }
+      if (getSetupStatus(document) === "recovery")
+        throw new Error(STORAGE_RECOVERY_MESSAGE);
+      if (tables.some((table) => table.name === "app_storage_identity")) {
+        const identity = await transaction.getFirstAsync<{
+          had_profile: number;
+        }>("SELECT had_profile FROM app_storage_identity WHERE id = 1");
+        if (!identity || (identity.had_profile && document.users.length === 0))
+          throw new Error(STORAGE_RECOVERY_MESSAGE);
+      }
+      if (
+        version < DATABASE_VERSION ||
+        stored.schema_version < LOCAL_SCHEMA_VERSION
+      ) {
+        if (document.users.length && !document._local.onboardingCompletedAt)
+          document._local.onboardingCompletedAt = new Date().toISOString();
+        await transaction.execAsync(
+          "CREATE TABLE IF NOT EXISTS app_migration_snapshots (id INTEGER PRIMARY KEY, from_version INTEGER NOT NULL, document_json TEXT NOT NULL, created_at TEXT NOT NULL);",
+        );
+        await transaction.runAsync(
+          "INSERT INTO app_migration_snapshots (from_version, document_json, created_at) VALUES (?, ?, ?)",
+          version,
+          stored.document_json,
+          new Date().toISOString(),
+        );
+        await transaction.runAsync(
+          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
+          LOCAL_SCHEMA_VERSION,
           JSON.stringify(document),
           new Date().toISOString(),
         );
       }
     }
-  }
-
-  if (currentVersion < 3) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 3;");
-    });
-  }
-
-  if (currentVersion < 4) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 4;");
-    });
-  }
-
-  if (currentVersion < 5) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        const isOriginalSeed = document.users.some(
-          (user) => user.uuid === "alex-personal",
-        );
-        if (isOriginalSeed) {
-          const bank = document.accounts.find(
-            (account) =>
-              account.uuid === "account-checking" &&
-              account.name === "Everyday checking" &&
-              account.bankName === "Northstar Bank",
-          );
-          if (bank && bank.cardCompany == null && bank.cardLastFour == null) {
-            bank.accountType = "bank";
-            bank.type = 3;
-          }
-          const card = document.accounts.find(
-            (account) =>
-              account.uuid === "account-credit" &&
-              account.name === "Everyday rewards",
-          );
-          if (card && card.cardCompany === "Mastercard") {
-            card.linkedBankAccountId ??= "account-checking";
-            card.paymentDay ??= 10;
-          }
-        }
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 5;");
-    });
-  }
-
-  if (currentVersion < 6) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 6;");
-    });
-  }
-
-  if (currentVersion < 7) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 7;");
-    });
-  }
-
-  if (currentVersion < 8) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 8;");
-    });
-  }
-
-  if (currentVersion < 9) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        const isOriginalSeed = document.users.some(
-          (user) => user.uuid === "alex-personal",
-        );
-        const isUntouchedLegacySeed =
-          document.categories.length > 0 &&
-          document.categories.every(
-            (category) =>
-              typeof category.uuid === "string" &&
-              LEGACY_DEFAULT_CATEGORY_UUIDS.has(category.uuid),
-          );
-        if (isOriginalSeed && isUntouchedLegacySeed) {
-          const defaults = createDefaultBackup();
-          document.categories = defaults.categories;
-          document.budgets = defaults.budgets;
-          const renameCategory = (uuid: JsonValue): JsonValue =>
-            typeof uuid === "string" && LEGACY_CATEGORY_RENAMES[uuid]
-              ? LEGACY_CATEGORY_RENAMES[uuid]
-              : uuid;
-          document.transactions = document.transactions.map((record) => {
-            const category = renameCategory(record.category);
-            const renamed = defaults.categories.find(
-              (candidate) => candidate.uuid === category,
-            );
-            return renamed
-              ? { ...record, category, categoryName: renamed.name }
-              : record;
-          });
-        }
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 9;");
-    });
-  }
-
-  if (currentVersion < 10) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        const isOriginalSeed = document.users.some(
-          (user) => user.uuid === "alex-personal",
-        );
-        const isUntouchedV9Seed =
-          document.categories.length > 0 &&
-          document.categories.every(
-            (category) =>
-              typeof category.uuid === "string" &&
-              V9_DEFAULT_CATEGORY_UUIDS.has(category.uuid),
-          );
-        if (isOriginalSeed && isUntouchedV9Seed) {
-          const defaults = createDefaultBackup();
-          document.categories = defaults.categories;
-          document.budgets = defaults.budgets;
-          document.transactions = document.transactions.map((record) =>
-            record.category === "category-project-aurora"
-              ? {
-                  ...record,
-                  category: "category-others",
-                  categoryName: "Others",
-                }
-              : record,
-          );
-        }
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 10;");
-    });
-  }
-
-  if (currentVersion < 11) {
-    await database.execAsync("PRAGMA user_version = 11;");
-  }
-
-  if (currentVersion < 12) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 12;");
-    });
-  }
-
-  // v13 adds optional budget tracking settings without dropping imported fields.
-  if (currentVersion < 13) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(JSON.parse(stored.document_json));
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion, JSON.stringify(document), new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
-    });
-  }
-
-  // v14 persists the application language in the canonical local document.
-  if (currentVersion < 14) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 14;");
-    });
-  }
-
-  // v15 adds immutable currency conversion snapshots to transaction records.
-  if (currentVersion < 15) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        "SELECT document_json FROM app_document WHERE id = 1",
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(
-          JSON.parse(stored.document_json),
-        );
-        await transaction.runAsync(
-          "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-          document._local.schemaVersion,
-          JSON.stringify(document),
-          new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync("PRAGMA user_version = 15;");
-    });
-  }
-
-  // v16 adds opt-in recurring schedules and an occurrence ledger; preserves imports.
-  if (currentVersion < 16) {
-    await database.withExclusiveTransactionAsync(async (transaction) => {
-      const stored = await transaction.getFirstAsync<{ document_json: string }>(
-        'SELECT document_json FROM app_document WHERE id = 1',
-      );
-      if (stored) {
-        const document = normalizeBackupDocument(JSON.parse(stored.document_json));
-        await transaction.runAsync(
-          'UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1',
-          document._local.schemaVersion, JSON.stringify(document), new Date().toISOString(),
-        );
-      }
-      await transaction.execAsync('PRAGMA user_version = 16;');
-    });
-  }
-
-  // This revision is independent of PRAGMA user_version so partially migrated devices recover.
-  await database.withExclusiveTransactionAsync(async (transaction) => {
-    const stored = await transaction.getFirstAsync<{ document_json: string }>(
+    await transaction.execAsync(
+      "CREATE TABLE IF NOT EXISTS app_storage_identity (id INTEGER PRIMARY KEY CHECK (id = 1), had_profile INTEGER NOT NULL);",
+    );
+    const saved = await transaction.getFirstAsync<{ document_json: string }>(
       "SELECT document_json FROM app_document WHERE id = 1",
     );
-    if (!stored) return;
-    const document = normalizeBackupDocument(JSON.parse(stored.document_json));
-    const isOriginalSeed = document.users.some(
-      (user) => user.uuid === "alex-personal",
-    );
-    if (
-      !isOriginalSeed ||
-      document._local.defaultCategoriesRevision >= DEFAULT_CATEGORIES_REVISION
-    )
-      return;
-    const defaults = createDefaultBackup();
-    const customCategories = document.categories.filter(
-      (category) =>
-        typeof category.uuid !== "string" ||
-        !ALL_SUPERSEDED_DEFAULT_CATEGORY_UUIDS.has(category.uuid),
-    );
-    document.categories = [...defaults.categories, ...customCategories];
-    document.transactions = document.transactions.map((record) => {
-      const legacyRename =
-        typeof record.category === "string"
-          ? LEGACY_CATEGORY_RENAMES[record.category]
-          : undefined;
-      const category =
-        legacyRename ??
-        (record.category === "category-project-aurora"
-          ? "category-others"
-          : record.category);
-      const renamed = defaults.categories.find(
-        (candidate) => candidate.uuid === category,
-      );
-      return renamed
-        ? { ...record, category, categoryName: renamed.name }
-        : record;
-    });
-    document._local.defaultCategoriesRevision = DEFAULT_CATEGORIES_REVISION;
+    const hasProfile =
+      normalizeBackupDocument(JSON.parse(saved!.document_json)).users.length >
+      0;
     await transaction.runAsync(
-      "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
-      document._local.schemaVersion,
-      JSON.stringify(document),
-      new Date().toISOString(),
+      "INSERT OR IGNORE INTO app_storage_identity (id, had_profile) VALUES (1, ?)",
+      hasProfile ? 1 : 0,
     );
+    // Advance only after every migration and validation succeeds; rollback includes DDL.
+    await transaction.execAsync("PRAGMA user_version = 17;");
   });
 }

@@ -23,7 +23,9 @@ require.extensions[".ts"] = (module, filename) => {
     );
   module._compile(compiled, filename);
 };
-const { createDefaultBackup } = require("../src/data/model/default-backup.ts");
+const {
+  createLegacyDevelopmentBackup: createDefaultBackup,
+} = require("./fixtures/legacy-development-backup.ts");
 const {
   normalizeBackupDocument,
 } = require("../src/data/model/normalize-backup.ts");
@@ -397,7 +399,7 @@ test("JSON backup round trip preserves all new account options and unknown field
   );
   assert.deepEqual(restored.accounts, next.accounts);
   assert.deepEqual(restored.unknown, next.unknown);
-  assert.equal(restored._local.schemaVersion, 16);
+  assert.equal(restored._local.schemaVersion, 17);
   assert.equal(restored._local.themeMode, "dark");
   assert.equal(restored._local.accentColor, "violet");
   assert.equal(
@@ -939,6 +941,7 @@ function sqliteAdapter(filename) {
   const db = new DatabaseSync(filename);
   const adapter = {
     execAsync: async (sql) => db.exec(sql),
+    getAllAsync: async (sql, ...params) => db.prepare(sql).all(...params),
     getFirstAsync: async (sql, ...params) => db.prepare(sql).get(...params),
     runAsync: async (sql, ...params) => db.prepare(sql).run(...params),
     withExclusiveTransactionAsync: async (work) => {
@@ -1003,7 +1006,7 @@ test("every card company survives SQLite reopening and both backup document form
   }
 });
 
-test("SQLite v2 to v12 migration preserves imported fields, upgrades the known seed, survives reopening and rolls back failed writes", async () => {
+test("SQLite v2 migration preserves imported fields without reseeding, survives reopening and rolls back failed writes", async () => {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), "budget-accounts-test-"),
   );
@@ -1026,7 +1029,7 @@ test("SQLite v2 to v12 migration preserves imported fields, upgrades the known s
     );
     await migrateLocalDatabase(database);
     const migrated = await readDocument(database);
-    assert.equal(migrated._local.schemaVersion, 16);
+    assert.equal(migrated._local.schemaVersion, 17);
     assert.equal(migrated._local.themeMode, "system");
     assert.equal(migrated._local.accentColor, "cyan");
     assert.equal(migrated.accounts[0].accountType, "bank");
@@ -1037,7 +1040,7 @@ test("SQLite v2 to v12 migration preserves imported fields, upgrades the known s
     assert.deepEqual(migrated.importedUnknown, { keep: true });
     assert.equal(
       (await database.getFirstAsync("PRAGMA user_version")).user_version,
-      16,
+      17,
     );
     const next = storeExchangeRates(add(migrated), rateTable());
     await writeDocument(database, next);

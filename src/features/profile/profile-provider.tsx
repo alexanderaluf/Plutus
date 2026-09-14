@@ -1,13 +1,14 @@
 import { createContext, type PropsWithChildren, useContext } from "react";
 
 import {
+  deleteAttachment,
     getAttachmentFile,
     persistAttachment,
 } from "@/data/attachments/attachment-store";
 import { useLocalData } from "@/data/local-data-provider";
 import type { JsonObject } from "@/data/model/json";
+import { deleteProfileData } from "@/data/model/profile-record";
 
-import { initialProfiles } from "./data/profiles-data";
 import { profileFromRecord } from "./lib/profile-record-codec";
 import { getProfileColor, getProfileInitials } from "./lib/profile-utils";
 import type { ProfileValues, UserProfile } from "./types";
@@ -19,16 +20,14 @@ type ProfileContextValue = {
   selectProfile: (profileId: string) => Promise<void>;
   createProfile: (values: ProfileValues) => Promise<void>;
   updateProfile: (profileId: string, values: ProfileValues) => Promise<void>;
+  deleteProfile: (profileId: string) => Promise<void>;
 };
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 export function ProfileProvider({ children }: PropsWithChildren) {
-  const { document, updateDocument } = useLocalData();
-  const profiles =
-    document.users.length > 0
-      ? document.users.map(profileFromRecord)
-      : initialProfiles;
+  const { document, replaceDocument, updateDocument } = useLocalData();
+  const profiles = document.users.map(profileFromRecord);
   const selectedRecord = document.users.find(
     (record) => record.isSelected === true,
   );
@@ -135,6 +134,28 @@ export function ProfileProvider({ children }: PropsWithChildren) {
     }));
   }
 
+  async function deleteProfile(profileId: string) {
+    let attachmentPaths: string[] = [];
+    if (document.users.length === 1) {
+      const result = deleteProfileData(document, profileId);
+      attachmentPaths = result.attachmentPaths;
+      await replaceDocument(result.document);
+    } else {
+      await updateDocument((current) => {
+        const result = deleteProfileData(current, profileId);
+        attachmentPaths = result.attachmentPaths;
+        return result.document;
+      });
+    }
+    for (const path of attachmentPaths) {
+      try {
+        deleteAttachment(path);
+      } catch {
+        // The canonical manifest is already committed without this orphan.
+      }
+    }
+  }
+
   return (
     <ProfileContext.Provider
       value={{
@@ -144,6 +165,7 @@ export function ProfileProvider({ children }: PropsWithChildren) {
         selectProfile,
         createProfile,
         updateProfile,
+        deleteProfile,
       }}
     >
       {children}

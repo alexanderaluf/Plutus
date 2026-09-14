@@ -53,6 +53,11 @@ function mountSheet(parentId = null, write = async () => {}) {
       },
     },
     "react-native": { View: "View", Text: "Text" },
+    "react-i18next": { useTranslation: () => ({ t: (key) => key }) },
+    "@/shared/ui/app-text": { Text: "Text" },
+    "@/shared/ui/use-bottom-sheet-initial-position-fix": {
+      useBottomSheetInitialPositionFix: () => ({ containerStyle: undefined, onChange: () => {} }),
+    },
     "heroui-native": { BottomSheet: root, Button: button },
     "react-native-safe-area-context": {
       useSafeAreaInsets: () => ({ top: 24, bottom: 24 }),

@@ -19,7 +19,7 @@ require.extensions[".ts"] = (module, filename) => {
     );
   module._compile(source, filename);
 };
-const { createDefaultBackup } = require("../src/data/model/default-backup.ts");
+const { createLegacyDevelopmentBackup: createDefaultBackup } = require("./fixtures/legacy-development-backup.ts");
 const {
   normalizeBackupDocument,
 } = require("../src/data/model/normalize-backup.ts");
@@ -426,7 +426,7 @@ test("local reminders deduplicate and obsolete reminders are cancelled after ski
   const loaded = { exports: {} };
   new Function("require", "module", "exports", compiled)(
     (name) =>
-      name === "expo-notifications"
+      name === "expo" ? { isRunningInExpoGo: () => false } : name === "expo-notifications"
         ? notifications
         : name === "react-native"
           ? { Platform: { OS: "ios" } }
@@ -463,6 +463,7 @@ test("migration defaults automatic off and atomic repository rolls back ledger a
   const db = new DatabaseSync(":memory:");
   const adapter = {
     execAsync: async (sql) => db.exec(sql),
+    getAllAsync: async (sql, ...args) => db.prepare(sql).all(...args),
     getFirstAsync: async (sql, ...args) => db.prepare(sql).get(...args),
     runAsync: async (sql, ...args) => db.prepare(sql).run(...args),
     withExclusiveTransactionAsync: async (work) => {
@@ -492,7 +493,7 @@ test("migration defaults automatic off and atomic repository rolls back ledger a
       }),
     );
     assert.deepEqual(await readDocument(adapter), before);
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 16);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 17);
   } finally {
     db.close();
   }

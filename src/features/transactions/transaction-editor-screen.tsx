@@ -1,3 +1,5 @@
+import { formatAppDate } from "@/data/model/onboarding";
+import { selectAppPreferences } from "@/data/selectors/document-selectors";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { BlurTargetView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
@@ -103,14 +105,6 @@ function recordOptions(
           ? record.color
           : fallbackColor,
     }));
-}
-
-function formatTransactionDate(value: Date, locale?: string) {
-  return value.toLocaleDateString(locale, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function formatTransactionTime(value: Date, locale?: string) {
@@ -932,9 +926,9 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t("transactions.form.changeDate", {
-                      date: formatTransactionDate(
+                      date: formatAppDate(
                         safeOccurredAt,
-                        i18n.resolvedLanguage,
+                        selectAppPreferences(document).dateFormat,
                       ),
                     })}
                     onPress={() => {
@@ -951,9 +945,9 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                       </Text>
                     </View>
                     <Text className="font-manrope-semibold text-base text-foreground">
-                      {formatTransactionDate(
+                      {formatAppDate(
                         safeOccurredAt,
-                        i18n.resolvedLanguage,
+                        selectAppPreferences(document).dateFormat,
                       )}
                     </Text>
                     <DateTimePopover

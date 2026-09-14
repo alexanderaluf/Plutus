@@ -13,5 +13,6 @@
     "**/.expo-validation/**",
     "**/.git/**",
     "**/node_modules/**"
-  ]
+  ],
+  "java.configuration.updateBuildConfiguration": "interactive"
 }

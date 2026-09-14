@@ -136,7 +136,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
   const [draft, setDraft] = useState<BudgetDraft>(() =>
     existing
       ? existing
-      : { ...budgetDefaults(), currencyCode: selectBudgetCurrency(document) },
+      : { ...budgetDefaults(), currencyCode: selectBudgetCurrency(document), cycleDay: String(document._local.monthStartDay) },
   );
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
