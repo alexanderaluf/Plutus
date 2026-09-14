@@ -1,46 +1,58 @@
-import { Button, useThemeColor } from "heroui-native";
+import {
+    commitStagedAttachments,
+    discardStagedAttachments,
+    stageAttachments,
+} from "@/data/attachments/attachment-store";
+import { pickAndImportBackup } from "@/data/backup/backup-service";
+import { useLocalData } from "@/data/local-data-provider";
+import {
+    DATE_FORMATS,
+    type AppDateFormat,
+    type AppLanguage,
+} from "@/data/model/backup-document";
+import { cloneBackupDocument } from "@/data/model/normalize-backup";
+import {
+    completeSetup,
+    formatAppDate,
+    getSetupStatus,
+    withBaseCategories,
+} from "@/data/model/onboarding";
+import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
+import {
+    currencies,
+    type CurrencyOption,
+} from "@/features/profile/data/currencies-data";
+import { LANGUAGE_OPTIONS } from "@/localization/languages";
+import { useAppLocalization } from "@/localization/localization-provider";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import { Text } from "@/shared/ui/app-text";
+import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
-  Alert,
-  BackHandler,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    BackHandler,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    TextInput,
+    useWindowDimensions,
+    View,
 } from "react-native";
+import Animated, {
+    Easing,
+    ReduceMotion,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalData } from "@/data/local-data-provider";
-import {
-  DATE_FORMATS,
-  type AppLanguage,
-  type AppDateFormat,
-} from "@/data/model/backup-document";
-import {
-  completeSetup,
-  formatAppDate,
-  getSetupStatus,
-  withBaseCategories,
-} from "@/data/model/onboarding";
-import { cloneBackupDocument } from "@/data/model/normalize-backup";
-import { pickAndImportBackup } from "@/data/backup/backup-service";
-import {
-  stageAttachments,
-  commitStagedAttachments,
-  discardStagedAttachments,
-} from "@/data/attachments/attachment-store";
-import { LANGUAGE_OPTIONS } from "@/localization/languages";
-import { useAppLocalization } from "@/localization/localization-provider";
-import {
-  currencies,
-  type CurrencyOption,
-} from "@/features/profile/data/currencies-data";
-import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
-import { Text } from "@/shared/ui/app-text";
-import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
 const STEPS = [
   "welcome",
@@ -71,6 +83,15 @@ const WEEKDAYS = [
   "friday",
   "saturday",
 ] as const;
+const MONTH_DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+const DAY_COLUMNS = 7;
+const DAY_GAP = 8;
+const DAY_ROWS = Math.ceil(MONTH_DAYS.length / DAY_COLUMNS);
+const TRANSITION = {
+  duration: 320,
+  easing: Easing.bezier(0.22, 1, 0.36, 1),
+  reduceMotion: ReduceMotion.System,
+};
 // Availability lives in a shared catalog. Russian is retained for existing
 // installations; the requested initial setup currently offers English/Hebrew.
 const SETUP_LANGUAGES = LANGUAGE_OPTIONS.filter(
@@ -90,12 +111,10 @@ export function OnboardingScreen({
   } = useAppLocalization();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [foreground, muted, accent] = useThemeColor([
-    "foreground",
-    "muted",
-    "accent",
-  ]);
+  const theme = useAppThemeColors();
+  const { width: windowWidth } = useWindowDimensions();
   const [step, setStep] = useState(0);
+  const [leavingStep, setLeavingStep] = useState<number | null>(null);
   const [demo, setDemo] = useState(false);
   const [language, setLanguage] = useState<AppLanguage>(
     activeLanguage === "he" ? "he" : "en",
@@ -108,10 +127,15 @@ export function OnboardingScreen({
   const [weekStartDay, setWeekStartDay] = useState(0);
   const [backupAccepted, setBackupAccepted] = useState(false);
   const [responsibilityAccepted, setResponsibilityAccepted] = useState(false);
+  const [dayArea, setDayArea] = useState({ height: 0, width: 0 });
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
-  const scroll = useRef<ScrollView>(null);
+  const enterOffset = useSharedValue(0);
+  const enteringStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: enterOffset.value }],
+  }));
   const key = STEPS[step];
+  const contentBottom = 104 + insets.bottom;
   const disabled =
     busy ||
     (key === "control" && (!backupAccepted || !responsibilityAccepted)) ||
@@ -119,9 +143,6 @@ export function OnboardingScreen({
     (key === "currency" && !currency);
 
   useEffect(() => () => setPreviewLanguage(null), [setPreviewLanguage]);
-  useEffect(() => {
-    scroll.current?.scrollTo({ y: 0, animated: false });
-  }, [step]);
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
@@ -132,14 +153,27 @@ export function OnboardingScreen({
           return true;
         }
         if (step > 0) {
-          setStep((value) => value - 1);
+          goToStep(step - 1, -1);
           return true;
         }
         return false;
       },
     );
     return () => subscription.remove();
-  }, [busy, currencyOpen, step]);
+  });
+
+  // The entering step slides in over the step that stays in place: from the
+  // trailing edge when moving forward, from the leading edge when going back.
+  function goToStep(target: number, direction: 1 | -1) {
+    if (target < 0 || target >= STEPS.length || target === step) return;
+    Keyboard.dismiss();
+    setLeavingStep(step);
+    setStep(target);
+    enterOffset.value = (isRTL ? -1 : 1) * direction * windowWidth;
+    enterOffset.value = withTiming(0, TRANSITION, (finished) => {
+      if (finished) runOnJS(setLeavingStep)(null);
+    });
+  }
 
   function markBusy(value: boolean) {
     busyRef.current = value;
@@ -206,8 +240,9 @@ export function OnboardingScreen({
 
   async function next() {
     if (disabled || busyRef.current) return;
+    Keyboard.dismiss();
     if (step < STEPS.length - 1) {
-      setStep(step + 1);
+      goToStep(step + 1, 1);
       return;
     }
     markBusy(true);
@@ -262,244 +297,435 @@ export function OnboardingScreen({
         accessibilityState={{ checked: selected, disabled: busy }}
         disabled={busy}
         onPress={onPress}
-        className={`min-h-20 flex-row items-center gap-4 rounded-3xl border px-5 py-5 ${selected ? "border-accent bg-accent/10" : "border-border bg-surface-secondary"}`}
+        style={({ pressed }) => [
+          styles.row,
+          {
+            backgroundColor: selected
+              ? colorWithAlpha(theme.accent, 0.12)
+              : theme.surfaceSecondary,
+            borderColor: selected ? theme.accent : theme.border,
+          },
+          pressed && styles.pressed,
+        ]}
       >
         <View
-          className={`size-6 items-center justify-center rounded-full border ${selected ? "border-accent bg-accent" : "border-muted"}`}
+          style={[
+            styles.mark,
+            {
+              backgroundColor: selected ? theme.accent : "transparent",
+              borderColor: selected ? theme.accent : theme.muted,
+            },
+          ]}
         >
           {selected && (
-            <FilledIcon name="check" size={16} tone="accent-foreground" />
+            <FilledIcon name="check" size={14} tone="accent-foreground" />
           )}
         </View>
-        <View className="flex-1 gap-1">
-          <Text className="font-sans text-lg text-foreground">{label}</Text>
+        <View className="flex-1 gap-0.5">
+          <Text className="font-sans text-base leading-5 text-foreground">
+            {label}
+          </Text>
           {detail && (
-            <Text className="font-sans text-sm text-muted">{detail}</Text>
+            <Text className="font-sans text-xs text-muted">{detail}</Text>
           )}
         </View>
       </Pressable>
     );
   }
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      className="flex-1 bg-background"
-      style={{ paddingTop: insets.top, paddingBottom: insets.bottom }}
-    >
-      <View className="flex-row items-center justify-between px-5 py-3">
-        <Button
-          isIconOnly
-          variant="ghost"
-          isDisabled={busy || step === 0}
-          accessibilityLabel={t("onboarding.back")}
-          onPress={() => setStep(step - 1)}
-        >
-          <FilledIcon name="arrow-left" color={foreground} size={24} />
-        </Button>
-        <Text
-          accessibilityLiveRegion="polite"
-          className="font-sans text-sm text-muted"
-        >
-          {t("onboarding.progress", { current: step + 1, total: STEPS.length })}
-        </Text>
-        <Text className="font-sans text-sm text-foreground">
-          {language.toUpperCase()}
-        </Text>
-      </View>
-      <View className="mx-6 h-1 overflow-hidden rounded-full bg-surface-secondary">
-        <View
-          className="h-full rounded-full bg-accent"
-          style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
-        />
-      </View>
-      <ScrollView
-        ref={scroll}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          flexGrow: 1,
-          padding: 24,
-          gap: 24,
-          justifyContent: "center",
+  function option(
+    icon: FilledIconName,
+    label: string,
+    onPress: () => void | Promise<void>,
+    detail?: string,
+  ) {
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: busy }}
+        disabled={busy}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.row,
+          {
+            backgroundColor: theme.surfaceSecondary,
+            borderColor: theme.border,
+          },
+          pressed && styles.pressed,
+        ]}
+      >
+        <FilledIcon name={icon} color={theme.accent} size={22} />
+        <View className="flex-1 gap-0.5">
+          <Text className="font-sans text-base text-foreground">{label}</Text>
+          {detail && (
+            <Text className="font-sans text-xs text-muted">{detail}</Text>
+          )}
+        </View>
+        <FilledIcon name="chevron-right" color={theme.muted} size={18} />
+      </Pressable>
+    );
+  }
+
+  function monthDayGrid() {
+    const byWidth =
+      dayArea.width > 0
+        ? (dayArea.width - DAY_GAP * (DAY_COLUMNS - 1)) / DAY_COLUMNS
+        : 44;
+    const byHeight =
+      dayArea.height > 0
+        ? (dayArea.height - DAY_GAP * (DAY_ROWS - 1)) / DAY_ROWS
+        : 44;
+    const size = Math.round(Math.max(26, Math.min(46, byWidth, byHeight)));
+    return (
+      <View
+        className="flex-1 justify-center"
+        onLayout={({ nativeEvent }) => {
+          const { height, width } = nativeEvent.layout;
+          setDayArea((current) =>
+            Math.abs(current.height - height) < 1 &&
+            Math.abs(current.width - width) < 1
+              ? current
+              : { height, width },
+          );
         }}
       >
-        <View className="items-center">
-          <View className="size-28 items-center justify-center rounded-full bg-accent/10">
-            <FilledIcon name={ICONS[step]} color={accent} size={58} />
-          </View>
-        </View>
-        <View className="gap-3">
-          <Text
-            accessibilityRole="header"
-            className="text-center font-sans text-3xl text-foreground"
-          >
-            {t(`onboarding.${key}`)}
-          </Text>
-          <Text className="text-center font-sans text-base leading-6 text-muted">
-            {t(`onboarding.${key}Description`)}
-          </Text>
-        </View>
-        <View className="gap-3">
-          {key === "welcome" && (
-            <>
-              <Button
-                variant="outline"
-                className="h-20 justify-start rounded-full px-6"
-                isDisabled={busy}
-                onPress={restore}
+        <View
+          style={[
+            styles.dayGrid,
+            { width: size * DAY_COLUMNS + DAY_GAP * (DAY_COLUMNS - 1) },
+          ]}
+        >
+          {MONTH_DAYS.map((day) => {
+            const selected = day === monthStartDay;
+            return (
+              <Pressable
+                key={day}
+                accessibilityRole="radio"
+                accessibilityLabel={String(day)}
+                accessibilityState={{ checked: selected, disabled: busy }}
+                disabled={busy}
+                onPress={() => setMonthStartDay(day)}
+                style={[
+                  styles.day,
+                  {
+                    backgroundColor: selected
+                      ? theme.accent
+                      : theme.surfaceSecondary,
+                    borderColor: selected ? theme.accent : theme.border,
+                    borderRadius: Math.round(size / 3),
+                    height: size,
+                    width: size,
+                  },
+                ]}
               >
-                <FilledIcon name="database-import" color={accent} size={25} />
-                <Button.Label className="ms-3 font-sans text-lg">
-                  {t("onboarding.restore")}
-                </Button.Label>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 justify-start rounded-full px-6"
-                isDisabled={busy}
-                onPress={() => {
-                  setDemo(true);
-                  setStep(1);
-                }}
-              >
-                <FilledIcon name="experiment" color={accent} size={25} />
-                <Button.Label className="ms-3 font-sans text-lg">
-                  {t("onboarding.demo")}
-                </Button.Label>
-              </Button>
-            </>
-          )}
-          {key === "language" && (
-            <>
-              {demo && (
-                <Text className="mb-3 text-center font-sans text-sm text-muted">
-                  {t("onboarding.demoDescription")}
-                </Text>
-              )}
-              {SETUP_LANGUAGES.map((option) =>
-                choice(option.nativeName, option.code === language, () => {
-                  setLanguage(option.code);
-                  setPreviewLanguage(option.code);
-                }),
-              )}
-            </>
-          )}
-          {key === "control" && (
-            <>
-              {choice(
-                t("onboarding.backupConsent"),
-                backupAccepted,
-                () => setBackupAccepted(!backupAccepted),
-                undefined,
-                true,
-              )}
-              {choice(
-                t("onboarding.responsibilityConsent"),
-                responsibilityAccepted,
-                () => setResponsibilityAccepted(!responsibilityAccepted),
-                undefined,
-                true,
-              )}
-            </>
-          )}
-          {key === "name" && (
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              maxLength={80}
-              editable={!busy}
-              autoCapitalize="words"
-              autoComplete="name"
-              returnKeyType="next"
-              onSubmitEditing={() => {
-                void next();
-              }}
-              accessibilityLabel={t("onboarding.namePlaceholder")}
-              placeholder={t("onboarding.namePlaceholder")}
-              placeholderTextColor={muted}
-              className="min-h-20 rounded-3xl bg-surface-secondary px-6 font-sans text-xl text-foreground"
-              style={{ textAlign: isRTL ? "right" : "left" }}
-            />
-          )}
-          {key === "currency" && (
-            <Button
-              variant="secondary"
-              className="h-24 justify-start rounded-3xl px-6"
-              onPress={() => setCurrencyOpen(true)}
-            >
-              <FilledIcon name="currency-usd" color={accent} size={28} />
-              <View className="ms-4 flex-1 gap-1">
-                <Text className="font-sans text-lg text-foreground">
-                  {currency?.name ?? t("onboarding.selectCurrency")}
-                </Text>
-                {currency && (
-                  <Text className="font-sans text-sm text-muted">
-                    {currency.code}
-                  </Text>
-                )}
-              </View>
-              <FilledIcon name="chevron-right" color={muted} size={22} />
-            </Button>
-          )}
-          {key === "date" &&
-            DATE_FORMATS.map((format) =>
-              choice(
-                format,
-                format === dateFormat,
-                () => setDateFormat(format),
-                formatAppDate(new Date(2026, 8, 14), format),
-              ),
-            )}
-          {key === "month" && (
-            <View className="flex-row flex-wrap justify-center gap-2">
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                <Pressable
-                  key={day}
-                  accessibilityRole="radio"
-                  accessibilityLabel={String(day)}
-                  accessibilityState={{ checked: day === monthStartDay }}
-                  onPress={() => setMonthStartDay(day)}
-                  className={`size-14 items-center justify-center rounded-2xl border ${day === monthStartDay ? "border-accent bg-accent" : "border-border bg-surface-secondary"}`}
+                <Text
+                  className="font-sans"
+                  style={{
+                    color: selected ? theme.accentForeground : theme.foreground,
+                    fontSize: Math.max(12, Math.round(size * 0.38)),
+                    textAlign: "center",
+                  }}
                 >
-                  <Text
-                    className={`font-sans text-lg ${day === monthStartDay ? "text-accent-foreground" : "text-foreground"}`}
-                  >
-                    {day}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-          {key === "week" &&
-            WEEKDAYS.map((day, index) =>
-              choice(t(`onboarding.${day}`), weekStartDay === index, () =>
-                setWeekStartDay(index),
-              ),
-            )}
+                  {day}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
-      </ScrollView>
-      <View className="px-6 pb-4 pt-3">
-        <Button
-          className="h-16 rounded-full"
-          isDisabled={disabled}
-          onPress={() => {
-            if (key === "welcome") setDemo(false);
+      </View>
+    );
+  }
+
+  function stepIntro(index: number) {
+    const stepKey = STEPS[index];
+    return (
+      <View className="items-center gap-2">
+        <View
+          style={[
+            styles.badge,
+            { backgroundColor: colorWithAlpha(theme.accent, 0.12) },
+          ]}
+        >
+          <FilledIcon name={ICONS[index]} color={theme.accent} size={32} />
+        </View>
+        <Text
+          accessibilityRole="header"
+          className="text-center font-manrope-bold text-2xl text-foreground"
+        >
+          {t(`onboarding.${stepKey}`)}
+        </Text>
+        <Text
+          className={`text-center font-sans text-muted ${stepKey === "month" ? "text-xs leading-4" : "text-sm leading-5"}`}
+        >
+          {t(`onboarding.${stepKey}Description`)}
+        </Text>
+      </View>
+    );
+  }
+
+  function stepControls(index: number) {
+    const stepKey = STEPS[index];
+    if (stepKey === "welcome")
+      return (
+        <>
+          {option("database-import", t("onboarding.restore"), restore)}
+          {option("experiment", t("onboarding.demo"), () => {
+            setDemo(true);
+            goToStep(1, 1);
+          })}
+        </>
+      );
+    if (stepKey === "language")
+      return (
+        <>
+          {demo && (
+            <Text className="mb-1 text-center font-sans text-xs leading-4 text-muted">
+              {t("onboarding.demoDescription")}
+            </Text>
+          )}
+          {SETUP_LANGUAGES.map((languageOption) =>
+            choice(
+              languageOption.nativeName,
+              languageOption.code === language,
+              () => {
+                setLanguage(languageOption.code);
+                setPreviewLanguage(languageOption.code);
+              },
+            ),
+          )}
+        </>
+      );
+    if (stepKey === "control")
+      return (
+        <>
+          {choice(
+            t("onboarding.backupConsent"),
+            backupAccepted,
+            () => setBackupAccepted(!backupAccepted),
+            undefined,
+            true,
+          )}
+          {choice(
+            t("onboarding.responsibilityConsent"),
+            responsibilityAccepted,
+            () => setResponsibilityAccepted(!responsibilityAccepted),
+            undefined,
+            true,
+          )}
+        </>
+      );
+    if (stepKey === "name")
+      return (
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          maxLength={80}
+          editable={!busy}
+          autoCapitalize="words"
+          autoComplete="name"
+          returnKeyType="done"
+          submitBehavior="blurAndSubmit"
+          onSubmitEditing={() => {
             void next();
           }}
+          accessibilityLabel={t("onboarding.namePlaceholder")}
+          placeholder={t("onboarding.namePlaceholder")}
+          placeholderTextColor={theme.muted}
+          className="font-sans text-base text-foreground"
+          style={[
+            styles.row,
+            {
+              backgroundColor: theme.surfaceSecondary,
+              borderColor: theme.border,
+              textAlign: isRTL ? "right" : "left",
+            },
+          ]}
+        />
+      );
+    if (stepKey === "currency")
+      return option(
+        "currency-usd",
+        currency?.name ?? t("onboarding.selectCurrency"),
+        () => setCurrencyOpen(true),
+        currency?.code,
+      );
+    if (stepKey === "date")
+      return DATE_FORMATS.map((format) =>
+        choice(
+          format,
+          format === dateFormat,
+          () => setDateFormat(format),
+          formatAppDate(new Date(2026, 8, 14), format),
+        ),
+      );
+    if (stepKey === "week")
+      return WEEKDAYS.map((day, dayIndex) =>
+        choice(t(`onboarding.${day}`), weekStartDay === dayIndex, () =>
+          setWeekStartDay(dayIndex),
+        ),
+      );
+    return null;
+  }
+
+  function renderStep(index: number) {
+    // The day picker must stay fully visible, so that step never scrolls.
+    if (STEPS[index] === "month")
+      return (
+        <View
+          className="gap-3"
+          style={[styles.staticStep, { paddingBottom: contentBottom }]}
         >
-          <Button.Label className="font-sans text-lg">
-            {t(
-              key === "welcome"
-                ? "onboarding.fresh"
-                : key === "control"
-                  ? "onboarding.agree"
-                  : key === "week"
-                    ? "onboarding.finish"
-                    : "onboarding.continue",
+          {stepIntro(index)}
+          {monthDayGrid()}
+        </View>
+      );
+    return (
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: contentBottom },
+        ]}
+      >
+        {stepIntro(index)}
+        <View className="gap-2.5">{stepControls(index)}</View>
+      </ScrollView>
+    );
+  }
+
+  const actionLabel = t(
+    key === "welcome"
+      ? "onboarding.fresh"
+      : key === "control"
+        ? "onboarding.agree"
+        : key === "week"
+          ? "onboarding.finish"
+          : "onboarding.continue",
+  );
+
+  return (
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.screen}
+      >
+        <View style={[styles.screen, { paddingTop: insets.top }]}>
+          <View style={styles.header}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("onboarding.back")}
+              disabled={busy || step === 0}
+              onPress={() => goToStep(step - 1, -1)}
+              style={({ pressed }) => [
+                styles.back,
+                {
+                  backgroundColor: theme.surfaceSecondary,
+                  opacity: step === 0 ? 0 : pressed ? 0.72 : 1,
+                },
+              ]}
+            >
+              <FilledIcon
+                name="arrow-left"
+                color={theme.foreground}
+                size={20}
+              />
+            </Pressable>
+            <Text
+              accessibilityLiveRegion="polite"
+              className="font-sans text-xs text-muted"
+            >
+              {t("onboarding.progress", {
+                current: step + 1,
+                total: STEPS.length,
+              })}
+            </Text>
+            <Text className="font-sans text-xs text-foreground">
+              {language.toUpperCase()}
+            </Text>
+          </View>
+          <View
+            style={[styles.track, { backgroundColor: theme.surfaceSecondary }]}
+          >
+            <View
+              style={{
+                backgroundColor: theme.accent,
+                height: "100%",
+                width: `${((step + 1) / STEPS.length) * 100}%`,
+              }}
+            />
+          </View>
+          <View style={styles.stage}>
+            {leavingStep !== null && leavingStep !== step && (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                {renderStep(leavingStep)}
+              </View>
             )}
-          </Button.Label>
-        </Button>
-      </View>
+            <Animated.View
+              key={step}
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: theme.background },
+                enteringStyle,
+              ]}
+            >
+              {renderStep(step)}
+            </Animated.View>
+          </View>
+          <LinearGradient
+            colors={[
+              colorWithAlpha(theme.background, 0),
+              colorWithAlpha(theme.background, 0.72),
+              theme.background,
+              theme.background,
+            ]}
+            end={{ x: 0.5, y: 1 }}
+            locations={[
+              0,
+              (128 * 0.54) / (128 + insets.bottom),
+              128 / (128 + insets.bottom),
+              1,
+            ]}
+            pointerEvents="none"
+            start={{ x: 0.5, y: 0 }}
+            style={[styles.bottomScrim, { height: 128 + insets.bottom }]}
+          />
+          <View
+            pointerEvents="box-none"
+            style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
+          >
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={actionLabel}
+              accessibilityState={{ busy, disabled }}
+              disabled={disabled}
+              onPress={() => {
+                if (key === "welcome") setDemo(false);
+                void next();
+              }}
+              style={({ pressed }) => [
+                styles.action,
+                { backgroundColor: theme.accent },
+                pressed && styles.pressed,
+                disabled && styles.disabled,
+              ]}
+            >
+              <FilledIcon
+                name={key === "week" ? "check" : "chevron-right"}
+                size={24}
+                tone="accent-foreground"
+              />
+              <Text
+                numberOfLines={1}
+                style={{ flexShrink: 1 }}
+                className="font-manrope-bold text-base text-accent-foreground"
+              >
+                {actionLabel}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
       <CurrencySelectorSheet
         currencies={currencies}
         isOpen={currencyOpen}
@@ -512,15 +738,110 @@ export function OnboardingScreen({
           accessibilityViewIsModal
           className="absolute inset-0 items-center justify-center gap-5 bg-background/95 px-8"
         >
-          <ActivityIndicator size="large" color={accent} />
+          <ActivityIndicator size="large" color={theme.accent} />
           <Text
             accessibilityLiveRegion="polite"
-            className="text-center font-sans text-xl text-foreground"
+            className="text-center font-sans text-lg text-foreground"
           >
             {t("onboarding.saving")}
           </Text>
         </View>
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    height: 48,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+  },
+  back: {
+    alignItems: "center",
+    borderRadius: 18,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
+  },
+  track: {
+    borderRadius: 999,
+    height: 3,
+    marginHorizontal: 20,
+    overflow: "hidden",
+  },
+  stage: { flex: 1, overflow: "hidden" },
+  scrollContent: {
+    flexGrow: 1,
+    gap: 18,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  staticStep: { flex: 1, paddingHorizontal: 20, paddingTop: 12 },
+  row: {
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    minHeight: 54,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  mark: {
+    alignItems: "center",
+    borderRadius: 11,
+    borderWidth: 1,
+    height: 22,
+    justifyContent: "center",
+    width: 22,
+  },
+  badge: {
+    alignItems: "center",
+    borderRadius: 34,
+    height: 68,
+    justifyContent: "center",
+    width: 68,
+  },
+  dayGrid: {
+    alignSelf: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: DAY_GAP,
+  },
+  day: {
+    alignItems: "center",
+    borderWidth: 1,
+    justifyContent: "center",
+  },
+  bottomScrim: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    zIndex: 10,
+  },
+  actionDock: {
+    gap: 6,
+    left: 0,
+    paddingHorizontal: 12,
+    position: "absolute",
+    right: 0,
+    zIndex: 20,
+  },
+  action: {
+    alignItems: "center",
+    borderRadius: 29,
+    flexDirection: "row",
+    gap: 10,
+    height: 58,
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  pressed: { opacity: 0.72 },
+  disabled: { opacity: 0.5 },
+});

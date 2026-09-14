@@ -86,12 +86,47 @@ function mount({
       ActivityIndicator: "ActivityIndicator",
       Platform: { OS: "android" },
       BackHandler: {},
+      Keyboard: {
+        dismiss: () => events.push("keyboard-dismiss"),
+      },
+      StyleSheet: { absoluteFill: {}, create: (sheet) => sheet },
+      useWindowDimensions: () => ({ width: 390, height: 844 }),
       Alert: {
         alert: (title, message, buttons) => {
           alerts.push({ title, message });
           if (buttons) buttons[confirm ? 1 : 0].onPress();
         },
       },
+    },
+    "react-native-reanimated": {
+      default: { View: "Animated.View" },
+      Easing: { bezier: () => () => 0 },
+      ReduceMotion: { System: "system" },
+      runOnJS: (fn) => fn,
+      useAnimatedStyle: (worklet) => worklet(),
+      useSharedValue: (initial) => ({ value: initial }),
+      withTiming: (to, _config, callback) => {
+        callback?.(true);
+        return to;
+      },
+    },
+    "expo-linear-gradient": { LinearGradient: "LinearGradient" },
+    "@/shared/theme/app-theme": {
+      colorWithAlpha: (color) => color,
+      useAppThemeColors: () => ({
+        accent: "#afd",
+        accentForeground: "#012",
+        background: "#000",
+        border: "#333",
+        danger: "#f00",
+        foreground: "#fff",
+        isDark: true,
+        muted: "#aaa",
+        success: "#0f0",
+        surface: "#111",
+        surfaceSecondary: "#202020",
+        surfaceTertiary: "#2d2d2d",
+      }),
     },
     "heroui-native": {
       Button: button,
@@ -184,7 +219,11 @@ function mount({
     },
     release: () => releaseWrite(),
     action: (key) =>
-      nodes().find((node) => node.type === button && label(node).includes(key)),
+      nodes().find(
+        (node) =>
+          node.props?.accessibilityRole === "button" &&
+          label(node).includes(key),
+      ),
     radio: (text) =>
       nodes().find(
         (node) =>
@@ -195,7 +234,7 @@ function mount({
     press: async (key) => {
       const action = app.action(key);
       assert.ok(action, key);
-      if (!action.props.isDisabled) await action.props.onPress();
+      if (!action.props.disabled) await action.props.onPress();
       render();
     },
   };
@@ -211,27 +250,27 @@ async function fill(app, demo = false) {
   assert.equal(app.language, "he");
   assert.equal(app.document._local.appLanguage, "en");
   await app.press("onboarding.continue");
-  assert.equal(app.action("onboarding.agree").props.isDisabled, true);
+  assert.equal(app.action("onboarding.agree").props.disabled, true);
   let checks = app
     .nodes()
     .filter((node) => node.props?.accessibilityRole === "checkbox");
   checks[0].props.onPress();
   app.render();
-  assert.equal(app.action("onboarding.agree").props.isDisabled, true);
+  assert.equal(app.action("onboarding.agree").props.disabled, true);
   checks = app
     .nodes()
     .filter((node) => node.props?.accessibilityRole === "checkbox");
   checks[1].props.onPress();
   app.render();
   await app.press("onboarding.agree");
-  assert.equal(app.action("onboarding.continue").props.isDisabled, true);
+  assert.equal(app.action("onboarding.continue").props.disabled, true);
   app
     .nodes()
     .find((node) => node.type === "TextInput")
     .props.onChangeText("Alex");
   app.render();
   await app.press("onboarding.continue");
-  assert.equal(app.action("onboarding.continue").props.isDisabled, true);
+  assert.equal(app.action("onboarding.continue").props.disabled, true);
   app
     .nodes()
     .find((node) => node.type === "CurrencySheet")
@@ -279,7 +318,7 @@ test("failed setup keeps drafts and the empty database and shows an actionable e
   app.render();
   assert.equal(app.document.users.length, 0);
   assert.equal(app.alerts.at(-1).message, "disk full");
-  assert.equal(app.action("onboarding.finish").props.isDisabled, false);
+  assert.equal(app.action("onboarding.finish").props.disabled, false);
 });
 
 test("demo choice uses the same full setup and saves sample records only at completion", async () => {
