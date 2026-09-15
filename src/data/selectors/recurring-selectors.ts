@@ -207,12 +207,8 @@ export function selectRecurringSummary(items: Recurring[], now = new Date()) {
   );
   return {
     yearly: recurringTotals(annual),
-    yearlyIncome: recurringTotals(
-      annual.filter((r) => r.type === 1),
-    ),
-    yearlyExpense: recurringTotals(
-      annual.filter((r) => r.type === 0),
-    ),
+    yearlyIncome: recurringTotals(annual.filter((r) => r.type === 1)),
+    yearlyExpense: recurringTotals(annual.filter((r) => r.type === 0)),
     monthly: recurringTotals(
       annual.map((r) => ({ ...r, amount: r.amount / 12 })),
     ),
@@ -229,6 +225,30 @@ export function selectRecurringSummary(items: Recurring[], now = new Date()) {
     due: recurringTotals(
       month.filter((e) => e.status === "pending" && e.type === 0),
     ),
+  };
+}
+
+/** Current-month recurring expense activity used by the home screen. */
+export function selectHomeRecurringPayments(
+  document: BackupDocument,
+  now = new Date(),
+) {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const expenses = selectRecurringEvents(
+    selectRecurrings(document, now),
+    start,
+    end,
+  ).filter((event) => event.type === 0);
+  const pending = expenses.filter((event) => event.status === "pending");
+  const paid = expenses.filter(
+    (event) => event.status === "processed" && event.date <= now,
+  );
+
+  return {
+    paid: recurringTotals(paid),
+    pending,
+    remaining: recurringTotals(pending),
   };
 }
 export function selectRecurringRelations(

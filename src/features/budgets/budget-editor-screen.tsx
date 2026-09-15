@@ -34,6 +34,7 @@ import {
   selectCategories,
 } from "@/data/selectors/document-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { currencies } from "@/features/profile/data/currencies-data";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
@@ -51,13 +52,7 @@ import {
 } from "./components/budget-ui";
 
 type Sheet =
-  | "type"
-  | "mode"
-  | "scope"
-  | "period"
-  | "categories"
-  | "accounts"
-  | "settings";
+  "type" | "mode" | "scope" | "period" | "categories" | "accounts" | "settings";
 const toggleId = (values: string[], id: string) =>
   values.includes(id) ? values.filter((v) => v !== id) : [...values, id];
 
@@ -83,7 +78,10 @@ function BudgetEditorSheet({
         if (!open && !busy) onClose();
       }}
     >
-      <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+      <AppBottomSheetPortal
+        isOpen={isOpen}
+        unstable_accessibilityContainerViewIsModal
+      >
         <BottomSheet.Overlay isCloseOnPress={!busy} />
         <BottomSheet.Content
           containerStyle={initialPositionFix.containerStyle}
@@ -120,7 +118,7 @@ function BudgetEditorSheet({
             </BottomSheetScrollView>
           </View>
         </BottomSheet.Content>
-      </BottomSheet.Portal>
+      </AppBottomSheetPortal>
     </BottomSheet>
   );
 }
@@ -136,7 +134,11 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
   const [draft, setDraft] = useState<BudgetDraft>(() =>
     existing
       ? existing
-      : { ...budgetDefaults(), currencyCode: selectBudgetCurrency(document), cycleDay: String(document._local.monthStartDay) },
+      : {
+          ...budgetDefaults(),
+          currencyCode: selectBudgetCurrency(document),
+          cycleDay: String(document._local.monthStartDay),
+        },
   );
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
@@ -161,10 +163,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
   };
   const change = <K extends keyof BudgetDraft>(key: K, value: BudgetDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
-  function select<K extends keyof BudgetDraft>(
-    key: K,
-    value: BudgetDraft[K],
-  ) {
+  function select<K extends keyof BudgetDraft>(key: K, value: BudgetDraft[K]) {
     change(key, value);
   }
   function open(value: Sheet) {
@@ -189,9 +188,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
       router.replace({ pathname: "/budgets/[id]", params: { id: id.current } });
     } catch (reason) {
       setError(
-        reason instanceof Error
-          ? reason.message
-          : t("budgets.form.saveError"),
+        reason instanceof Error ? reason.message : t("budgets.form.saveError"),
       );
     } finally {
       saving.current = false;
@@ -257,126 +254,130 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
               paddingBottom: 104 + insets.bottom,
             }}
           >
-          <View className="mb-4 flex-row items-center gap-3">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("budgets.form.chooseIcon")}
-              disabled={busy}
-              onPress={() => setIconPickerOpen(true)}
-            >
-              <BudgetBadge budget={draft} />
-            </Pressable>
-            <View className="flex-1">
-              <BudgetField
-                editable={!busy}
-                accessibilityLabel={t("budgets.form.name")}
-                placeholder={t("budgets.form.namePlaceholder")}
-                maxLength={100}
-                value={draft.name}
-                onChangeText={(name) => setDraft((d) => ({ ...d, name }))}
-              />
+            <View className="mb-4 flex-row items-center gap-3">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("budgets.form.chooseIcon")}
+                disabled={busy}
+                onPress={() => setIconPickerOpen(true)}
+              >
+                <BudgetBadge budget={draft} />
+              </Pressable>
+              <View className="flex-1">
+                <BudgetField
+                  editable={!busy}
+                  accessibilityLabel={t("budgets.form.name")}
+                  placeholder={t("budgets.form.namePlaceholder")}
+                  maxLength={100}
+                  value={draft.name}
+                  onChangeText={(name) => setDraft((d) => ({ ...d, name }))}
+                />
+              </View>
             </View>
-          </View>
-          <BudgetField
-            editable={!busy}
-            accessibilityLabel={t("budgets.form.amount")}
-            placeholder={t("budgets.form.amountPlaceholder")}
-            keyboardType="decimal-pad"
-            value={draft.amount}
-            onChangeText={(amount) => setDraft((d) => ({ ...d, amount }))}
-          />
-          {row(
-            "type",
-            t("budgets.form.budgetFor"),
-            t("budgets.form.budgetForHelp"),
-            t("budgets.common.current", {
-              value: labels.types[draft.transactionType],
-            }),
-            "swap-horizontal",
-          )}
-          {row(
-            "mode",
-            t("budgets.form.mode"),
-            t("budgets.form.modeHelp"),
-            t("budgets.common.current", {
-              value: labels.modes[draft.budgetMode],
-            }),
-            "tune",
-          )}
-          {row(
-            "scope",
-            t("budgets.form.scope"),
-            t("budgets.form.scopeHelp"),
-            t("budgets.common.current", {
-              value: t("budgets.common.typeBudget", {
-                type: labels.scopes[draft.budgetType],
+            <BudgetField
+              editable={!busy}
+              accessibilityLabel={t("budgets.form.amount")}
+              placeholder={t("budgets.form.amountPlaceholder")}
+              keyboardType="decimal-pad"
+              value={draft.amount}
+              onChangeText={(amount) => setDraft((d) => ({ ...d, amount }))}
+            />
+            {row(
+              "type",
+              t("budgets.form.budgetFor"),
+              t("budgets.form.budgetForHelp"),
+              t("budgets.common.current", {
+                value: labels.types[draft.transactionType],
               }),
-            }),
-            "wallet",
-          )}
-          {row(
-            "period",
-            t("budgets.form.period"),
-            t("budgets.form.periodHelp"),
-            draft.period === "Monthly" && Number(draft.cycleDay) > 1
-              ? t("budgets.common.currentMonthlyCycle", {
-                  period: labels.periods[draft.period],
-                  day: draft.cycleDay,
-                })
-              : t("budgets.common.current", {
-                  value: labels.periods[draft.period],
-                }),
-            "clock",
-          )}
-          {draft.budgetType === "Category" &&
-            row(
-              "categories",
-              draft.budgetMode === "Automatic"
-                ? t("budgets.form.autoTrackCategories")
-                : t("budgets.form.selectCategories"),
-              draft.budgetMode === "Automatic"
-                ? t("budgets.form.autoTrackCategoriesHelp")
-                : t("budgets.form.selectCategoriesHelp"),
-              t("budgets.common.selected", {
-                count: draft.categories.length,
-              }),
-              "shopping",
+              "swap-horizontal",
             )}
-          {row(
-            "accounts",
-            t("budgets.form.filterAccounts"),
-            t("budgets.form.filterAccountsHelp"),
-            draft.accounts.length
-              ? t("budgets.common.selected", { count: draft.accounts.length })
-              : t("budgets.common.allAccounts"),
-            "bank",
-          )}
-          {row(
-            "currency",
-            t("budgets.form.currency"),
-            t("budgets.form.currencyHelp"),
-            draft.currencyCode,
-            "cash",
-          )}
-          {row(
-            "settings",
-            t("budgets.form.additionalSettings"),
-            t("budgets.form.additionalSettingsHelp"),
-            draft.rolling
-              ? t("budgets.common.rollingBudget")
-              : t("budgets.common.fixedBudget"),
-            "cog",
-          )}
-          <BudgetField
-            editable={!busy}
-            accessibilityLabel={t("budgets.form.notes")}
-            placeholder={t("budgets.form.notesPlaceholder")}
-            multiline
-            maxLength={2000}
-            value={draft.notes}
-            onChangeText={(notes) => setDraft((d) => ({ ...d, notes }))}
-            style={{ minHeight: 120, textAlignVertical: "top", marginTop: 12 }}
-          />
+            {row(
+              "mode",
+              t("budgets.form.mode"),
+              t("budgets.form.modeHelp"),
+              t("budgets.common.current", {
+                value: labels.modes[draft.budgetMode],
+              }),
+              "tune",
+            )}
+            {row(
+              "scope",
+              t("budgets.form.scope"),
+              t("budgets.form.scopeHelp"),
+              t("budgets.common.current", {
+                value: t("budgets.common.typeBudget", {
+                  type: labels.scopes[draft.budgetType],
+                }),
+              }),
+              "wallet",
+            )}
+            {row(
+              "period",
+              t("budgets.form.period"),
+              t("budgets.form.periodHelp"),
+              draft.period === "Monthly" && Number(draft.cycleDay) > 1
+                ? t("budgets.common.currentMonthlyCycle", {
+                    period: labels.periods[draft.period],
+                    day: draft.cycleDay,
+                  })
+                : t("budgets.common.current", {
+                    value: labels.periods[draft.period],
+                  }),
+              "clock",
+            )}
+            {draft.budgetType === "Category" &&
+              row(
+                "categories",
+                draft.budgetMode === "Automatic"
+                  ? t("budgets.form.autoTrackCategories")
+                  : t("budgets.form.selectCategories"),
+                draft.budgetMode === "Automatic"
+                  ? t("budgets.form.autoTrackCategoriesHelp")
+                  : t("budgets.form.selectCategoriesHelp"),
+                t("budgets.common.selected", {
+                  count: draft.categories.length,
+                }),
+                "shopping",
+              )}
+            {row(
+              "accounts",
+              t("budgets.form.filterAccounts"),
+              t("budgets.form.filterAccountsHelp"),
+              draft.accounts.length
+                ? t("budgets.common.selected", { count: draft.accounts.length })
+                : t("budgets.common.allAccounts"),
+              "bank",
+            )}
+            {row(
+              "currency",
+              t("budgets.form.currency"),
+              t("budgets.form.currencyHelp"),
+              draft.currencyCode,
+              "cash",
+            )}
+            {row(
+              "settings",
+              t("budgets.form.additionalSettings"),
+              t("budgets.form.additionalSettingsHelp"),
+              draft.rolling
+                ? t("budgets.common.rollingBudget")
+                : t("budgets.common.fixedBudget"),
+              "cog",
+            )}
+            <BudgetField
+              editable={!busy}
+              accessibilityLabel={t("budgets.form.notes")}
+              placeholder={t("budgets.form.notesPlaceholder")}
+              multiline
+              maxLength={2000}
+              value={draft.notes}
+              onChangeText={(notes) => setDraft((d) => ({ ...d, notes }))}
+              style={{
+                minHeight: 120,
+                textAlignVertical: "top",
+                marginTop: 12,
+              }}
+            />
             <Text className="mt-2 font-manrope-semibold text-lg text-foreground">
               {t("budgets.form.colors")}
             </Text>
@@ -385,7 +386,9 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
             </Text>
             <BudgetColorPicker
               value={draft.color}
-              onChange={(color) => setDraft((current) => ({ ...current, color }))}
+              onChange={(color) =>
+                setDraft((current) => ({ ...current, color }))
+              }
             />
           </ScrollView>
 
@@ -465,272 +468,265 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
         busy={busy}
         onClose={() => setSheet(null)}
       >
-          {sheet === "type" &&
-            labels.types.map((label, index) => (
+        {sheet === "type" &&
+          labels.types.map((label, index) => (
+            <BudgetOption
+              key={label}
+              title={t("budgets.common.typeBudget", { type: label })}
+              description={
+                index === 0
+                  ? t("budgets.form.typeDescriptions.expense")
+                  : index === 1
+                    ? t("budgets.form.typeDescriptions.income")
+                    : t("budgets.form.typeDescriptions.transfer")
+              }
+              selected={draft.transactionType === index}
+              onPress={() => {
+                setDraft((current) => ({
+                  ...current,
+                  transactionType: index as 0 | 1 | 2,
+                  categories:
+                    current.transactionType === index ? current.categories : [],
+                }));
+              }}
+            />
+          ))}
+        {sheet === "mode" && (
+          <>
+            {(["Automatic", "Manual"] as const).map((mode) => (
               <BudgetOption
-                key={label}
-                title={t("budgets.common.typeBudget", { type: label })}
+                key={mode}
+                title={labels.modes[mode]}
                 description={
-                  index === 0
-                    ? t("budgets.form.typeDescriptions.expense")
-                    : index === 1
-                      ? t("budgets.form.typeDescriptions.income")
-                      : t("budgets.form.typeDescriptions.transfer")
+                  mode === "Automatic"
+                    ? t("budgets.form.modeDescriptions.automatic")
+                    : t("budgets.form.modeDescriptions.manual")
                 }
-                selected={draft.transactionType === index}
-                onPress={() => {
-                  setDraft((current) => ({
-                    ...current,
-                    transactionType: index as 0 | 1 | 2,
-                    categories:
-                      current.transactionType === index
-                        ? current.categories
-                        : [],
-                  }));
-                }}
+                selected={draft.budgetMode === mode}
+                onPress={() => select("budgetMode", mode)}
               />
             ))}
-          {sheet === "mode" && (
-            <>
-              {(["Automatic", "Manual"] as const).map((mode) => (
-                <BudgetOption
-                  key={mode}
-                  title={labels.modes[mode]}
-                  description={
-                    mode === "Automatic"
-                      ? t("budgets.form.modeDescriptions.automatic")
-                      : t("budgets.form.modeDescriptions.manual")
-                  }
-                  selected={draft.budgetMode === mode}
-                  onPress={() => select("budgetMode", mode)}
-                />
-              ))}
-            </>
-          )}
-          {sheet === "scope" && (
-            <>
-              {(["Category", "Overall"] as const).map((scope) => (
-                <BudgetOption
-                  key={scope}
-                  title={t("budgets.common.typeBudget", {
-                    type: labels.scopes[scope],
-                  })}
-                  description={
-                    scope === "Category"
-                      ? t("budgets.form.scopeDescriptions.category")
-                      : t("budgets.form.scopeDescriptions.overall")
-                  }
-                  selected={draft.budgetType === scope}
-                  onPress={() => select("budgetType", scope)}
-                />
-              ))}
-            </>
-          )}
-          {sheet === "period" && (
-            <>
-              {BUDGET_PERIODS.map((period) => (
-                <BudgetOption
-                  key={period}
-                  title={labels.periods[period]}
-                  description={
-                    period === "Custom"
-                      ? t("budgets.form.customDateRange")
-                      : t("budgets.form.resets", {
-                          period: labels.periods[period].toLocaleLowerCase(
-                            i18n.resolvedLanguage,
-                          ),
-                        })
-                  }
-                  selected={draft.period === period}
-                  onPress={() => select("period", period)}
-                />
-              ))}
-              {draft.period === "Monthly" && (
-                <>
-                  <Text className="mt-3 font-manrope-semibold text-lg text-foreground">
-                    {t("budgets.form.customMonthlyCycle")}
-                  </Text>
-                  <BudgetField
-                    accessibilityLabel={t("budgets.form.startDay")}
-                    placeholder={t("budgets.form.startDayPlaceholder")}
-                    keyboardType="number-pad"
-                    value={draft.cycleDay}
-                    maxLength={2}
-                    onChangeText={(v) => change("cycleDay", v)}
-                  />
-                  <Text className="text-sm text-muted">
-                    {t("budgets.form.shorterMonths")}
-                  </Text>
-                </>
-              )}
-              {draft.period === "Custom" && (
-                <>
-                  <BudgetField
-                    accessibilityLabel={t("budgets.form.startDate")}
-                    placeholder={t("budgets.form.startDatePlaceholder")}
-                    value={draft.startDate}
-                    onChangeText={(v) => change("startDate", v)}
-                  />
-                  <BudgetField
-                    accessibilityLabel={t("budgets.form.endDate")}
-                    placeholder={t("budgets.form.endDatePlaceholder")}
-                    value={draft.endDate}
-                    onChangeText={(v) => change("endDate", v)}
-                  />
-                  <Text className="text-sm text-muted">
-                    {t("budgets.form.datesIncluded")}
-                  </Text>
-                </>
-              )}
-            </>
-          )}
-          {sheet === "categories" && (
-            <>
-              <Text className="text-muted">
-                {t("budgets.form.categorySelection", {
-                  selected: draft.categories.length,
-                  total: categories.length,
+          </>
+        )}
+        {sheet === "scope" && (
+          <>
+            {(["Category", "Overall"] as const).map((scope) => (
+              <BudgetOption
+                key={scope}
+                title={t("budgets.common.typeBudget", {
+                  type: labels.scopes[scope],
                 })}
-              </Text>
-              <BudgetField
-                accessibilityLabel={t("budgets.form.searchCategories")}
-                placeholder={t("budgets.form.searchCategories")}
-                value={query}
-                onChangeText={setQuery}
-              />
-              {categories
-                .filter((cat) =>
-                  cat.name.toLowerCase().includes(query.toLowerCase()),
-                )
-                .map((cat) => (
-                  <BudgetOption
-                    key={cat.id}
-                    title={cat.name}
-                    description={
-                      cat.parentId
-                        ? t("budgets.form.subcategory", {
-                            parent:
-                              categories.find((p) => p.id === cat.parentId)
-                                ?.name ?? t("budgets.form.parentCategory"),
-                          })
-                        : undefined
-                    }
-                    selected={draft.categories.some((id) =>
-                      references(
-                        document.categories.find(
-                          (r) => identity(r) === cat.id,
-                        )!,
-                        id,
-                      ),
-                    )}
-                    onPress={() =>
-                      select("categories", toggleId(draft.categories, cat.id))
-                    }
-                  >
-                    <BudgetBadge budget={cat} />
-                  </BudgetOption>
-                ))}
-              {!categories.length && (
-                <Text className="py-4 text-muted">
-                  {t("budgets.form.noCategories", {
-                    type: labels.types[
-                      draft.transactionType
-                    ].toLocaleLowerCase(i18n.resolvedLanguage),
-                  })}
-                </Text>
-              )}
-              {draft.budgetMode === "Manual" ? (
-                <BudgetToggle
-                  title={t("budgets.form.includeSubcategories")}
-                  description={t("budgets.form.includeSubcategoriesHelp")}
-                  value={draft.includeSubcategories}
-                  onChange={(v) => select("includeSubcategories", v)}
-                />
-              ) : (
-                <Text className="py-3 text-muted">
-                  {t("budgets.form.automaticIncludesDescendants")}
-                </Text>
-              )}
-              <View className="flex-row gap-3">
-                <Button
-                  variant="secondary"
-                  onPress={() =>
-                    select(
-                      "categories",
-                      categories.map((cat) => cat.id),
-                    )
-                  }
-                >
-                  {t("budgets.form.selectAll")}
-                </Button>
-                <Button
-                  variant="ghost"
-                  onPress={() => select("categories", [])}
-                >
-                  {t("budgets.form.clearAll")}
-                </Button>
-              </View>
-            </>
-          )}
-          {sheet === "accounts" && (
-            <>
-              <Text className="text-muted">
-                {t("budgets.form.accountSelection", {
-                  selected: draft.accounts.length,
-                  total: accounts.length,
-                })}
-              </Text>
-              {accounts.map((a) => (
-                <BudgetOption
-                  key={a.id}
-                  title={a.name}
-                  description={`${a.ownerName} · ${a.currencyCode}`}
-                  selected={draft.accounts.includes(a.id)}
-                  onPress={() =>
-                    select("accounts", toggleId(draft.accounts, a.id))
-                  }
-                  icon="bank"
-                />
-              ))}
-              <View className="flex-row gap-3">
-                <Button
-                  variant="secondary"
-                  onPress={() =>
-                    select(
-                      "accounts",
-                      accounts.map((a) => a.id),
-                    )
-                  }
-                >
-                  {t("budgets.form.selectAll")}
-                </Button>
-                <Button variant="ghost" onPress={() => select("accounts", [])}>
-                  {t("budgets.form.clearAll")}
-                </Button>
-              </View>
-            </>
-          )}
-          {sheet === "settings" && (
-            <>
-              <BudgetToggle
-                title={t("budgets.common.rollingBudget")}
                 description={
-                  draft.period === "Custom"
-                    ? t("budgets.form.rollingCustomHelp")
-                    : t("budgets.form.rollingHelp")
+                  scope === "Category"
+                    ? t("budgets.form.scopeDescriptions.category")
+                    : t("budgets.form.scopeDescriptions.overall")
                 }
-                disabled={draft.period === "Custom"}
-                value={draft.rolling}
-                onChange={(v) => select("rolling", v)}
+                selected={draft.budgetType === scope}
+                onPress={() => select("budgetType", scope)}
               />
+            ))}
+          </>
+        )}
+        {sheet === "period" && (
+          <>
+            {BUDGET_PERIODS.map((period) => (
+              <BudgetOption
+                key={period}
+                title={labels.periods[period]}
+                description={
+                  period === "Custom"
+                    ? t("budgets.form.customDateRange")
+                    : t("budgets.form.resets", {
+                        period: labels.periods[period].toLocaleLowerCase(
+                          i18n.resolvedLanguage,
+                        ),
+                      })
+                }
+                selected={draft.period === period}
+                onPress={() => select("period", period)}
+              />
+            ))}
+            {draft.period === "Monthly" && (
+              <>
+                <Text className="mt-3 font-manrope-semibold text-lg text-foreground">
+                  {t("budgets.form.customMonthlyCycle")}
+                </Text>
+                <BudgetField
+                  accessibilityLabel={t("budgets.form.startDay")}
+                  placeholder={t("budgets.form.startDayPlaceholder")}
+                  keyboardType="number-pad"
+                  value={draft.cycleDay}
+                  maxLength={2}
+                  onChangeText={(v) => change("cycleDay", v)}
+                />
+                <Text className="text-sm text-muted">
+                  {t("budgets.form.shorterMonths")}
+                </Text>
+              </>
+            )}
+            {draft.period === "Custom" && (
+              <>
+                <BudgetField
+                  accessibilityLabel={t("budgets.form.startDate")}
+                  placeholder={t("budgets.form.startDatePlaceholder")}
+                  value={draft.startDate}
+                  onChangeText={(v) => change("startDate", v)}
+                />
+                <BudgetField
+                  accessibilityLabel={t("budgets.form.endDate")}
+                  placeholder={t("budgets.form.endDatePlaceholder")}
+                  value={draft.endDate}
+                  onChangeText={(v) => change("endDate", v)}
+                />
+                <Text className="text-sm text-muted">
+                  {t("budgets.form.datesIncluded")}
+                </Text>
+              </>
+            )}
+          </>
+        )}
+        {sheet === "categories" && (
+          <>
+            <Text className="text-muted">
+              {t("budgets.form.categorySelection", {
+                selected: draft.categories.length,
+                total: categories.length,
+              })}
+            </Text>
+            <BudgetField
+              accessibilityLabel={t("budgets.form.searchCategories")}
+              placeholder={t("budgets.form.searchCategories")}
+              value={query}
+              onChangeText={setQuery}
+            />
+            {categories
+              .filter((cat) =>
+                cat.name.toLowerCase().includes(query.toLowerCase()),
+              )
+              .map((cat) => (
+                <BudgetOption
+                  key={cat.id}
+                  title={cat.name}
+                  description={
+                    cat.parentId
+                      ? t("budgets.form.subcategory", {
+                          parent:
+                            categories.find((p) => p.id === cat.parentId)
+                              ?.name ?? t("budgets.form.parentCategory"),
+                        })
+                      : undefined
+                  }
+                  selected={draft.categories.some((id) =>
+                    references(
+                      document.categories.find((r) => identity(r) === cat.id)!,
+                      id,
+                    ),
+                  )}
+                  onPress={() =>
+                    select("categories", toggleId(draft.categories, cat.id))
+                  }
+                >
+                  <BudgetBadge budget={cat} />
+                </BudgetOption>
+              ))}
+            {!categories.length && (
+              <Text className="py-4 text-muted">
+                {t("budgets.form.noCategories", {
+                  type: labels.types[draft.transactionType].toLocaleLowerCase(
+                    i18n.resolvedLanguage,
+                  ),
+                })}
+              </Text>
+            )}
+            {draft.budgetMode === "Manual" ? (
               <BudgetToggle
-                title={t("budgets.form.showBudget")}
-                description={t("budgets.form.showBudgetHelp")}
-                value={draft.showOnHome}
-                onChange={(v) => select("showOnHome", v)}
+                title={t("budgets.form.includeSubcategories")}
+                description={t("budgets.form.includeSubcategoriesHelp")}
+                value={draft.includeSubcategories}
+                onChange={(v) => select("includeSubcategories", v)}
               />
-            </>
-          )}
+            ) : (
+              <Text className="py-3 text-muted">
+                {t("budgets.form.automaticIncludesDescendants")}
+              </Text>
+            )}
+            <View className="flex-row gap-3">
+              <Button
+                variant="secondary"
+                onPress={() =>
+                  select(
+                    "categories",
+                    categories.map((cat) => cat.id),
+                  )
+                }
+              >
+                {t("budgets.form.selectAll")}
+              </Button>
+              <Button variant="ghost" onPress={() => select("categories", [])}>
+                {t("budgets.form.clearAll")}
+              </Button>
+            </View>
+          </>
+        )}
+        {sheet === "accounts" && (
+          <>
+            <Text className="text-muted">
+              {t("budgets.form.accountSelection", {
+                selected: draft.accounts.length,
+                total: accounts.length,
+              })}
+            </Text>
+            {accounts.map((a) => (
+              <BudgetOption
+                key={a.id}
+                title={a.name}
+                description={`${a.ownerName} · ${a.currencyCode}`}
+                selected={draft.accounts.includes(a.id)}
+                onPress={() =>
+                  select("accounts", toggleId(draft.accounts, a.id))
+                }
+                icon="bank"
+              />
+            ))}
+            <View className="flex-row gap-3">
+              <Button
+                variant="secondary"
+                onPress={() =>
+                  select(
+                    "accounts",
+                    accounts.map((a) => a.id),
+                  )
+                }
+              >
+                {t("budgets.form.selectAll")}
+              </Button>
+              <Button variant="ghost" onPress={() => select("accounts", [])}>
+                {t("budgets.form.clearAll")}
+              </Button>
+            </View>
+          </>
+        )}
+        {sheet === "settings" && (
+          <>
+            <BudgetToggle
+              title={t("budgets.common.rollingBudget")}
+              description={
+                draft.period === "Custom"
+                  ? t("budgets.form.rollingCustomHelp")
+                  : t("budgets.form.rollingHelp")
+              }
+              disabled={draft.period === "Custom"}
+              value={draft.rolling}
+              onChange={(v) => select("rolling", v)}
+            />
+            <BudgetToggle
+              title={t("budgets.form.showBudget")}
+              description={t("budgets.form.showBudgetHelp")}
+              value={draft.showOnHome}
+              onChange={(v) => select("showOnHome", v)}
+            />
+          </>
+        )}
       </BudgetEditorSheet>
       <CurrencySelectorSheet
         currencies={currencies}

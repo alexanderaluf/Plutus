@@ -81,6 +81,9 @@ function mountSheet(language, nativeRTL) {
     },
     "@/shared/ui/filled-icon": { FilledIcon: "FilledIcon" },
     "@/shared/ui/record-icon": { RecordIcon: "RecordIcon" },
+    "@/shared/ui/app-bottom-sheet-portal": {
+      AppBottomSheetPortal: primitive("AppBottomSheetPortal"),
+    },
     "@/shared/ui/use-bottom-sheet-initial-position-fix": {
       useBottomSheetInitialPositionFix: () => ({
         containerStyle: undefined,

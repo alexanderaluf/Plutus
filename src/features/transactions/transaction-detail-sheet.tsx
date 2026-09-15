@@ -23,10 +23,11 @@ import type { Transaction } from "@/features/home/types";
 import { formatCurrency } from "@/shared/lib/currency";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
-import { RecurringPaymentSnapshot } from './recurring-payment-snapshot';
+import { RecurringPaymentSnapshot } from "./recurring-payment-snapshot";
 
 function useSheetDirection() {
   const { i18n } = useTranslation();
@@ -34,8 +35,8 @@ function useSheetDirection() {
   const flip = isRTL !== I18nManager.isRTL;
 
   return {
-    nativeDirection: I18nManager.isRTL ? "rtl" as const : "ltr" as const,
-    writingDirection: isRTL ? "rtl" as const : "ltr" as const,
+    nativeDirection: I18nManager.isRTL ? ("rtl" as const) : ("ltr" as const),
+    writingDirection: isRTL ? ("rtl" as const) : ("ltr" as const),
     row: (flip ? "row-reverse" : "row") as "row" | "row-reverse",
     start: (flip ? "right" : "left") as "left" | "right",
     end: (flip ? "left" : "right") as "left" | "right",
@@ -87,7 +88,8 @@ export function TransactionDetailSheet({
 }) {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const { nativeDirection, writingDirection, row, start, end } = useSheetDirection();
+  const { nativeDirection, writingDirection, row, start, end } =
+    useSheetDirection();
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
   const dangerForeground = useThemeColor("danger-foreground");
@@ -248,7 +250,10 @@ export function TransactionDetailSheet({
         if (!open && opened.current && isOpen && !busy) close();
       }}
     >
-      <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+      <AppBottomSheetPortal
+        isOpen={isOpen}
+        unstable_accessibilityContainerViewIsModal
+      >
         <BottomSheet.Overlay isCloseOnPress={!busy} />
         <BottomSheet.Content
           containerStyle={initialPositionFix.containerStyle}
@@ -308,10 +313,7 @@ export function TransactionDetailSheet({
                   </Text>
                 )}
 
-                <View
-                  className="gap-3"
-                  style={{ flexDirection: row }}
-                >
+                <View className="gap-3" style={{ flexDirection: row }}>
                   <Button
                     variant="tertiary"
                     className="flex-1"
@@ -360,10 +362,7 @@ export function TransactionDetailSheet({
                     <View
                       className="size-16 items-center justify-center rounded-2xl"
                       style={{
-                        backgroundColor: colorWithAlpha(
-                          transaction.color,
-                          0.2,
-                        ),
+                        backgroundColor: colorWithAlpha(transaction.color, 0.2),
                       }}
                     >
                       <RecordIcon
@@ -536,7 +535,10 @@ export function TransactionDetailSheet({
                           <View className="max-w-full rounded-full bg-surface-tertiary px-2.5 py-1.5">
                             <Text
                               className="font-manrope-semibold text-xs text-foreground"
-                              style={{ textAlign: start, writingDirection: "ltr" }}
+                              style={{
+                                textAlign: start,
+                                writingDirection: "ltr",
+                              }}
                             >
                               {t("transactions.details.exchangeRateValue", {
                                 from: transaction.currencyCode,
@@ -683,7 +685,10 @@ export function TransactionDetailSheet({
                     onPress={requestDelete}
                   >
                     <FilledIcon name="delete" size={22} tone="danger" />
-                    <Button.Label className="text-danger" style={{ writingDirection }}>
+                    <Button.Label
+                      className="text-danger"
+                      style={{ writingDirection }}
+                    >
                       {t("transactions.details.delete")}
                     </Button.Label>
                   </Button>
@@ -695,7 +700,10 @@ export function TransactionDetailSheet({
                     onPress={edit}
                   >
                     <FilledIcon name="pencil" size={22} tone="accent" />
-                    <Button.Label className="text-accent" style={{ writingDirection }}>
+                    <Button.Label
+                      className="text-accent"
+                      style={{ writingDirection }}
+                    >
                       {t("transactions.details.edit")}
                     </Button.Label>
                   </Button>
@@ -707,7 +715,10 @@ export function TransactionDetailSheet({
                     onPress={copy}
                   >
                     <FilledIcon name="copy" size={22} tone="accent" />
-                    <Button.Label className="text-accent" style={{ writingDirection }}>
+                    <Button.Label
+                      className="text-accent"
+                      style={{ writingDirection }}
+                    >
                       {t("transactions.details.copy")}
                     </Button.Label>
                   </Button>
@@ -716,7 +727,7 @@ export function TransactionDetailSheet({
             )}
           </View>
         </BottomSheet.Content>
-      </BottomSheet.Portal>
+      </AppBottomSheetPortal>
     </BottomSheet>
   );
 }

@@ -6,6 +6,7 @@ import { formatCurrency } from "@/shared/lib/currency";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { useRouter } from "expo-router";
 import { BottomSheet, Button } from "heroui-native";
@@ -292,7 +293,10 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
           if (!open && !busy) setSheet(null);
         }}
       >
-        <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+        <AppBottomSheetPortal
+          isOpen={sheet === "delete"}
+          unstable_accessibilityContainerViewIsModal
+        >
           <BottomSheet.Overlay isCloseOnPress={!busy} />
           <BottomSheet.Content
             containerStyle={deleteSheetInitialPositionFix.containerStyle}
@@ -351,7 +355,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
               </View>
             </View>
           </BottomSheet.Content>
-        </BottomSheet.Portal>
+        </AppBottomSheetPortal>
       </BottomSheet>
     </SafeAreaView>
   );

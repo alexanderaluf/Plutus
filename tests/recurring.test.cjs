@@ -19,7 +19,9 @@ require.extensions[".ts"] = (module, filename) => {
     );
   module._compile(source, filename);
 };
-const { createLegacyDevelopmentBackup: createDefaultBackup } = require("./fixtures/legacy-development-backup.ts");
+const {
+  createLegacyDevelopmentBackup: createDefaultBackup,
+} = require("./fixtures/legacy-development-backup.ts");
 const {
   normalizeBackupDocument,
 } = require("../src/data/model/normalize-backup.ts");
@@ -45,6 +47,7 @@ const {
   selectRecurrings,
   selectRecurringSummary,
   selectRecurringEvents,
+  selectHomeRecurringPayments,
   selectRecurringTransactionSnapshot,
 } = require("../src/data/selectors/recurring-selectors.ts");
 const {
@@ -347,6 +350,32 @@ test("due-this-month excludes processed/skipped expenses, includes future unpaid
   );
   assert.equal(events[0].status, "skipped");
 });
+test("home recurring summary separates paid and unpaid expenses for the current month", () => {
+  const d = add(fixture(), {
+    currencyCode: "ILS",
+    amount: "10",
+    period: "Daily",
+    automatic: false,
+    startAt: new Date(2026, 9, 1, 8).toISOString(),
+    endAt: new Date(2026, 9, 3).toISOString(),
+  });
+  d.recurrings[0].nextIndex = 1;
+  d.recurrings[0].occurrences = [
+    {
+      scheduledAt: new Date(2026, 9, 1, 8).toISOString(),
+      status: "processed",
+      amount: 10,
+      currencyCode: "ILS",
+      type: 0,
+      transactionId: "paid-transaction",
+    },
+  ];
+
+  const result = selectHomeRecurringPayments(d, now);
+  assert.deepEqual(result.paid, [{ currencyCode: "ILS", amount: 10 }]);
+  assert.deepEqual(result.remaining, [{ currencyCode: "ILS", amount: 20 }]);
+  assert.equal(result.pending.length, 2);
+});
 test("end dates are inclusive and a completed schedule cannot run again", async () => {
   const store = memory(
     add(fixture(), {
@@ -426,13 +455,15 @@ test("local reminders deduplicate and obsolete reminders are cancelled after ski
   const loaded = { exports: {} };
   new Function("require", "module", "exports", compiled)(
     (name) =>
-      name === "expo" ? { isRunningInExpoGo: () => false } : name === "expo-notifications"
-        ? notifications
-        : name === "react-native"
-          ? { Platform: { OS: "ios" } }
-          : name.startsWith("@/")
-            ? require(path.join(root, name.slice(2)))
-            : require(path.resolve(path.dirname(filename), name)),
+      name === "expo"
+        ? { isRunningInExpoGo: () => false }
+        : name === "expo-notifications"
+          ? notifications
+          : name === "react-native"
+            ? { Platform: { OS: "ios" } }
+            : name.startsWith("@/")
+              ? require(path.join(root, name.slice(2)))
+              : require(path.resolve(path.dirname(filename), name)),
     loaded,
     loaded.exports,
   );

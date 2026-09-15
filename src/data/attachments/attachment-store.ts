@@ -13,6 +13,11 @@ function getAppDirectory() {
   return new Directory(Paths.document, APP_DIRECTORY_NAME);
 }
 
+export function clearLocalAttachmentStorage() {
+  const directory = getAppDirectory();
+  if (directory.exists) directory.delete();
+}
+
 export function getAttachmentsDirectory() {
   return new Directory(getAppDirectory(), ATTACHMENTS_DIRECTORY_NAME);
 }

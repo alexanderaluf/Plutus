@@ -32,6 +32,10 @@ import {
   AppThemeController,
   useAppThemeColors,
 } from "@/shared/theme/app-theme";
+import {
+  AppBottomSheetPortalHost,
+  AppBottomSheetPortalLayer,
+} from "@/shared/ui/app-bottom-sheet-portal";
 
 const ROOT_BACKGROUNDS = {
   dark: "#000000",
@@ -111,11 +115,16 @@ export default function RootLayout() {
             <LocalizationProvider>
               <LocalizedHeroUIProvider>
                 <AppThemeController />
-                <OnboardingGate>
-                  <ProfileProvider>
-                    <AppNavigation />
-                  </ProfileProvider>
-                </OnboardingGate>
+                <AppBottomSheetPortalLayer>
+                  <View style={{ flex: 1 }}>
+                    <OnboardingGate>
+                      <ProfileProvider>
+                        <AppNavigation />
+                      </ProfileProvider>
+                    </OnboardingGate>
+                    <AppBottomSheetPortalHost />
+                  </View>
+                </AppBottomSheetPortalLayer>
               </LocalizedHeroUIProvider>
             </LocalizationProvider>
           </LocalDataProvider>

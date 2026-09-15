@@ -1,21 +1,21 @@
 import { useLocalData } from "@/data/local-data-provider";
 import {
-    RECURRING_PERIODS,
-    recurringDefaults,
-    saveRecurring,
-    type RecurringDraft,
+  RECURRING_PERIODS,
+  recurringDefaults,
+  saveRecurring,
+  type RecurringDraft,
 } from "@/data/model/recurring-record";
 import { requestRecurringReminderPermission } from "@/data/recurring/recurring-reminders";
 import {
-    selectAccounts,
-    selectCategories,
-    selectRecurringRelations,
-    selectRecurrings,
+  selectAccounts,
+  selectCategories,
+  selectRecurringRelations,
+  selectRecurrings,
 } from "@/data/selectors/document-selectors";
 import { BudgetColorPicker } from "@/features/budgets/components/budget-color-picker";
 import {
-    BudgetField,
-    BudgetOption,
+  BudgetField,
+  BudgetOption,
 } from "@/features/budgets/components/budget-ui";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
 import { currencies } from "@/features/profile/data/currencies-data";
@@ -26,6 +26,7 @@ import { Text } from "@/shared/ui/app-text";
 import { DateTimePopover } from "@/shared/ui/date-time-popover";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { IconPicker } from "@/shared/ui/icon-picker";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { uuid } from "expo-modules-core";
@@ -36,9 +37,9 @@ import { useTranslation } from "react-i18next";
 import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-    RecurringAction,
-    RecurringBadge,
-    RecurringEditorShell,
+  RecurringAction,
+  RecurringBadge,
+  RecurringEditorShell,
 } from "./components/recurring-ui";
 
 function RecurringOptionsSheet({
@@ -57,7 +58,10 @@ function RecurringOptionsSheet({
 
   return (
     <BottomSheet isOpen={isOpen} onOpenChange={onOpenChange}>
-      <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+      <AppBottomSheetPortal
+        isOpen={isOpen}
+        unstable_accessibilityContainerViewIsModal
+      >
         <BottomSheet.Overlay />
         <BottomSheet.Content
           containerStyle={initialPositionFix.containerStyle}
@@ -81,7 +85,7 @@ function RecurringOptionsSheet({
             </Button>
           </View>
         </BottomSheet.Content>
-      </BottomSheet.Portal>
+      </AppBottomSheetPortal>
     </BottomSheet>
   );
 }

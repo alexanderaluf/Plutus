@@ -15,6 +15,7 @@ import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { formatCurrency } from "@/shared/lib/currency";
 import { Text } from "@/shared/ui/app-text";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
@@ -62,7 +63,10 @@ function BudgetSortSheet({
         if (!open) onClose();
       }}
     >
-      <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+      <AppBottomSheetPortal
+        isOpen={isOpen}
+        unstable_accessibilityContainerViewIsModal
+      >
         <BottomSheet.Overlay />
         <BottomSheet.Content
           containerStyle={initialPositionFix.containerStyle}
@@ -97,7 +101,7 @@ function BudgetSortSheet({
             </View>
           </View>
         </BottomSheet.Content>
-      </BottomSheet.Portal>
+      </AppBottomSheetPortal>
     </BottomSheet>
   );
 }

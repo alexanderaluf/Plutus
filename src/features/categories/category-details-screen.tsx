@@ -244,20 +244,6 @@ export function CategoryDetailsScreen() {
             entering={categoryEntrance(150)}
             className="flex-row items-center justify-end gap-3 px-5 py-3"
           >
-            {selectedId && selectedId !== id && (
-              <Button
-                variant="ghost"
-                isDisabled={isDeleting}
-                onPress={() =>
-                  router.push({
-                    pathname: "/categories/[id]",
-                    params: { id: selectedId },
-                  })
-                }
-              >
-                <Button.Label>{t("categories.details.openChild")}</Button.Label>
-              </Button>
-            )}
             <Button
               isDisabled={isDeleting}
               onPress={() =>

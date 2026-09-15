@@ -54,6 +54,13 @@
         }
       ],
       "expo-sqlite",
+      [
+        "expo-file-system",
+        {
+          "supportsOpeningDocumentsInPlace": true,
+          "enableFileSharing": true
+        }
+      ],
       "expo-sharing",
       "@react-native-community/datetimepicker",
       [
@@ -61,8 +68,8 @@
         {
           "supportsRTL": true,
           "supportedLocales": {
-            "ios": ["en", "he"],
-            "android": ["en", "he"]
+            "ios": ["en", "he", "ru"],
+            "android": ["en", "he", "ru"]
           }
         }
       ],

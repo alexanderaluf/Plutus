@@ -1,10 +1,10 @@
 import {
-    createContext,
-    useContext,
-    useEffect,
-    useState,
-    type ComponentType,
-    type PropsWithChildren,
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ComponentType,
+  type PropsWithChildren,
 } from "react";
 import { I18nextProvider } from "react-i18next";
 import { I18nManager, Platform, View, type ViewProps } from "react-native";
@@ -27,7 +27,10 @@ const nativeIsRTL = I18nManager.isRTL;
 const LocalizationContext = createContext<LocalizationContextValue>({
   direction: nativeIsRTL ? "rtl" : "ltr",
   isRTL: nativeIsRTL,
-  language: i18n.resolvedLanguage === "he" ? "he" : "en",
+  language:
+    i18n.resolvedLanguage === "he" || i18n.resolvedLanguage === "ru"
+      ? i18n.resolvedLanguage
+      : "en",
   setPreviewLanguage: () => undefined,
 });
 const DirectionalView = View as ComponentType<
@@ -36,7 +39,9 @@ const DirectionalView = View as ComponentType<
 
 export function LocalizationProvider({ children }: PropsWithChildren) {
   const { document } = useLocalData();
-  const [previewLanguage, setPreviewLanguage] = useState<AppLanguage | null>(null);
+  const [previewLanguage, setPreviewLanguage] = useState<AppLanguage | null>(
+    null,
+  );
   const language = previewLanguage ?? document._local.appLanguage;
   const isRTL = language === "he";
   const direction: AppDirection = isRTL ? "rtl" : "ltr";
@@ -70,7 +75,9 @@ export function LocalizationProvider({ children }: PropsWithChildren) {
 
   return (
     <I18nextProvider i18n={i18n}>
-      <LocalizationContext.Provider value={{ direction, isRTL, language, setPreviewLanguage }}>
+      <LocalizationContext.Provider
+        value={{ direction, isRTL, language, setPreviewLanguage }}
+      >
         <DirectionalView dir={direction} style={{ direction, flex: 1 }}>
           {children}
         </DirectionalView>

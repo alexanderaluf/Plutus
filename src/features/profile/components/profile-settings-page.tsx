@@ -21,6 +21,7 @@ type SettingsItem = {
 };
 
 type ProfileSettingsPageProps = {
+  onOpenBackup: () => void;
   onOpenConverter: () => void;
   onOpenLanguage: () => void;
   onOpenTheme: () => void;
@@ -81,11 +82,13 @@ function SettingsRow({
 
 function SettingsGroup({
   items,
+  onOpenBackup,
   onOpenConverter,
   onOpenLanguage,
   onOpenTheme,
 }: {
   items: SettingsItem[];
+  onOpenBackup?: () => void;
   onOpenConverter?: () => void;
   onOpenLanguage?: () => void;
   onOpenTheme?: () => void;
@@ -101,6 +104,8 @@ function SettingsGroup({
               ? onOpenTheme
               : item.id === "language"
                 ? onOpenLanguage
+                : item.id === "backup"
+                  ? onOpenBackup
                 : item.id === "converter"
                   ? onOpenConverter
                   : undefined
@@ -119,6 +124,7 @@ function createRevealAnimation(delay: number) {
 }
 
 export function ProfileSettingsPage({
+  onOpenBackup,
   onOpenConverter,
   onOpenLanguage,
   onOpenTheme,
@@ -225,6 +231,7 @@ export function ProfileSettingsPage({
       <Animated.View entering={createRevealAnimation(45)}>
         <SettingsGroup
           items={primarySettings}
+          onOpenBackup={onOpenBackup}
           onOpenLanguage={onOpenLanguage}
           onOpenTheme={onOpenTheme}
         />

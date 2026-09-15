@@ -10,44 +10,45 @@ import { BottomSheet, Button, Input } from "heroui-native";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
-    Animated,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    StyleSheet,
-    View,
+  Alert,
+  Animated,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
 } from "react-native";
 import {
-    SafeAreaView,
-    useSafeAreaInsets,
+  SafeAreaView,
+  useSafeAreaInsets,
 } from "react-native-safe-area-context";
 
 import {
-    deleteAttachment,
-    getAttachmentFile,
-    persistAttachment,
+  deleteAttachment,
+  getAttachmentFile,
+  persistAttachment,
 } from "@/data/attachments/attachment-store";
 import { useLocalData } from "@/data/local-data-provider";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { belongsToProfile, identity } from "@/data/model/category-record";
 import { convertCurrency } from "@/data/model/exchange-rate";
 import type { JsonObject } from "@/data/model/json";
 import {
-    createTransactionDraft,
-    saveTransaction,
-    saveTransactionTemplate,
-    transactionDraftFromRecord,
-    type TransactionDraft,
-    type TransactionType,
+  createTransactionDraft,
+  saveTransaction,
+  saveTransactionTemplate,
+  transactionDraftFromRecord,
+  type TransactionDraft,
+  type TransactionType,
 } from "@/data/model/transaction-record";
 import {
-    selectAccounts,
-    selectBudgets,
-    selectCategories,
-    selectCategoryRootId,
-    selectTopLevelCategories,
+  selectAccounts,
+  selectBudgets,
+  selectCategories,
+  selectCategoryRootId,
+  selectTopLevelCategories,
 } from "@/data/selectors/document-selectors";
 import { selectExchangeRates } from "@/data/selectors/exchange-rate-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
@@ -64,8 +65,8 @@ import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-i
 
 import { TransactionCategorySheet } from "./components/transaction-category-sheet";
 import {
-    TransactionSelectionSection,
-    type TransactionOption,
+  TransactionSelectionSection,
+  type TransactionOption,
 } from "./components/transaction-selection-section";
 
 type SaveMode = "transaction" | "another" | "template";
@@ -1412,7 +1413,10 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       </KeyboardAvoidingView>
 
       <BottomSheet isOpen={actionMenuOpen} onOpenChange={setActionMenuOpen}>
-        <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+        <AppBottomSheetPortal
+          isOpen={actionMenuOpen}
+          unstable_accessibilityContainerViewIsModal
+        >
           <BottomSheet.Overlay />
           <BottomSheet.Content
             containerStyle={actionSheetInitialPositionFix.containerStyle}
@@ -1451,7 +1455,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
               </Button>
             </View>
           </BottomSheet.Content>
-        </BottomSheet.Portal>
+        </AppBottomSheetPortal>
       </BottomSheet>
       <CurrencySelectorSheet
         currencies={currencies}

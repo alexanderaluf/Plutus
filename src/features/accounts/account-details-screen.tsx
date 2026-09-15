@@ -8,6 +8,7 @@ import {
 } from "@/data/selectors/document-selectors";
 import { formatCurrency } from "@/shared/lib/currency";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { useAppLocalization } from "@/localization/localization-provider";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
@@ -390,7 +391,10 @@ export function AccountDetailsScreen() {
             }
           }}
         >
-          <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+          <AppBottomSheetPortal
+            isOpen={isMenuOpen}
+            unstable_accessibilityContainerViewIsModal
+          >
             <BottomSheet.Overlay isCloseOnPress={!deleting} />
             <BottomSheet.Content
               containerStyle={menuInitialPositionFix.containerStyle}
@@ -499,7 +503,7 @@ export function AccountDetailsScreen() {
                 )}
               </View>
             </BottomSheet.Content>
-          </BottomSheet.Portal>
+          </AppBottomSheetPortal>
         </BottomSheet>
       )}
     </SafeAreaView>

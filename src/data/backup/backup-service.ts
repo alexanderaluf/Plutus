@@ -1,6 +1,6 @@
-import * as DocumentPicker from "expo-document-picker";
-import { File, Paths } from "expo-file-system";
+import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import { strFromU8 } from "fflate";
 
 import { i18n } from "@/localization/i18n";
 
@@ -31,6 +31,12 @@ function createExportFile(name: string, content: string | Uint8Array) {
   return file;
 }
 
+const BACKUP_MIME_TYPES: Record<BackupFormat, string> = {
+  zip: "application/zip",
+  json: "application/json",
+  csv: "text/csv",
+};
+
 async function shareFile(file: File, mimeType: string) {
   if (!(await Sharing.isAvailableAsync())) {
     throw new Error(i18n.t("errors.backup.sharingUnavailable"));
@@ -42,37 +48,58 @@ async function shareFile(file: File, mimeType: string) {
   });
 }
 
-export async function exportBackup(
+export async function createBackupFile(
   document: BackupDocument,
   format: BackupFormat,
 ) {
   const suffix = timestamp();
 
   if (format === "json") {
-    const file = createExportFile(
+    return createExportFile(
       `plutus-${suffix}.json`,
       JSON.stringify(createJsonBackupDocument(document), null, 2),
     );
-    await shareFile(file, "application/json");
-    return file.uri;
   }
 
   if (format === "csv") {
-    const file = createExportFile(
+    return createExportFile(
       `plutus-transactions-${suffix}.csv`,
       transactionsToCsv(document.transactions),
     );
-    await shareFile(file, "text/csv");
-    return file.uri;
   }
 
-  const file = createExportFile(
+  return createExportFile(
     `plutus-full-${suffix}.zip`,
     await createZipBackup(document),
   );
-  await shareFile(file, "application/zip");
+}
+
+export async function shareBackup(
+  document: BackupDocument,
+  format: BackupFormat,
+) {
+  const file = await createBackupFile(document, format);
+  await shareFile(file, BACKUP_MIME_TYPES[format]);
   return file.uri;
 }
+
+export async function saveBackup(
+  document: BackupDocument,
+  format: BackupFormat,
+) {
+  const file = await createBackupFile(document, format);
+  try {
+    const directory = await Directory.pickDirectoryAsync();
+    const destination = new File(directory, file.name);
+    await file.copy(destination, { overwrite: true });
+    return destination.uri;
+  } catch (error) {
+    if (error instanceof Error && /cancel/i.test(error.message)) return null;
+    throw error;
+  }
+}
+
+export const exportBackup = shareBackup;
 
 function mergeTransactions(
   current: BackupDocument,
@@ -88,44 +115,73 @@ function mergeTransactions(
   return { ...current, transactions: [...merged.values()] };
 }
 
+function isZip(bytes: Uint8Array) {
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    ((bytes[2] === 0x03 && bytes[3] === 0x04) ||
+      (bytes[2] === 0x05 && bytes[3] === 0x06) ||
+      (bytes[2] === 0x07 && bytes[3] === 0x08))
+  );
+}
+
+export function importBackupBytes(
+  current: BackupDocument,
+  bytes: Uint8Array,
+  fileName = "",
+  mimeType = "",
+): ImportedBackup {
+  if (bytes.byteLength > MAX_IMPORT_BYTES) {
+    throw new Error(i18n.t("errors.backup.importTooLarge"));
+  }
+
+  const normalizedName = fileName.toLowerCase();
+  const extension = normalizedName.includes(".")
+    ? normalizedName.split(".").pop()
+    : "";
+  if (
+    isZip(bytes) ||
+    extension === "zip" ||
+    mimeType.toLowerCase().includes("zip")
+  ) {
+    const restored = parseZipBackup(bytes);
+    return {
+      format: "zip",
+      document: restored.document,
+      attachments: restored.attachments,
+    };
+  }
+
+  const text = strFromU8(bytes);
+  const isCsv =
+    extension === "csv" ||
+    mimeType.toLowerCase().includes("csv") ||
+    (!extension && !text.trimStart().startsWith("{"));
+  if (isCsv) {
+    return {
+      format: "csv",
+      document: mergeTransactions(current, transactionsFromCsv(text)),
+    };
+  }
+
+  return {
+    format: "json",
+    document: parseBackupDocument(text),
+  };
+}
+
 export async function pickAndImportBackup(current: BackupDocument) {
-  const result = await DocumentPicker.getDocumentAsync({
-    copyToCacheDirectory: true,
-    multiple: false,
-    type: ["application/json", "text/csv", "application/zip", "*/*"],
+  const result = await File.pickFileAsync({
+    multipleFiles: false,
+    mimeTypes: ["application/json", "text/csv", "application/zip", "*/*"],
   });
 
   if (result.canceled) return null;
 
-  const asset = result.assets[0];
-  const file = new File(asset.uri);
-  const fileSize = asset.size ?? file.size;
-  if (fileSize > MAX_IMPORT_BYTES) {
+  const file = result.result;
+  if (file.size > MAX_IMPORT_BYTES) {
     throw new Error(i18n.t("errors.backup.importTooLarge"));
   }
-  const extension = asset.name.toLowerCase().split(".").pop();
-
-  if (extension === "zip") {
-    const restored = parseZipBackup(await file.bytes());
-    return {
-      format: "zip" as const,
-      document: restored.document,
-      attachments: restored.attachments,
-    } satisfies ImportedBackup;
-  }
-
-  if (extension === "csv") {
-    return {
-      format: "csv" as const,
-      document: mergeTransactions(
-        current,
-        transactionsFromCsv(await file.text()),
-      ),
-    } satisfies ImportedBackup;
-  }
-
-  return {
-    format: "json" as const,
-    document: parseBackupDocument(await file.text()),
-  } satisfies ImportedBackup;
+  return importBackupBytes(current, await file.bytes(), file.name, file.type);
 }

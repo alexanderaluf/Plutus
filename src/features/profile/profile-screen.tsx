@@ -9,6 +9,7 @@ import Animated, { Easing, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CurrencyConverterPage } from "./components/currency-converter-page";
+import { DataBackupPage } from "./components/data-backup-page";
 import { LanguageSettingsPage } from "./components/language-settings-page";
 import { ProfileAvatar } from "./components/profile-avatar";
 import { ProfileHubActions } from "./components/profile-hub-actions";
@@ -17,7 +18,13 @@ import { ProfileSettingsPage } from "./components/profile-settings-page";
 import { ThemeSettingsPage } from "./components/theme-settings-page";
 import { useProfiles } from "./profile-provider";
 
-type ProfilePage = "profile" | "settings" | "theme" | "language" | "converter";
+type ProfilePage =
+  | "profile"
+  | "settings"
+  | "theme"
+  | "language"
+  | "backup"
+  | "converter";
 
 export function ProfileScreen() {
   const { t } = useTranslation();
@@ -36,6 +43,7 @@ export function ProfileScreen() {
         setPage((current) =>
           current === "theme" ||
           current === "language" ||
+          current === "backup" ||
           current === "converter"
             ? "settings"
             : "profile",
@@ -52,6 +60,8 @@ export function ProfileScreen() {
       ? t("settings.items.theme.title")
       : page === "language"
         ? t("language.title")
+        : page === "backup"
+          ? t("settings.items.backup.title")
         : page === "converter"
           ? t("settings.items.converter.title")
           : page === "settings"
@@ -65,7 +75,10 @@ export function ProfileScreen() {
     >
       <ProfileScreenHeader
         onBack={
-          page === "theme" || page === "language" || page === "converter"
+          page === "theme" ||
+          page === "language" ||
+          page === "backup" ||
+          page === "converter"
             ? () => setPage("settings")
             : page === "settings"
               ? () => setPage("profile")
@@ -76,6 +89,7 @@ export function ProfileScreen() {
 
       {page === "settings" ? (
         <ProfileSettingsPage
+          onOpenBackup={() => setPage("backup")}
           onOpenConverter={() => setPage("converter")}
           onOpenLanguage={() => setPage("language")}
           onOpenTheme={() => setPage("theme")}
@@ -84,6 +98,8 @@ export function ProfileScreen() {
         <ThemeSettingsPage />
       ) : page === "language" ? (
         <LanguageSettingsPage />
+      ) : page === "backup" ? (
+        <DataBackupPage />
       ) : page === "converter" ? (
         <CurrencyConverterPage />
       ) : (

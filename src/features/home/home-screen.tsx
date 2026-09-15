@@ -2,13 +2,14 @@ import { BlurTargetView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Animated, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Animated, Pressable, StyleSheet, View } from "react-native";
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
   selectCategories,
   selectCategoryMonthlyTotals,
   selectHomeOverview,
+  selectHomeRecurringPayments,
   selectTrackedBudgets,
   selectTransactions,
 } from "@/data/selectors/document-selectors";
@@ -28,13 +29,14 @@ import { TransactionDetailSheet } from "@/features/transactions/transaction-deta
 import { BudgetCard } from "./components/budget-card";
 import { CategoryList } from "./components/category-list";
 import { OverviewCarousel } from "./components/overview-carousel";
+import { RecurringHomeSection } from "./components/recurring-home-section";
 import { TransactionList } from "./components/transaction-list";
 
-type HomeSection = "transactions" | "categories" | "budgets";
+type HomeSection = "transactions" | "categories" | "budgets" | "recurring";
 
 const HEADER_HEIGHT = 64;
 const SELECTOR_PINNED_TOP = 8;
-const SELECTOR_SPACER_HEIGHT = 84;
+const SELECTOR_SPACER_HEIGHT = 76;
 
 export function HomeScreen() {
   const router = useRouter();
@@ -57,10 +59,11 @@ export function HomeScreen() {
     () => selectCategoryMonthlyTotals(document, now),
     [document, now],
   );
-  const { persistedBudgets, overview } = useMemo(() => {
+  const { persistedBudgets, overview, recurringPayments } = useMemo(() => {
     return {
       persistedBudgets: selectTrackedBudgets(document, now),
       overview: selectHomeOverview(document, activeProfile.currencyCode, now),
+      recurringPayments: selectHomeRecurringPayments(document, now),
     };
   }, [document, activeProfile.currencyCode, now]);
 
@@ -77,6 +80,7 @@ export function HomeScreen() {
       value: "categories",
     },
     { label: t("home.sectionSelector.budgets"), value: "budgets" },
+    { label: t("home.sectionSelector.recurring"), value: "recurring" },
   ] as const;
 
   useEffect(() => {
@@ -137,8 +141,10 @@ export function HomeScreen() {
                 accessibilityLabel={t(
                   "home.sectionSelector.accessibilityLabel",
                 )}
-                minHeight={Platform.OS === "android" ? 52 : 48}
+                minHeight={44}
+                multilineLabels
                 options={selectorOptions}
+                textSize={12}
                 value={section}
                 onChange={setSection}
               />
@@ -172,8 +178,15 @@ export function HomeScreen() {
                   })
                 }
               />
-            ) : (
+            ) : section === "budgets" ? (
               <BudgetCard budgets={persistedBudgets} showAll />
+            ) : (
+              <RecurringHomeSection
+                paid={recurringPayments.paid}
+                pending={recurringPayments.pending}
+                remaining={recurringPayments.remaining}
+                fallbackCurrency={activeProfile.currencyCode}
+              />
             )}
           </Animated.ScrollView>
         </BlurTargetView>
@@ -222,8 +235,10 @@ export function HomeScreen() {
             <GlassSegmentedControl
               accessibilityLabel={t("home.sectionSelector.accessibilityLabel")}
               blurTarget={blurTargetRef}
-              minHeight={Platform.OS === "android" ? 52 : 48}
+              minHeight={44}
+              multilineLabels
               options={selectorOptions}
+              textSize={12}
               value={section}
               onChange={setSection}
             />

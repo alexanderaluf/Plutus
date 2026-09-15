@@ -11,6 +11,7 @@ import { Keyboard, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Text } from "@/shared/ui/app-text";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 
@@ -205,7 +206,10 @@ export function CurrencySelectorSheet({
 
   return (
     <BottomSheet isOpen={isOpen} onOpenChange={handleOpenChange}>
-      <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+      <AppBottomSheetPortal
+        isOpen={isOpen}
+        unstable_accessibilityContainerViewIsModal
+      >
         <BottomSheet.Overlay />
         <BottomSheet.Content
           containerStyle={initialPositionFix.containerStyle}
@@ -231,7 +235,7 @@ export function CurrencySelectorSheet({
             }}
           />
         </BottomSheet.Content>
-      </BottomSheet.Portal>
+      </AppBottomSheetPortal>
     </BottomSheet>
   );
 }

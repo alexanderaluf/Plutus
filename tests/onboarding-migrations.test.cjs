@@ -712,6 +712,104 @@ test("Paisa v3 document, CSV quoted fields, JSON stripping and ZIP media round t
       zipSync({ ...files, "attachments/../escape": new Uint8Array([1]) }),
     ),
   );
+  const backupServiceFilename = path.join(
+    sourceRoot,
+    "data/backup/backup-service.ts",
+  );
+  const backupServiceCode = ts.transpileModule(
+    fs.readFileSync(backupServiceFilename, "utf8"),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    },
+  ).outputText;
+  const backupServiceModule = { exports: {} };
+  let copiedFile = null;
+  let sharedFile = null;
+  class MockFile {
+    constructor(...parts) {
+      const name = parts.at(-1);
+      this.name = typeof name === "string" ? name : name.name;
+      this.uri = `file:///${this.name}`;
+      this.size = 0;
+      this.type = "";
+    }
+    create() {}
+    write(content) {
+      this.size = content.length;
+    }
+    async copy(destination) {
+      copiedFile = destination;
+    }
+  }
+  class MockDirectory {
+    static async pickDirectoryAsync() {
+      return new MockDirectory();
+    }
+  }
+  new Function("require", "module", "exports", backupServiceCode)(
+    (name) => {
+      if (name === "expo-file-system")
+        return {
+          Directory: MockDirectory,
+          File: MockFile,
+          Paths: { cache: "cache" },
+        };
+      if (name === "expo-sharing")
+        return {
+          isAvailableAsync: async () => true,
+          shareAsync: async (uri) => {
+            sharedFile = uri;
+          },
+        };
+      if (name === "./zip-backup")
+        return {
+          createZipBackup: async () => new Uint8Array(),
+          parseZipBackup,
+        };
+      if (name.startsWith("@/"))
+        return require(path.join(sourceRoot, name.slice(2)));
+      return name.startsWith(".")
+        ? require(path.resolve(path.dirname(backupServiceFilename), name))
+        : require(name);
+    },
+    backupServiceModule,
+    backupServiceModule.exports,
+  );
+  const { importBackupBytes } = backupServiceModule.exports;
+  assert.equal(
+    importBackupBytes(
+      createDefaultBackup(),
+      zipSync(files),
+      "provider-document",
+      "application/octet-stream",
+    ).format,
+    "zip",
+  );
+  assert.equal(
+    importBackupBytes(
+      createDefaultBackup(),
+      strToU8(JSON.stringify(createJsonBackupDocument(d))),
+      "provider-document",
+      "application/json",
+    ).format,
+    "json",
+  );
+  assert.equal(
+    importBackupBytes(
+      createDefaultBackup(),
+      strToU8(transactionsToCsv(d.transactions)),
+      "provider-document",
+      "application/octet-stream",
+    ).format,
+    "csv",
+  );
+  await backupServiceModule.exports.saveBackup(d, "json");
+  assert.match(copiedFile.name, /^plutus-.*\.json$/);
+  await backupServiceModule.exports.shareBackup(d, "csv");
+  assert.match(sharedFile, /^file:\/\/\/plutus-transactions-.*\.csv$/);
   const filename = path.join(sourceRoot, "data/backup/zip-backup.ts");
   const code = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
     compilerOptions: {

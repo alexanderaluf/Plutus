@@ -336,13 +336,24 @@ export const en = {
     exportFailed: "Export failed",
     importFailed: "Import failed",
     importComplete: "Import complete",
+    savedTitle: "Backup saved",
+    savedDescription: "The backup was saved in the selected folder.",
     csvImportComplete: "Transactions were merged into local storage.",
     restoreComplete: "The local backup was restored successfully.",
+    exportSection: "Choose a backup format",
+    pageDescription:
+      "Save a copy to a device folder or share it with another app.",
+    restoreSection: "Restore data",
     unexpectedError: "An unexpected error occurred.",
     localRecords_one: "{{formattedCount}} local record",
     localRecords_other: "{{formattedCount}} local records",
     attachments_one: "{{formattedCount}} attachment",
     attachments_other: "{{formattedCount}} attachments",
+    formats: {
+      zip: "Full database archive (.zip)",
+      json: "Data backup (.json)",
+      csv: "Transactions spreadsheet (.csv)",
+    },
     actions: {
       exportZip: "Export ZIP backup",
       exportZipDescription:
@@ -351,8 +362,14 @@ export const en = {
       exportJsonDescription: "Restorable records without media files",
       exportCsv: "Export transactions CSV",
       exportCsvDescription: "Spreadsheet-friendly transaction export",
+      save: "Save",
+      saving: "Saving...",
+      share: "Share",
+      sharing: "Sharing...",
+      restoring: "Restoring...",
       import: "Import data",
-      importDescription: "Restore ZIP/JSON or merge a transaction CSV",
+      importDescription:
+        "ZIP and JSON replace local app data after confirmation. CSV merges transactions only.",
     },
   },
   accounts: {
@@ -1200,10 +1217,21 @@ export const en = {
       accessibilityLabel: "Choose home content",
       budgets: "Budgets",
       categories: "Categories",
+      recurring: "Recurring",
       transactions: "Transactions",
     },
     categories: {
       empty: "No categories yet.",
+    },
+    recurring: {
+      title: "Recurring payments",
+      manage: "Manage recurring",
+      paid: "Paid this month",
+      remaining: "Still to pay",
+      remainingTitle: "Payments left this month",
+      empty: "No unpaid recurring expenses remain this month.",
+      open: "Open {{name}} recurring payment",
+      due: "Due {{date}}",
     },
     budgets: {
       title: "Your budgets",

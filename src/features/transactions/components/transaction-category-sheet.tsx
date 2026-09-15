@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
@@ -119,7 +120,10 @@ export function TransactionCategorySheet({
         if (!open && opened.current && isOpen) close();
       }}
     >
-      <BottomSheet.Portal unstable_accessibilityContainerViewIsModal>
+      <AppBottomSheetPortal
+        isOpen={isOpen}
+        unstable_accessibilityContainerViewIsModal
+      >
         <BottomSheet.Overlay />
         <BottomSheet.Content
           containerStyle={initialPositionFix.containerStyle}
@@ -133,10 +137,7 @@ export function TransactionCategorySheet({
           backgroundClassName="rounded-t-[28px] bg-surface"
           handleIndicatorClassName="w-10 bg-muted/40"
         >
-          <View
-            onLayout={openAfterLayout}
-            className="flex-1"
-          >
+          <View onLayout={openAfterLayout} className="flex-1">
             <View className="gap-3 border-b border-border px-5 pb-4">
               <BottomSheet.Title>
                 {t("transactions.categorySheet.title", {
@@ -196,7 +197,7 @@ export function TransactionCategorySheet({
             </View>
           </View>
         </BottomSheet.Content>
-      </BottomSheet.Portal>
+      </AppBottomSheetPortal>
     </BottomSheet>
   );
 }

@@ -55,6 +55,9 @@ function mountSheet(parentId = null, write = async () => {}) {
     "react-native": { View: "View", Text: "Text" },
     "react-i18next": { useTranslation: () => ({ t: (key) => key }) },
     "@/shared/ui/app-text": { Text: "Text" },
+    "@/shared/ui/app-bottom-sheet-portal": {
+      AppBottomSheetPortal: "AppBottomSheetPortal",
+    },
     "@/shared/ui/use-bottom-sheet-initial-position-fix": {
       useBottomSheetInitialPositionFix: () => ({ containerStyle: undefined, onChange: () => {} }),
     },

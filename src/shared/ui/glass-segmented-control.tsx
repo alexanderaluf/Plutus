@@ -1,11 +1,6 @@
 import { BlurView } from "expo-blur";
 import { useEffect, useState, type RefObject } from "react";
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Platform, Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   ReduceMotion,
   useAnimatedStyle,
@@ -25,6 +20,7 @@ type GlassSegmentedControlProps<Value extends SegmentValue> = {
   accessibilityLabel?: string;
   blurTarget?: RefObject<View | null>;
   minHeight?: number;
+  multilineLabels?: boolean;
   onChange: (value: Value) => void;
   options: readonly SegmentOption<Value>[];
   textSize?: number;
@@ -35,6 +31,7 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
   accessibilityLabel,
   blurTarget,
   minHeight = 48,
+  multilineLabels = false,
   onChange,
   options,
   textSize = 14,
@@ -87,9 +84,7 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
       {Platform.OS === "ios" || blurTarget ? (
         <BlurView
           blurMethod={
-            Platform.OS === "android"
-              ? "dimezisBlurViewSdk31Plus"
-              : undefined
+            Platform.OS === "android" ? "dimezisBlurViewSdk31Plus" : undefined
           }
           blurReductionFactor={3}
           blurTarget={blurTarget}
@@ -144,13 +139,17 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
               ]}
             >
               <Text
-                numberOfLines={1}
+                adjustsFontSizeToFit={multilineLabels}
+                minimumFontScale={multilineLabels ? 0.78 : undefined}
+                numberOfLines={multilineLabels ? 2 : 1}
                 className="font-manrope-bold"
                 style={{
                   color: isSelected
                     ? colors.accentForeground
                     : colors.foreground,
                   fontSize: textSize,
+                  lineHeight: multilineLabels ? textSize * 1.2 : undefined,
+                  textAlign: "center",
                 }}
               >
                 {option.label}
