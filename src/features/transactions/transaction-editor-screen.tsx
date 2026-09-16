@@ -9,7 +9,8 @@ import { BlurTargetView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
 import { uuid } from "expo-modules-core";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { BottomSheet, Button, Input } from "heroui-native";
+import { Button, Input } from "heroui-native";
+import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {

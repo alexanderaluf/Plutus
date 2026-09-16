@@ -56,7 +56,7 @@ function mountSheet(language, nativeRTL) {
     "react-native-safe-area-context": {
       useSafeAreaInsets: () => ({ top: 24, bottom: 24 }),
     },
-    "@gorhom/bottom-sheet": { BottomSheetScrollView: "ScrollView" },
+    "@/shared/ui/app-bottom-sheet": { BottomSheet: bottomSheet, BottomSheetScrollView: "ScrollView" },
     "expo-router": { useRouter: () => ({}) },
     "heroui-native": { BottomSheet: bottomSheet, Button: button, useThemeColor: () => "#ffffff" },
     "@/data/attachments/attachment-store": {},

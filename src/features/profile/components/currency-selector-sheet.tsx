@@ -1,10 +1,10 @@
-import { BottomSheetFlatList } from "@gorhom/bottom-sheet";
+import { BottomSheetFlatList, BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import {
-  BottomSheet,
   SearchField,
   useBottomSheetAwareHandlers,
   useThemeColor,
 } from "heroui-native";
+
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Keyboard, Pressable, View } from "react-native";

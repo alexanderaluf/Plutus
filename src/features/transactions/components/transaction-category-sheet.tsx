@@ -1,7 +1,11 @@
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import { BottomSheet, Button } from "heroui-native";
+import {
+  BottomSheetScrollView,
+  BottomSheet,
+} from "@/shared/ui/app-bottom-sheet";
+import { Button } from "heroui-native";
+
 import { useEffect, useRef, useState } from "react";
-import { Pressable, View } from "react-native";
+import { Platform, Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -81,9 +85,9 @@ export function TransactionCategorySheet({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
   const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
-  const opened = useRef(false);
+  const opened = useRef(Platform.OS === "ios");
   const openingFrame = useRef<number | null>(null);
 
   useEffect(() => {

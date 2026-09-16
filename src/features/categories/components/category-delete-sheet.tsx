@@ -1,8 +1,9 @@
 import { WarningFill } from "@material-symbols-svg/react-native/rounded/icons/warning";
-import { BottomSheet, Button } from "heroui-native";
+import { Button } from "heroui-native";
+import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { View } from "react-native";
+import { Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { deleteCategory } from "@/data/model/category-record";
@@ -24,14 +25,14 @@ export function CategoryDeleteSheet({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { document, updateDocument } = useLocalData();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
   const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const saving = useRef(false);
   const deleted = useRef(false);
   const openingFrame = useRef<number | null>(null);
-  const openingScheduled = useRef(false);
+  const openingScheduled = useRef(Platform.OS === "ios");
   const closing = useRef(false);
   const [children] = useState(() =>
     selectCategories(document).filter((item) => item.parentId === category.id),

@@ -1,8 +1,12 @@
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import {
+  BottomSheetScrollView,
+  BottomSheet,
+} from "@/shared/ui/app-bottom-sheet";
 import { useRouter } from "expo-router";
-import { BottomSheet, Button, useThemeColor } from "heroui-native";
+import { Button, useThemeColor } from "heroui-native";
+
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { I18nManager, Image, StyleSheet, View } from "react-native";
+import { Platform, I18nManager, Image, StyleSheet, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import Animated, {
   FadeIn,
@@ -95,13 +99,13 @@ export function TransactionDetailSheet({
   const dangerForeground = useThemeColor("danger-foreground");
   const { document, updateDocument } = useLocalData();
   const { activeProfile } = useProfiles();
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
   const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deleteConfirmationVisible, setDeleteConfirmationVisible] =
     useState(false);
-  const opened = useRef(false);
+  const opened = useRef(Platform.OS === "ios");
   const openingFrame = useRef<number | null>(null);
   const receiptUri = (() => {
     if (!transaction.receiptPath) return null;

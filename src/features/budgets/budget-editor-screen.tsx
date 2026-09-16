@@ -3,11 +3,15 @@ import {
   EdgeToEdgeScrollView,
 } from "@/shared/ui/edge-to-edge-layout";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import {
+  BottomSheetScrollView,
+  BottomSheet,
+} from "@/shared/ui/app-bottom-sheet";
 import { useRef, useState, type PropsWithChildren } from "react";
 import { useRouter } from "expo-router";
 import { uuid } from "expo-modules-core";
-import { BottomSheet, Button } from "heroui-native";
+import { Button } from "heroui-native";
+
 import { useTranslation } from "react-i18next";
 import {
   KeyboardAvoidingView,

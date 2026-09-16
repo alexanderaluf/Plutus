@@ -6,7 +6,11 @@ const ts = require("typescript");
 
 // Exercise the real component's event handlers with delayed native layout and
 // animation frames. This does not attempt to emulate native sheet rendering.
-function mountSheet(parentId = null, write = async () => {}) {
+function mountSheet(
+  parentId = null,
+  write = async () => {},
+  platform = "android",
+) {
   const slots = [];
   let cursor = 0;
   const effects = [];
@@ -52,16 +56,20 @@ function mountSheet(parentId = null, write = async () => {}) {
         }
       },
     },
-    "react-native": { View: "View", Text: "Text" },
+    "react-native": { View: "View", Text: "Text", Platform: { OS: platform } },
     "react-i18next": { useTranslation: () => ({ t: (key) => key }) },
     "@/shared/ui/app-text": { Text: "Text" },
     "@/shared/ui/app-bottom-sheet-portal": {
       AppBottomSheetPortal: "AppBottomSheetPortal",
     },
     "@/shared/ui/use-bottom-sheet-initial-position-fix": {
-      useBottomSheetInitialPositionFix: () => ({ containerStyle: undefined, onChange: () => {} }),
+      useBottomSheetInitialPositionFix: () => ({
+        containerStyle: undefined,
+        onChange: () => {},
+      }),
     },
-    "heroui-native": { BottomSheet: root, Button: button },
+    "heroui-native": { Button: button },
+    "@/shared/ui/app-bottom-sheet": { BottomSheet: root },
     "react-native-safe-area-context": {
       useSafeAreaInsets: () => ({ top: 24, bottom: 24 }),
     },
@@ -236,5 +244,23 @@ test("successful deletion notifies the route only after the sheet closes", async
   assert.deepEqual(sheet.deleted, []);
   sheet.content().props.onClose();
   assert.deepEqual(sheet.deleted, ["target"]);
+  sheet.unmount();
+});
+
+test("iOS confirmation presents immediately and closes without waiting for a hidden-content layout", () => {
+  const sheet = mountSheet(null, async () => {}, "ios");
+  assert.equal(sheet.tree.props.isOpen, true);
+  sheet.layout();
+  assert.equal(
+    sheet.frameCount,
+    0,
+    "native iOS opening does not need a portal animation frame",
+  );
+  sheet.tree.props.onOpenChange(false);
+  sheet.render();
+  assert.equal(sheet.tree.props.isOpen, false);
+  assert.equal(sheet.dismissed, 0);
+  sheet.content().props.onClose();
+  assert.equal(sheet.dismissed, 1);
   sheet.unmount();
 });

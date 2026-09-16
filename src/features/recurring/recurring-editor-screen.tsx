@@ -31,7 +31,8 @@ import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-i
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { uuid } from "expo-modules-core";
 import { useRouter } from "expo-router";
-import { BottomSheet, Button, Switch as HeroSwitch } from "heroui-native";
+import { Button, Switch as HeroSwitch } from "heroui-native";
+import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import { useRef, useState, type PropsWithChildren } from "react";
 import { useTranslation } from "react-i18next";
 import { Platform, Pressable, View } from "react-native";

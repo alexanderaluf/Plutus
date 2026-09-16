@@ -1,4 +1,5 @@
-import { BottomSheet, Button } from "heroui-native";
+import { Button } from "heroui-native";
+import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
