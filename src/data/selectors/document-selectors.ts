@@ -1,3 +1,5 @@
+import { financialMonth } from "../model/financial-month";
+import { createRecordLookup } from "./transaction-selectors";
 import { ACCOUNT_ICONS } from "@/features/accounts/account-options";
 import { selectBudgets } from "./budget-selectors";
 import { selectExchangeQuote } from "./exchange-rate-selectors";
@@ -7,7 +9,7 @@ import type {
   AccountPeriod,
   AccountTransaction,
 } from "@/features/accounts/types";
-import type { BudgetCategory, Transaction } from "@/features/home/types";
+import type { BudgetCategory } from "@/features/home/types";
 import type { DailySpend, SpendingCategory } from "@/features/reports/types";
 import type { SearchResult } from "@/features/search/types";
 import type { FilledIconName } from "@/shared/ui/filled-icon";
@@ -27,6 +29,7 @@ import type { BackupDocument } from "../model/backup-document";
 import { formatAppDate } from "../model/onboarding";
 import type { JsonObject, JsonValue } from "../model/json";
 
+export { selectTransactions } from "./transaction-selectors";
 export { selectBudgets, selectBudgetCurrency } from "./budget-selectors";
 export {
   recurringTotals,
@@ -99,12 +102,6 @@ function transactionDate(record: JsonObject, document: BackupDocument) {
   return Number.isNaN(date.getTime())
     ? i18n.t("common.unknownDate")
     : formatAppDate(date, document._local.dateFormat);
-}
-
-function relatedName(records: JsonObject[], value: JsonValue | undefined) {
-  if (value == null) return "";
-  const record = records.find((item) => references(item, value));
-  return record ? text(record.name) : "";
 }
 
 export function selectAccounts(document: BackupDocument): Account[] {
@@ -406,7 +403,10 @@ export function selectHomeOverview(
   now = new Date(),
 ) {
   const currency = currencyCode.toUpperCase();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const { start: monthStart } = financialMonth(
+    now,
+    document._local.monthStartDay,
+  );
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const upcomingEnd = new Date(
     now.getFullYear(),
@@ -460,23 +460,39 @@ export function selectHomeOverview(
       rateDate: [...rateDates].sort()[0] ?? null,
     };
   }
-  const monthly = selectTransactions(document).filter((transaction) => {
-    const date = new Date(transaction.occurredAtIso);
+  const accountRecords = createRecordLookup(document.accounts);
+  const monthly = document.transactions.filter((record) => {
+    const date = new Date(text(record.date, text(record.createdAt)));
+    const account = accountRecords.get(
+      record.account ?? record.fromAccount ?? record.sourceAccount,
+    );
     return (
-      transaction.type !== 2 &&
+      belongsToProfile(document, record) &&
+      record.type !== 2 &&
       date >= monthStart &&
       date <= now &&
-      (!transaction.accountId || includedAccountIds.has(transaction.accountId))
+      (!account || includedAccountIds.has(identity(account)))
     );
   });
-  // Account amounts retain the conversion used when a transaction was recorded.
+  // Aggregate raw money without formatting/rendering every transaction row.
   const recordedMoney = (type: number) =>
     monthly
-      .filter((t) => t.type === type)
-      .map((t) => ({
-        amount: t.accountAmount,
-        currencyCode: t.accountCurrencyCode,
-      }));
+      .filter((record) => (record.type === 1 ? 1 : 0) === type)
+      .map((record) => {
+        const account = accountRecords.get(
+          record.account ?? record.fromAccount ?? record.sourceAccount,
+        );
+        const code = text(
+          record.accountCurrencyCode,
+          text(account?.currencyCode, text(record.currencyCode, "USD")),
+        ).toUpperCase();
+        return {
+          amount: Math.abs(
+            number(record.accountAmount, Math.abs(number(record.amount))),
+          ),
+          currencyCode: /^[A-Z]{3}$/.test(code) ? code : "USD",
+        };
+      });
   const income = recordedMoney(1),
     expense = recordedMoney(0);
   const recurrings = selectRecurrings(document, now).filter((recurring) => {
@@ -524,7 +540,18 @@ export function selectHomeOverview(
     dailyExpense: sum(
       expense.map((value) => ({
         ...value,
-        amount: value.amount / now.getDate(),
+        amount:
+          value.amount /
+          (1 +
+            Math.round(
+              (Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) -
+                Date.UTC(
+                  monthStart.getFullYear(),
+                  monthStart.getMonth(),
+                  monthStart.getDate(),
+                )) /
+                86_400_000,
+            )),
       })),
     ),
     transactionCount: monthly.length,
@@ -578,102 +605,6 @@ function includedTransactions(document: BackupDocument) {
     (transaction) =>
       !excludedIds.has(transaction.account) && transaction.type !== 2,
   );
-}
-
-export function selectTransactions(document: BackupDocument): Transaction[] {
-  return document.transactions
-    .filter((record) => belongsToProfile(document, record))
-    .map((record, index) => {
-      const categoryRecord = document.categories.find((item) =>
-        references(item, record.category),
-      );
-      const accountRecord = document.accounts.find((item) =>
-        references(
-          item,
-          record.account ?? record.fromAccount ?? record.sourceAccount,
-        ),
-      );
-      const destinationRecord = document.accounts.find((item) =>
-        references(item, record.toAccount ?? record.destinationAccount),
-      );
-      const category = text(
-        record.categoryName,
-        lookupName(document.categories, record.category),
-      );
-      const occurredAtIso = text(record.date, text(record.createdAt));
-      const timestamp = new Date(occurredAtIso).getTime();
-      const type = record.type === 1 ? 1 : record.type === 2 ? 2 : 0;
-      const absoluteAmount = Math.abs(number(record.amount));
-      const currencyCode = text(
-        record.currencyCode,
-        text(accountRecord?.currencyCode, "USD"),
-      ).toUpperCase();
-      const accountCurrencyCode = text(
-        record.accountCurrencyCode,
-        text(accountRecord?.currencyCode, currencyCode),
-      ).toUpperCase();
-      return {
-        id: recordId(record, index),
-        merchant: text(record.name, i18n.t("common.untitledTransaction")),
-        description: text(record.description),
-        category,
-        categoryId: categoryRecord ? identity(categoryRecord) : "",
-        occurredAt: transactionDate(record, document),
-        occurredAtIso,
-        amount: type === 1 ? absoluteAmount : -absoluteAmount,
-        absoluteAmount,
-        currencyCode: /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : "USD",
-        accountAmount: Math.abs(number(record.accountAmount, absoluteAmount)),
-        accountCurrencyCode: /^[A-Z]{3}$/.test(accountCurrencyCode)
-          ? accountCurrencyCode
-          : "USD",
-        exchangeRate:
-          number(record.exchangeRate) > 0 ? number(record.exchangeRate) : null,
-        exchangeRateDate: text(record.exchangeRateDate) || null,
-        exchangeRateFetchedAt: text(record.exchangeRateFetchedAt) || null,
-        exchangeRateSource: text(record.exchangeRateSource) || null,
-        type,
-        icon: text(categoryRecord?.icon, categoryIcon(category)),
-        iconPath:
-          /^[Mm]/.test(text(categoryRecord?.iconPath)) &&
-          text(categoryRecord?.iconPath).length <= 20_000
-            ? text(categoryRecord?.iconPath)
-            : null,
-        color: /^#[a-f\d]{6}$/i.test(text(categoryRecord?.color))
-          ? text(categoryRecord?.color)
-          : colors[index % colors.length],
-        tone: type === 1 ? "blue" : type === 2 ? "amber" : "emerald",
-        accountId: accountRecord ? identity(accountRecord) : "",
-        accountName: text(
-          record.accountName,
-          text(accountRecord?.name, i18n.t("common.noAccount")),
-        ),
-        destinationAccountId: destinationRecord
-          ? identity(destinationRecord)
-          : "",
-        destinationAccountName: text(destinationRecord?.name),
-        budgetName: relatedName(document.budgets, record.budget),
-        labelName: relatedName(
-          document.labels,
-          record.label ?? (Array.isArray(record.tags) ? record.tags[0] : null),
-        ),
-        loanName: relatedName(document.loans, record.loan),
-        placeName: relatedName(document.places, record.place),
-        personName: relatedName(
-          document.peoples,
-          record.person ?? record.payee,
-        ),
-        receiptPath:
-          typeof record.receipt === "string"
-            ? record.receipt
-            : typeof record.image === "string"
-              ? record.image
-              : null,
-        timestamp: Number.isFinite(timestamp) ? timestamp : -Infinity,
-      } satisfies Transaction & { timestamp: number };
-    })
-    .sort((left, right) => right.timestamp - left.timestamp)
-    .map(({ timestamp, ...transaction }) => transaction);
 }
 
 export function selectSearchResults(document: BackupDocument): SearchResult[] {

@@ -1213,6 +1213,12 @@ export const en = {
       seeAll: "See all",
       empty: "No recent activity yet.",
     },
+    monthSelector: {
+      thisMonth: "This month",
+      previousMonth: "Previous financial month",
+      nextMonth: "Next financial month",
+      empty: "No transactions in this financial month.",
+    },
     sectionSelector: {
       accessibilityLabel: "Choose home content",
       budgets: "Budgets",
