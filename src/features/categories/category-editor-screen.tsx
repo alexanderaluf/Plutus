@@ -1,6 +1,9 @@
+import {
+  TopSafeAreaGradient,
+  BottomSafeAreaGradient,
+} from "@/shared/ui/safe-area-gradients";
 import { BlurTargetView } from "expo-blur";
 import Reanimated from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   CategoryFormSections,
   categoryEntrance,
@@ -19,10 +22,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import {
   categoryFamily,
@@ -188,10 +188,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
         })
       : ICON_COLORS;
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.fill, { backgroundColor: theme.background }]}
-    >
+    <View style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.fill}
@@ -210,7 +207,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
                 { useNativeDriver: true },
               )}
             >
-              <View style={styles.headerSpace} />
+              <View style={[styles.headerSpace, { height: 56 + insets.top }]} />
               <View style={styles.selectorSpace} />
               {editId && !existing ? (
                 <Text className="px-5 text-danger">
@@ -221,193 +218,184 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
                   pointerEvents={isSaving ? "none" : "auto"}
                   className="gap-5 px-5"
                 >
-              <View className="flex-row items-center gap-3">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("categories.form.chooseIcon")}
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setShowIcons(true);
-                  }}
-                  className="size-16 items-center justify-center rounded-2xl"
-                  style={{ backgroundColor: color }}
-                >
-                  <RecordIcon
-                    name={draft.icon}
-                    pathData={draft.iconPath}
-                    color={colorForeground(color)}
-                    size={32}
-                  />
-                  <View
-                    className="absolute -bottom-1 rounded-full border-2 border-background bg-surface p-1"
-                    style={{ end: -4 }}
-                  >
-                    <FilledIcon name="pencil" size={14} />
-                  </View>
-                </Pressable>
-                <Input
-                  accessibilityLabel={t("categories.form.name")}
-                  placeholder={t("categories.form.namePlaceholder")}
-                  maxLength={100}
-                  value={draft.name}
-                  onChangeText={(value) => change("name", value)}
-                  containerClassName="flex-1"
-                  className="h-16 rounded-2xl bg-surface"
-                  style={inputDirectionStyle}
-                />
-              </View>
-              <Input
-                accessibilityLabel={t("categories.form.description")}
-                placeholder={t("categories.form.descriptionPlaceholder")}
-                multiline
-                maxLength={500}
-                value={draft.description}
-                onChangeText={(value) => change("description", value)}
-                className="h-14 min-h-14 rounded-2xl bg-surface"
-                style={inputDirectionStyle}
-              />
-              <Pressable
-                accessibilityRole="switch"
-                accessibilityState={{
-                  checked: draft.isDefault,
-                  disabled: isSaving,
-                }}
-                accessibilityLabel={t("categories.form.defaultCategory")}
-                disabled={isSaving}
-                onPress={() => change("isDefault", !draft.isDefault)}
-                className="flex-row items-center gap-4 rounded-2xl py-2"
-                style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
-              >
-                <View className="flex-1 gap-1">
-                  <Text className="font-manrope-bold text-lg text-foreground">
-                    {t("categories.form.defaultCategory")}
-                  </Text>
-                  <Text className="font-sans text-sm leading-5 text-muted">
-                    {t("categories.form.defaultCategoryHelp")}
-                  </Text>
-                </View>
-                <View
-                  pointerEvents="none"
-                  importantForAccessibility="no-hide-descendants"
-                >
-                  <HeroSwitch
-                    isSelected={draft.isDefault}
-                    isDisabled={isSaving}
-                    style={{ width: 60, height: 28 }}
-                  >
-                    <HeroSwitch.Thumb style={{ width: 36, height: 24 }} />
-                  </HeroSwitch>
-                </View>
-              </Pressable>
-              <TransactionSelectionSection
-                title={t("categories.form.parentCategory")}
-                placeholder={t("categories.form.noParent")}
-                icon="filter"
-                options={parents.map((category) => ({
-                  id: category.id,
-                  name: category.name,
-                  description: category.description,
-                  icon: category.icon,
-                  iconPath: category.iconPath,
-                  color: category.color,
-                }))}
-                selectedId={parent?.id ?? ""}
-                expanded={showParents}
-                disabled={isSaving}
-                optional
-                compactOptions
-                onToggle={() => setShowParents((value) => !value)}
-                onSelect={(parentId) => change("parentId", parentId || null)}
-              />
-              <Text className="mt-2 font-manrope-semibold text-lg text-foreground">
-                {t("categories.form.colors")}
-              </Text>
-              <View className="flex-row rounded-xl bg-surface p-1">
-                {(["Primary", "Accent", "Custom"] as const).map((value) => (
-                  <Pressable
-                    key={value}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: palette === value }}
-                    onPress={() => setPalette(value)}
-                    className={`min-h-11 flex-1 items-center justify-center rounded-lg ${
-                      palette === value ? "bg-accent" : "bg-transparent"
-                    }`}
-                  >
-                    <Text
-                      className={
-                        palette === value
-                          ? "text-accent-foreground"
-                          : "text-foreground"
-                      }
-                    >
-                      {paletteLabels[value]}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-              {palette === "Custom" ? (
-                <Input
-                  accessibilityLabel={t("categories.form.customHex")}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  placeholder={t("categories.form.hexPlaceholder")}
-                  maxLength={7}
-                  value={draft.color}
-                  onChangeText={(value) => change("color", value)}
-                  style={inputDirectionStyle}
-                />
-              ) : (
-                <View className="flex-row flex-wrap gap-2">
-                  {swatches.map((hex) => (
+                  <View className="flex-row items-center gap-3">
                     <Pressable
-                      key={hex}
-                      accessibilityRole="radio"
-                      accessibilityLabel={t(
-                        "categories.form.colorAccessibility",
-                        { color: hex },
-                      )}
-                      accessibilityState={{
-                        checked:
-                          draft.color.toLowerCase() === hex.toLowerCase(),
+                      accessibilityRole="button"
+                      accessibilityLabel={t("categories.form.chooseIcon")}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setShowIcons(true);
                       }}
-                      onPress={() => change("color", hex)}
-                      style={{
-                        backgroundColor: hex,
-                        width: 44,
-                        height: 44,
-                        borderRadius: 12,
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
+                      className="size-16 items-center justify-center rounded-2xl"
+                      style={{ backgroundColor: color }}
                     >
-                      {draft.color.toLowerCase() === hex.toLowerCase() && (
-                        <FilledIcon
-                          name="check"
-                          color={colorForeground(hex)}
-                          size={26}
-                        />
-                      )}
+                      <RecordIcon
+                        name={draft.icon}
+                        pathData={draft.iconPath}
+                        color={colorForeground(color)}
+                        size={32}
+                      />
+                      <View
+                        className="absolute -bottom-1 rounded-full border-2 border-background bg-surface p-1"
+                        style={{ end: -4 }}
+                      >
+                        <FilledIcon name="pencil" size={14} />
+                      </View>
                     </Pressable>
-                  ))}
-                </View>
-              )}
+                    <Input
+                      accessibilityLabel={t("categories.form.name")}
+                      placeholder={t("categories.form.namePlaceholder")}
+                      maxLength={100}
+                      value={draft.name}
+                      onChangeText={(value) => change("name", value)}
+                      containerClassName="flex-1"
+                      className="h-16 rounded-2xl bg-surface"
+                      style={inputDirectionStyle}
+                    />
+                  </View>
+                  <Input
+                    accessibilityLabel={t("categories.form.description")}
+                    placeholder={t("categories.form.descriptionPlaceholder")}
+                    multiline
+                    maxLength={500}
+                    value={draft.description}
+                    onChangeText={(value) => change("description", value)}
+                    className="h-14 min-h-14 rounded-2xl bg-surface"
+                    style={inputDirectionStyle}
+                  />
+                  <Pressable
+                    accessibilityRole="switch"
+                    accessibilityState={{
+                      checked: draft.isDefault,
+                      disabled: isSaving,
+                    }}
+                    accessibilityLabel={t("categories.form.defaultCategory")}
+                    disabled={isSaving}
+                    onPress={() => change("isDefault", !draft.isDefault)}
+                    className="flex-row items-center gap-4 rounded-2xl py-2"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
+                  >
+                    <View className="flex-1 gap-1">
+                      <Text className="font-manrope-bold text-lg text-foreground">
+                        {t("categories.form.defaultCategory")}
+                      </Text>
+                      <Text className="font-sans text-sm leading-5 text-muted">
+                        {t("categories.form.defaultCategoryHelp")}
+                      </Text>
+                    </View>
+                    <View
+                      pointerEvents="none"
+                      importantForAccessibility="no-hide-descendants"
+                    >
+                      <HeroSwitch
+                        isSelected={draft.isDefault}
+                        isDisabled={isSaving}
+                        style={{ width: 60, height: 28 }}
+                      >
+                        <HeroSwitch.Thumb style={{ width: 36, height: 24 }} />
+                      </HeroSwitch>
+                    </View>
+                  </Pressable>
+                  <TransactionSelectionSection
+                    title={t("categories.form.parentCategory")}
+                    placeholder={t("categories.form.noParent")}
+                    icon="filter"
+                    options={parents.map((category) => ({
+                      id: category.id,
+                      name: category.name,
+                      description: category.description,
+                      icon: category.icon,
+                      iconPath: category.iconPath,
+                      color: category.color,
+                    }))}
+                    selectedId={parent?.id ?? ""}
+                    expanded={showParents}
+                    disabled={isSaving}
+                    optional
+                    compactOptions
+                    onToggle={() => setShowParents((value) => !value)}
+                    onSelect={(parentId) =>
+                      change("parentId", parentId || null)
+                    }
+                  />
+                  <Text className="mt-2 font-manrope-semibold text-lg text-foreground">
+                    {t("categories.form.colors")}
+                  </Text>
+                  <View className="flex-row rounded-xl bg-surface p-1">
+                    {(["Primary", "Accent", "Custom"] as const).map((value) => (
+                      <Pressable
+                        key={value}
+                        accessibilityRole="tab"
+                        accessibilityState={{ selected: palette === value }}
+                        onPress={() => setPalette(value)}
+                        className={`min-h-11 flex-1 items-center justify-center rounded-lg ${
+                          palette === value ? "bg-accent" : "bg-transparent"
+                        }`}
+                      >
+                        <Text
+                          className={
+                            palette === value
+                              ? "text-accent-foreground"
+                              : "text-foreground"
+                          }
+                        >
+                          {paletteLabels[value]}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {palette === "Custom" ? (
+                    <Input
+                      accessibilityLabel={t("categories.form.customHex")}
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      placeholder={t("categories.form.hexPlaceholder")}
+                      maxLength={7}
+                      value={draft.color}
+                      onChangeText={(value) => change("color", value)}
+                      style={inputDirectionStyle}
+                    />
+                  ) : (
+                    <View className="flex-row flex-wrap gap-2">
+                      {swatches.map((hex) => (
+                        <Pressable
+                          key={hex}
+                          accessibilityRole="radio"
+                          accessibilityLabel={t(
+                            "categories.form.colorAccessibility",
+                            { color: hex },
+                          )}
+                          accessibilityState={{
+                            checked:
+                              draft.color.toLowerCase() === hex.toLowerCase(),
+                          }}
+                          onPress={() => change("color", hex)}
+                          style={{
+                            backgroundColor: hex,
+                            width: 44,
+                            height: 44,
+                            borderRadius: 12,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {draft.color.toLowerCase() === hex.toLowerCase() && (
+                            <FilledIcon
+                              name="check"
+                              color={colorForeground(hex)}
+                              size={26}
+                            />
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </CategoryFormSections>
               )}
             </Animated.ScrollView>
           </BlurTargetView>
 
-          <LinearGradient
-            colors={[
-              theme.background,
-              colorWithAlpha(theme.background, 0.82),
-              colorWithAlpha(theme.background, 0),
-            ]}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            pointerEvents="none"
-            style={styles.topScrim}
-          />
+          <TopSafeAreaGradient headerHidden={headerHidden} />
 
           <View
             pointerEvents={headerHidden ? "none" : "box-none"}
@@ -415,7 +403,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
             importantForAccessibility={
               headerHidden ? "no-hide-descendants" : "auto"
             }
-            style={styles.headerClip}
+            style={[styles.headerClip, { top: insets.top }]}
           >
             <Animated.View
               style={[
@@ -449,6 +437,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
             pointerEvents={isSaving ? "none" : "auto"}
             style={[
               styles.selectorDock,
+              { top: 64 + insets.top },
               { transform: [{ translateY: topControlsTranslateY }] },
             ]}
           >
@@ -463,77 +452,60 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
             />
           </Animated.View>
 
-          <LinearGradient
-            colors={[
-              colorWithAlpha(theme.background, 0),
-              colorWithAlpha(theme.background, 0.72),
-              theme.background,
-              theme.background,
-            ]}
-            locations={[
-              0,
-              (128 * 0.54) / (128 + insets.bottom),
-              128 / (128 + insets.bottom),
-              1,
-            ]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            pointerEvents="none"
-            style={[styles.bottomScrim, { height: 128 + insets.bottom }]}
-          />
+          <BottomSafeAreaGradient />
 
           <Reanimated.View
             entering={categoryEntrance(220)}
             pointerEvents="box-none"
             style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
           >
-          {!!error && (
-            <Text
-              accessibilityRole="alert"
-              accessibilityLiveRegion="polite"
-              className="font-sans text-sm text-danger"
+            {!!error && (
+              <Text
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                className="font-sans text-sm text-danger"
+              >
+                {error}
+              </Text>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                isSaving
+                  ? t("categories.form.saving")
+                  : editId
+                    ? t("categories.form.save")
+                    : t("categories.form.add")
+              }
+              accessibilityState={{
+                busy: isSaving,
+                disabled: isSaving || (!!editId && !existing),
+              }}
+              disabled={isSaving || (!!editId && !existing)}
+              onPress={save}
+              android_ripple={{
+                color: colorWithAlpha(theme.accentForeground, 0.16),
+                borderless: false,
+              }}
+              style={({ pressed }) => [
+                styles.actionButton,
+                { backgroundColor: theme.accent },
+                (isSaving || (!!editId && !existing)) && styles.actionDisabled,
+                Platform.OS === "ios" && pressed && styles.actionPressed,
+              ]}
             >
-              {error}
-            </Text>
-          )}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              isSaving
-                ? t("categories.form.saving")
-                : editId
-                  ? t("categories.form.save")
-                  : t("categories.form.add")
-            }
-            accessibilityState={{
-              busy: isSaving,
-              disabled: isSaving || (!!editId && !existing),
-            }}
-            disabled={isSaving || (!!editId && !existing)}
-            onPress={save}
-            android_ripple={{
-              color: colorWithAlpha(theme.accentForeground, 0.16),
-              borderless: false,
-            }}
-            style={({ pressed }) => [
-              styles.actionButton,
-              { backgroundColor: theme.accent },
-              (isSaving || (!!editId && !existing)) && styles.actionDisabled,
-              Platform.OS === "ios" && pressed && styles.actionPressed,
-            ]}
-          >
-            <FilledIcon name="check" size={24} tone="accent-foreground" />
-            <Text
-              numberOfLines={1}
-              className="shrink font-manrope-bold text-base text-accent-foreground"
-            >
-              {isSaving
-                ? t("categories.form.saving")
-                : editId
-                  ? t("categories.form.save")
-                  : t("categories.form.add")}
-            </Text>
-          </Pressable>
+              <FilledIcon name="check" size={24} tone="accent-foreground" />
+              <Text
+                numberOfLines={1}
+                className="shrink font-manrope-bold text-base text-accent-foreground"
+              >
+                {isSaving
+                  ? t("categories.form.saving")
+                  : editId
+                    ? t("categories.form.save")
+                    : t("categories.form.add")}
+              </Text>
+            </Pressable>
           </Reanimated.View>
         </View>
       </KeyboardAvoidingView>
@@ -551,7 +523,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
           }}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -559,14 +531,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   headerSpace: { height: 56 },
   selectorSpace: { height: 84 },
-  topScrim: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    zIndex: 10,
-  },
   headerClip: {
     position: "absolute",
     top: 0,
@@ -588,13 +552,6 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     zIndex: 20,
-  },
-  bottomScrim: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
   },
   actionDock: {
     position: "absolute",

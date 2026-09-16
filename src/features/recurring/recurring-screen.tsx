@@ -4,10 +4,7 @@ import { Button } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Animated, AppState, Pressable, View } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { localDateKey } from "@/data/model/recurring-record";
 import { getCalendarOffset } from "@/data/model/onboarding";
@@ -162,10 +159,7 @@ export function RecurringScreen() {
   const error = actions.error || recurringError || retryError;
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: c.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <BlurTargetView ref={target} style={{ flex: 1 }}>
         <Animated.ScrollView
           showsVerticalScrollIndicator={false}
@@ -331,10 +325,13 @@ export function RecurringScreen() {
                     style={{ width: "14.2857%", paddingVertical: 12 }}
                   >
                     <Text className="text-center text-xs text-muted">
-                      {new Date(2026, 8, 6 + ((i + weekStartDay) % 7)).toLocaleDateString(
-                        i18n.resolvedLanguage,
-                        { weekday: "short" },
-                      )}
+                      {new Date(
+                        2026,
+                        8,
+                        6 + ((i + weekStartDay) % 7),
+                      ).toLocaleDateString(i18n.resolvedLanguage, {
+                        weekday: "short",
+                      })}
                     </Text>
                   </View>
                 ))}
@@ -349,7 +346,8 @@ export function RecurringScreen() {
                       ).getDate(),
                   },
                   (_, index) => {
-                    const date = index - getCalendarOffset(month, weekStartDay) + 1;
+                    const date =
+                      index - getCalendarOffset(month, weekStartDay) + 1;
                     if (date <= 0)
                       return <View key={index} style={{ width: "14.2857%" }} />;
                     const current = new Date(
@@ -575,6 +573,6 @@ export function RecurringScreen() {
           onDismiss={() => setTransactionId(null)}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }

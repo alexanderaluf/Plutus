@@ -1,56 +1,59 @@
 import {
-    commitStagedAttachments,
-    discardStagedAttachments,
-    stageAttachments,
+  TopSafeAreaGradient,
+  BottomSafeAreaGradient,
+} from "@/shared/ui/safe-area-gradients";
+import {
+  commitStagedAttachments,
+  discardStagedAttachments,
+  stageAttachments,
 } from "@/data/attachments/attachment-store";
 import { pickAndImportBackup } from "@/data/backup/backup-service";
 import { useLocalData } from "@/data/local-data-provider";
 import {
-    DATE_FORMATS,
-    type AppDateFormat,
-    type AppLanguage,
+  DATE_FORMATS,
+  type AppDateFormat,
+  type AppLanguage,
 } from "@/data/model/backup-document";
 import { cloneBackupDocument } from "@/data/model/normalize-backup";
 import {
-    completeSetup,
-    formatAppDate,
-    getSetupStatus,
-    withBaseCategories,
+  completeSetup,
+  formatAppDate,
+  getSetupStatus,
+  withBaseCategories,
 } from "@/data/model/onboarding";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
 import {
-    currencies,
-    type CurrencyOption,
+  currencies,
+  type CurrencyOption,
 } from "@/features/profile/data/currencies-data";
 import { LANGUAGE_OPTIONS } from "@/localization/languages";
 import { useAppLocalization } from "@/localization/localization-provider";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
-import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    ActivityIndicator,
-    Alert,
-    BackHandler,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    TextInput,
-    useWindowDimensions,
-    View,
+  ActivityIndicator,
+  Alert,
+  BackHandler,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  useWindowDimensions,
+  View,
 } from "react-native";
 import Animated, {
-    Easing,
-    ReduceMotion,
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withTiming,
+  Easing,
+  ReduceMotion,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -573,7 +576,10 @@ export function OnboardingScreen({
       return (
         <View
           className="gap-3"
-          style={[styles.staticStep, { paddingBottom: contentBottom }]}
+          style={[
+            styles.staticStep,
+            { paddingTop: insets.top + 63, paddingBottom: contentBottom },
+          ]}
         >
           {stepIntro(index)}
           {monthDayGrid()}
@@ -585,7 +591,7 @@ export function OnboardingScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: contentBottom },
+          { paddingTop: insets.top + 63, paddingBottom: contentBottom },
         ]}
       >
         {stepIntro(index)}
@@ -610,50 +616,63 @@ export function OnboardingScreen({
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.screen}
       >
-        <View style={[styles.screen, { paddingTop: insets.top }]}>
-          <View style={styles.header}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("onboarding.back")}
-              disabled={busy || step === 0}
-              onPress={() => goToStep(step - 1, -1)}
-              style={({ pressed }) => [
-                styles.back,
-                {
-                  backgroundColor: theme.surfaceSecondary,
-                  opacity: step === 0 ? 0 : pressed ? 0.72 : 1,
-                },
+        <View style={styles.screen}>
+          <View
+            style={{
+              position: "absolute",
+              top: insets.top,
+              left: 0,
+              right: 0,
+              zIndex: 20,
+            }}
+          >
+            <View style={styles.header}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("onboarding.back")}
+                disabled={busy || step === 0}
+                onPress={() => goToStep(step - 1, -1)}
+                style={({ pressed }) => [
+                  styles.back,
+                  {
+                    backgroundColor: theme.surfaceSecondary,
+                    opacity: step === 0 ? 0 : pressed ? 0.72 : 1,
+                  },
+                ]}
+              >
+                <FilledIcon
+                  name="arrow-left"
+                  color={theme.foreground}
+                  size={20}
+                />
+              </Pressable>
+              <Text
+                accessibilityLiveRegion="polite"
+                className="font-sans text-xs text-muted"
+              >
+                {t("onboarding.progress", {
+                  current: step + 1,
+                  total: STEPS.length,
+                })}
+              </Text>
+              <Text className="font-sans text-xs text-foreground">
+                {language.toUpperCase()}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.track,
+                { backgroundColor: theme.surfaceSecondary },
               ]}
             >
-              <FilledIcon
-                name="arrow-left"
-                color={theme.foreground}
-                size={20}
+              <View
+                style={{
+                  backgroundColor: theme.accent,
+                  height: "100%",
+                  width: `${((step + 1) / STEPS.length) * 100}%`,
+                }}
               />
-            </Pressable>
-            <Text
-              accessibilityLiveRegion="polite"
-              className="font-sans text-xs text-muted"
-            >
-              {t("onboarding.progress", {
-                current: step + 1,
-                total: STEPS.length,
-              })}
-            </Text>
-            <Text className="font-sans text-xs text-foreground">
-              {language.toUpperCase()}
-            </Text>
-          </View>
-          <View
-            style={[styles.track, { backgroundColor: theme.surfaceSecondary }]}
-          >
-            <View
-              style={{
-                backgroundColor: theme.accent,
-                height: "100%",
-                width: `${((step + 1) / STEPS.length) * 100}%`,
-              }}
-            />
+            </View>
           </View>
           <View style={styles.stage}>
             {leavingStep !== null && leavingStep !== step && (
@@ -672,24 +691,8 @@ export function OnboardingScreen({
               {renderStep(step)}
             </Animated.View>
           </View>
-          <LinearGradient
-            colors={[
-              colorWithAlpha(theme.background, 0),
-              colorWithAlpha(theme.background, 0.72),
-              theme.background,
-              theme.background,
-            ]}
-            end={{ x: 0.5, y: 1 }}
-            locations={[
-              0,
-              (128 * 0.54) / (128 + insets.bottom),
-              128 / (128 + insets.bottom),
-              1,
-            ]}
-            pointerEvents="none"
-            start={{ x: 0.5, y: 0 }}
-            style={[styles.bottomScrim, { height: 128 + insets.bottom }]}
-          />
+          <TopSafeAreaGradient />
+          <BottomSafeAreaGradient />
           <View
             pointerEvents="box-none"
             style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
@@ -817,13 +820,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     justifyContent: "center",
-  },
-  bottomScrim: {
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    zIndex: 10,
   },
   actionDock: {
     gap: 6,

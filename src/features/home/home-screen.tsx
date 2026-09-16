@@ -1,4 +1,5 @@
 import { BlurTargetView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -39,6 +40,7 @@ const SELECTOR_PINNED_TOP = 8;
 const SELECTOR_SPACER_HEIGHT = 76;
 
 export function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { i18n, t } = useTranslation();
   const { activeProfile } = useProfiles();
@@ -89,7 +91,7 @@ export function HomeScreen() {
       return;
     }
 
-    const stickyThreshold = selectorTop - SELECTOR_PINNED_TOP;
+    const stickyThreshold = selectorTop - (insets.top + SELECTOR_PINNED_TOP);
     const listener = scrollY.addListener(({ value }) => {
       const nextSticky = value >= stickyThreshold;
       setIsSelectorSticky((current) =>
@@ -98,14 +100,17 @@ export function HomeScreen() {
     });
 
     return () => scrollY.removeListener(listener);
-  }, [scrollY, selectorTop]);
+  }, [insets.top, scrollY, selectorTop]);
 
   return (
     <>
       <View style={styles.fill}>
         <BlurTargetView ref={blurTargetRef} style={styles.fill}>
           <Animated.ScrollView
-            contentContainerStyle={styles.content}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: 160 + insets.bottom },
+            ]}
             keyboardShouldPersistTaps="handled"
             onScroll={onScroll}
             scrollEventThrottle={16}
@@ -231,7 +236,12 @@ export function HomeScreen() {
           </View>
         </CollapsingHeader>
         {isSelectorSticky ? (
-          <View style={[styles.selectorDock, { top: SELECTOR_PINNED_TOP }]}>
+          <View
+            style={[
+              styles.selectorDock,
+              { top: insets.top + SELECTOR_PINNED_TOP },
+            ]}
+          >
             <GlassSegmentedControl
               accessibilityLabel={t("home.sectionSelector.accessibilityLabel")}
               blurTarget={blurTargetRef}

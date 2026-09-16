@@ -1,5 +1,6 @@
+import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, ScrollView, View } from "react-native";
+import { Alert, Pressable, View } from "react-native";
 import Animated, {
   Easing,
   FadeInDown,
@@ -106,9 +107,9 @@ function SettingsGroup({
                 ? onOpenLanguage
                 : item.id === "backup"
                   ? onOpenBackup
-                : item.id === "converter"
-                  ? onOpenConverter
-                  : undefined
+                  : item.id === "converter"
+                    ? onOpenConverter
+                    : undefined
           }
         />
       ))}
@@ -221,7 +222,7 @@ export function ProfileSettingsPage({
   ];
 
   return (
-    <ScrollView
+    <EdgeToEdgeScrollView
       className="flex-1"
       contentContainerClassName="gap-4 px-4 pt-3"
       contentContainerStyle={{ paddingBottom: 28 }}
@@ -242,6 +243,6 @@ export function ProfileSettingsPage({
       <Animated.View entering={createRevealAnimation(205)}>
         <CreditsFooter />
       </Animated.View>
-    </ScrollView>
+    </EdgeToEdgeScrollView>
   );
 }

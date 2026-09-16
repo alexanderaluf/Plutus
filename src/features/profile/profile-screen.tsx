@@ -1,12 +1,14 @@
-import { useAppThemeColors } from "@/shared/theme/app-theme";
+import {
+  EdgeToEdgeLayout,
+  EdgeToEdgeScrollView,
+} from "@/shared/ui/edge-to-edge-layout";
 import { Text } from "@/shared/ui/app-text";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BackHandler, View } from "react-native";
+import { BackHandler } from "react-native";
 import Animated, { Easing, FadeInDown } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CurrencyConverterPage } from "./components/currency-converter-page";
 import { DataBackupPage } from "./components/data-backup-page";
@@ -19,17 +21,11 @@ import { ThemeSettingsPage } from "./components/theme-settings-page";
 import { useProfiles } from "./profile-provider";
 
 type ProfilePage =
-  | "profile"
-  | "settings"
-  | "theme"
-  | "language"
-  | "backup"
-  | "converter";
+  "profile" | "settings" | "theme" | "language" | "backup" | "converter";
 
 export function ProfileScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const theme = useAppThemeColors();
   const { activeProfile } = useProfiles();
   const [page, setPage] = useState<ProfilePage>("profile");
   const firstName = activeProfile.name.split(" ")[0];
@@ -62,31 +58,30 @@ export function ProfileScreen() {
         ? t("language.title")
         : page === "backup"
           ? t("settings.items.backup.title")
-        : page === "converter"
-          ? t("settings.items.converter.title")
-          : page === "settings"
-            ? t("settings.title")
-            : t("profile.accountsTitle");
+          : page === "converter"
+            ? t("settings.items.converter.title")
+            : page === "settings"
+              ? t("settings.title")
+              : t("profile.accountsTitle");
 
   return (
-    <SafeAreaView
-      edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: theme.background }}
+    <EdgeToEdgeLayout
+      header={
+        <ProfileScreenHeader
+          onBack={
+            page === "theme" ||
+            page === "language" ||
+            page === "backup" ||
+            page === "converter"
+              ? () => setPage("settings")
+              : page === "settings"
+                ? () => setPage("profile")
+                : undefined
+          }
+          title={title}
+        />
+      }
     >
-      <ProfileScreenHeader
-        onBack={
-          page === "theme" ||
-          page === "language" ||
-          page === "backup" ||
-          page === "converter"
-            ? () => setPage("settings")
-            : page === "settings"
-              ? () => setPage("profile")
-              : undefined
-        }
-        title={title}
-      />
-
       {page === "settings" ? (
         <ProfileSettingsPage
           onOpenBackup={() => setPage("backup")}
@@ -103,7 +98,11 @@ export function ProfileScreen() {
       ) : page === "converter" ? (
         <CurrencyConverterPage />
       ) : (
-        <View className="flex-1 px-5 pt-10">
+        <EdgeToEdgeScrollView
+          className="flex-1"
+          contentContainerClassName="px-5"
+          contentContainerStyle={{ paddingTop: 40 }}
+        >
           <Animated.View
             entering={FadeInDown.duration(380).easing(
               Easing.bezier(0.22, 1, 0.36, 1),
@@ -154,8 +153,8 @@ export function ProfileScreen() {
               onSettings={() => setPage("settings")}
             />
           </Animated.View>
-        </View>
+        </EdgeToEdgeScrollView>
       )}
-    </SafeAreaView>
+    </EdgeToEdgeLayout>
   );
 }

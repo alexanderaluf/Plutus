@@ -1,4 +1,9 @@
+import {
+  EdgeToEdgeLayout,
+  EdgeToEdgeScrollView,
+} from "@/shared/ui/edge-to-edge-layout";
 import { useLocalData } from "@/data/local-data-provider";
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { belongsToProfile, identity } from "@/data/model/category-record";
 import { selectBudgets } from "@/data/selectors/document-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
@@ -13,10 +18,7 @@ import { BottomSheet, Button } from "heroui-native";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Animated, I18nManager, View } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   BudgetBadge,
   BudgetChart,
@@ -98,19 +100,20 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
   }
   if (!budget)
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: c.background }}>
-        <BudgetHeader title={t("budgets.details.title")} />
-        <Text className="p-5 text-muted">
-          {t("budgets.details.unavailableError")}
-        </Text>
-      </SafeAreaView>
+      <EdgeToEdgeLayout>
+        <EdgeToEdgeScrollView
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24 }}
+        >
+          <BudgetHeader title={t("budgets.details.title")} />
+          <Text className="p-5 text-muted">
+            {t("budgets.details.unavailableError")}
+          </Text>
+        </EdgeToEdgeScrollView>
+      </EdgeToEdgeLayout>
     );
   const b = budget;
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: c.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <Animated.FlatList
         data={b.transactions}
         keyExtractor={(t) => t.id}
@@ -269,6 +272,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
           </Button>
         </BudgetHeader>
       </CollapsingHeader>
+      <BottomSafeAreaGradient fadeHeight={124} />
       <View
         style={{
           position: "absolute",
@@ -357,6 +361,6 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
           </BottomSheet.Content>
         </AppBottomSheetPortal>
       </BottomSheet>
-    </SafeAreaView>
+    </View>
   );
 }

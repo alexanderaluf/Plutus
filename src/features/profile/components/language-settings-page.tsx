@@ -1,6 +1,7 @@
+import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 import Animated, {
@@ -38,7 +39,7 @@ export function LanguageSettingsPage() {
   }
 
   return (
-    <ScrollView
+    <EdgeToEdgeScrollView
       className="flex-1"
       contentContainerClassName="gap-5 px-4 pt-3"
       contentContainerStyle={{ paddingBottom: 32 }}
@@ -109,10 +110,13 @@ export function LanguageSettingsPage() {
       </Animated.View>
 
       {error ? (
-        <Text accessibilityRole="alert" className="font-sans text-sm text-danger">
+        <Text
+          accessibilityRole="alert"
+          className="font-sans text-sm text-danger"
+        >
           {error}
         </Text>
       ) : null}
-    </ScrollView>
+    </EdgeToEdgeScrollView>
   );
 }

@@ -1,9 +1,10 @@
+import {
+  EdgeToEdgeLayout,
+  EdgeToEdgeScrollView,
+} from "@/shared/ui/edge-to-edge-layout";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView } from "react-native";
 import { useTranslation } from "react-i18next";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useAppThemeColors } from "@/shared/theme/app-theme";
 
 import { ProfileList } from "./components/profile-list";
 import { ProfileDeleteSheet } from "./components/profile-delete-sheet";
@@ -14,7 +15,6 @@ import type { UserProfile } from "./types";
 export function ManageProfilesScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const theme = useAppThemeColors();
   const { profiles, activeProfileId, selectProfile } = useProfiles();
   const [profileToDelete, setProfileToDelete] = useState<UserProfile | null>(
     null,
@@ -30,12 +30,10 @@ export function ManageProfilesScreen() {
   }
 
   return (
-    <SafeAreaView
-      edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: theme.background }}
+    <EdgeToEdgeLayout
+      header={<ProfileScreenHeader title={t("profile.manage.title")} />}
     >
-      <ProfileScreenHeader title={t("profile.manage.title")} />
-      <ScrollView
+      <EdgeToEdgeScrollView
         className="flex-1"
         contentContainerClassName="px-5 pb-8 pt-5"
         showsVerticalScrollIndicator={false}
@@ -48,12 +46,12 @@ export function ManageProfilesScreen() {
           onEdit={openEditor}
           onSelect={selectProfile}
         />
-      </ScrollView>
+      </EdgeToEdgeScrollView>
       <ProfileDeleteSheet
         profile={profileToDelete}
         isOpen={profileToDelete !== null}
         onDismiss={() => setProfileToDelete(null)}
       />
-    </SafeAreaView>
+    </EdgeToEdgeLayout>
   );
 }

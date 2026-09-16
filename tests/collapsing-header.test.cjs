@@ -16,7 +16,12 @@ function loadHeader(platform) {
     },
   }).outputText;
   const mocks = {
-    "expo-linear-gradient": { LinearGradient: "LinearGradient" },
+    "react-native-safe-area-context": {
+      useSafeAreaInsets: () => ({ top: 47, bottom: 34 }),
+    },
+    "@/shared/ui/safe-area-gradients": {
+      TopSafeAreaGradient: "TopSafeAreaGradient",
+    },
     "react-native": {
       Animated: { View: "Animated.View" },
       Platform: { OS: platform },
@@ -56,19 +61,13 @@ for (const platform of ["ios", "android"]) {
       assert.equal(bounds.height, 112);
       assert.equal(bounds.top, 47);
       assert.equal(bounds.overflow, "hidden");
-      assert.equal(flatten(gradient.props.style).left, 0);
-      assert.equal(flatten(gradient.props.style).right, 0);
-      assert.equal(flatten(gradient.props.style).top, 47);
-      assert.equal(
-        flatten(gradient.props.style).height,
-        platform === "ios" ? 24 : 80,
-      );
-      assert.equal(gradient.props.pointerEvents, "none");
-      assert.ok(bounds.zIndex > flatten(gradient.props.style).zIndex);
+      assert.equal(gradient.type, "TopSafeAreaGradient");
+      assert.equal(gradient.props.topInset, undefined);
+      assert.equal(gradient.props.headerHidden, false);
       assert.equal(clip.props.pointerEvents, "auto");
       assert.equal(
         flatten(CollapsingHeaderSpacer({ height: 112 }).props.style).height,
-        112,
+        159,
       );
       const animated = clip.props.children.props.style;
       assert.deepEqual(animated.opacity.inputRange, [0, 40]);
@@ -85,6 +84,7 @@ for (const platform of ["ios", "android"]) {
       scrollY: { interpolate: (config) => config },
     });
     const clip = tree.props.children[1];
+    assert.equal(tree.props.children[0].props.headerHidden, true);
     assert.equal(clip.props.pointerEvents, "none");
     assert.equal(clip.props.accessibilityElementsHidden, true);
     assert.equal(clip.props.importantForAccessibility, "no-hide-descendants");

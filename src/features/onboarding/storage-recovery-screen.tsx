@@ -1,5 +1,9 @@
 import { Component, useState, type PropsWithChildren } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import { StatusBar } from "expo-status-bar";
+import { NavigationBar } from "expo-navigation-bar";
 import { Directory, File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { zipSync } from "fflate";
@@ -52,6 +56,7 @@ export function StorageRecoveryScreen({
   onReset,
   onRetry,
 }: StorageRecoveryScreenProps) {
+  const insets = useSafeAreaInsets();
   const [busyAction, setBusyAction] = useState<
     "save" | "share" | "reset" | null
   >(null);
@@ -132,87 +137,117 @@ export function StorageRecoveryScreen({
 
   const busy = busyAction !== null;
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        padding: 28,
-        gap: 24,
-        backgroundColor: "#141b19",
-      }}
-    >
-      <Text
-        accessibilityRole="header"
-        style={{ color: "#ffffff", fontSize: 28 }}
-      >
-        Your data needs recovery
-      </Text>
-      <Text style={{ color: "#d0d8d3", fontSize: 17, lineHeight: 26 }}>
-        Plutus could not open your saved data safely. Nothing has been reset.
-        Keep the app installed and save a recovery copy before seeking help. A
-        future compatible update can retry the migration.
-      </Text>
-      <Text
-        style={{
-          color: "#d0d8d3",
-          fontSize: 16,
-          lineHeight: 25,
-          writingDirection: "rtl",
+    <View style={{ flex: 1, backgroundColor: "#141b19" }}>
+      <StatusBar style="light" />
+      <NavigationBar style="light" />
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
+          padding: 28,
+          paddingTop: insets.top + 28,
+          paddingBottom: insets.bottom + 28,
+          gap: 24,
+          backgroundColor: "#141b19",
         }}
       >
-        לא ניתן לפתוח את הנתונים בבטחה. הנתונים לא אופסו. שמרו עותק לשחזור ואל
-        תמחקו את האפליקציה או את האחסון שלה.
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => {
-          void saveRecovery();
-        }}
-        style={{ padding: 20, backgroundColor: "#b5dfc8", borderRadius: 30 }}
-      >
-        <Text style={{ color: "#13251c", textAlign: "center", fontSize: 17 }}>
-          {busyAction === "save"
-            ? "Saving…"
-            : "Save recovery copy / שמירת עותק"}
+        <Text
+          accessibilityRole="header"
+          style={{ color: "#ffffff", fontSize: 28 }}
+        >
+          Your data needs recovery
         </Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => {
-          void shareRecovery();
-        }}
-        style={{ padding: 18 }}
-      >
-        <Text style={{ color: "#ffffff", textAlign: "center" }}>
-          {busyAction === "share" ? "Sharing…" : "Share recovery copy"}
+        <Text style={{ color: "#d0d8d3", fontSize: 17, lineHeight: 26 }}>
+          Plutus could not open your saved data safely. Nothing has been reset.
+          Keep the app installed and save a recovery copy before seeking help. A
+          future compatible update can retry the migration.
         </Text>
-      </Pressable>
-      {onRetry && (
+        <Text
+          style={{
+            color: "#d0d8d3",
+            fontSize: 16,
+            lineHeight: 25,
+            writingDirection: "rtl",
+          }}
+        >
+          לא ניתן לפתוח את הנתונים בבטחה. הנתונים לא אופסו. שמרו עותק לשחזור ואל
+          תמחקו את האפליקציה או את האחסון שלה.
+        </Text>
         <Pressable
           accessibilityRole="button"
           disabled={busy}
-          onPress={onRetry}
+          onPress={() => {
+            void saveRecovery();
+          }}
+          style={{ padding: 20, backgroundColor: "#b5dfc8", borderRadius: 30 }}
+        >
+          <Text style={{ color: "#13251c", textAlign: "center", fontSize: 17 }}>
+            {busyAction === "save"
+              ? "Saving…"
+              : "Save recovery copy / שמירת עותק"}
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => {
+            void shareRecovery();
+          }}
           style={{ padding: 18 }}
         >
           <Text style={{ color: "#ffffff", textAlign: "center" }}>
-            Try again / נסו שוב
+            {busyAction === "share" ? "Sharing…" : "Share recovery copy"}
           </Text>
         </Pressable>
-      )}
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={confirmReset}
-        style={{ padding: 18 }}
-      >
-        <Text style={{ color: "#ffb4ab", textAlign: "center" }}>
-          {busyAction === "reset"
-            ? "Erasing local data…"
-            : "Restore defaults and start onboarding"}
-        </Text>
-      </Pressable>
+        {onRetry && (
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={onRetry}
+            style={{ padding: 18 }}
+          >
+            <Text style={{ color: "#ffffff", textAlign: "center" }}>
+              Try again / נסו שוב
+            </Text>
+          </Pressable>
+        )}
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={confirmReset}
+          style={{ padding: 18 }}
+        >
+          <Text style={{ color: "#ffb4ab", textAlign: "center" }}>
+            {busyAction === "reset"
+              ? "Erasing local data…"
+              : "Restore defaults and start onboarding"}
+          </Text>
+        </Pressable>
+      </ScrollView>
+      <LinearGradient
+        pointerEvents="none"
+        aria-hidden
+        colors={["rgba(20,27,25,0.92)", "rgba(20,27,25,0)"]}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: insets.top + 96,
+        }}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        aria-hidden
+        colors={["rgba(20,27,25,0)", "rgba(20,27,25,0.92)"]}
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: insets.bottom + 128,
+        }}
+      />
     </View>
   );
 }

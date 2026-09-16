@@ -1,5 +1,9 @@
+import {
+  EdgeToEdgeLayout,
+  useEdgeToEdgeContentInsets,
+} from "@/shared/ui/edge-to-edge-layout";
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { Button, Input } from "heroui-native";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   useDeferredValue,
   useMemo,
@@ -17,7 +21,7 @@ import {
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
-  initialWindowMetrics,
+  SafeAreaProvider,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -26,10 +30,7 @@ import { useAppLocalization } from "@/localization/localization-provider";
 import { ICON_GROUPS } from "@/shared/icons/icon-options";
 import { MATERIAL_ROUNDED_FILLED_ICONS } from "@/shared/icons/material-rounded-filled-icons";
 import { RecordIcon, type IconSelection } from "./record-icon";
-import {
-  colorWithAlpha,
-  useAppThemeColors,
-} from "@/shared/theme/app-theme";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 
 type PickerIcon = IconSelection & { label: string; searchText: string };
 type PickerSection = { title: string; data: PickerIcon[][] };
@@ -62,51 +63,44 @@ export function PickerModal({
   onClose: () => void;
 }>) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const colors = useAppThemeColors();
-  const topInset = Math.max(insets.top, initialWindowMetrics?.insets.top ?? 0);
-  const bottomInset = Math.max(
-    insets.bottom,
-    initialWindowMetrics?.insets.bottom ?? 0,
-  );
 
   return (
     <Modal
       visible
       animationType="slide"
       presentationStyle="fullScreen"
-      statusBarTranslucent={false}
+      statusBarTranslucent
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: colors.background,
-            paddingBottom: bottomInset,
-            paddingTop: topInset,
-          }}
-        >
-          <View className="flex-row items-center gap-3 px-5 py-3">
-            <Button
-              isIconOnly
-              variant="ghost"
-              accessibilityLabel={t("iconPicker.close")}
-              onPress={onClose}
-            >
-              <FilledIcon name="arrow-left" size={24} />
-            </Button>
-            <View className="flex-1">
-              <Text
-                accessibilityRole="header"
-                className="font-manrope-bold text-xl text-foreground"
-              >
-                {title}
-              </Text>
-            </View>
-          </View>
-          {children}
-        </View>
+        <SafeAreaProvider>
+          <EdgeToEdgeLayout
+            header={
+              <View className="flex-row items-center gap-3 px-5 py-3">
+                <Button
+                  isIconOnly
+                  variant="ghost"
+                  accessibilityLabel={t("iconPicker.close")}
+                  onPress={onClose}
+                >
+                  <FilledIcon name="arrow-left" size={24} />
+                </Button>
+                <View className="flex-1">
+                  <Text
+                    accessibilityRole="header"
+                    className="font-manrope-bold text-xl text-foreground"
+                  >
+                    {title}
+                  </Text>
+                </View>
+              </View>
+            }
+            bottomFade={false}
+          >
+            {children}
+          </EdgeToEdgeLayout>
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     </Modal>
   );
@@ -122,8 +116,30 @@ export function IconPicker({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  return (
+    <PickerModal title={t("iconPicker.title")} onClose={onClose}>
+      <IconPickerContent
+        selected={selected}
+        onSelect={onSelect}
+        onClose={onClose}
+      />
+    </PickerModal>
+  );
+}
+
+function IconPickerContent({
+  selected,
+  onSelect,
+  onClose,
+}: {
+  selected: IconSelection;
+  onSelect: (icon: IconSelection) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
   const { direction } = useAppLocalization();
   const insets = useSafeAreaInsets();
+  const contentInsets = useEdgeToEdgeContentInsets();
   const colors = useAppThemeColors();
   const [query, setQuery] = useState("");
   const [draft, setDraft] = useState(selected);
@@ -178,9 +194,18 @@ export function IconPicker({
   }, [deferredQuery, t]);
 
   return (
-    <PickerModal title={t("iconPicker.title")} onClose={onClose}>
+    <>
       <View style={{ flex: 1 }}>
-        <View className="px-5 pb-3">
+        <View
+          className="px-5 pb-3"
+          style={{
+            position: "absolute",
+            top: contentInsets.top,
+            left: 0,
+            right: 0,
+            zIndex: 20,
+          }}
+        >
           <Input
             accessibilityLabel={t("iconPicker.search")}
             placeholder={t("iconPicker.search")}
@@ -206,7 +231,10 @@ export function IconPicker({
           stickySectionHeadersEnabled={false}
           style={{ flex: 1 }}
           windowSize={7}
-          contentContainerStyle={{ paddingBottom: 104 + insets.bottom }}
+          contentContainerStyle={{
+            paddingTop: contentInsets.top + 68,
+            paddingBottom: 104 + insets.bottom,
+          }}
           renderSectionHeader={({ section }) => (
             <View className="bg-background px-5 pb-2 pt-5">
               <Text className="font-manrope-semibold text-base text-accent">
@@ -229,7 +257,9 @@ export function IconPicker({
                     style={({ pressed }) => [
                       {
                         borderColor:
-                          draft.name === icon.name ? colors.accent : colors.border,
+                          draft.name === icon.name
+                            ? colors.accent
+                            : colors.border,
                         backgroundColor:
                           draft.name === icon.name
                             ? colorWithAlpha(colors.accent, 0.14)
@@ -261,18 +291,7 @@ export function IconPicker({
           }
         />
       </View>
-      <LinearGradient
-        colors={[
-          colorWithAlpha(colors.background, 0),
-          colorWithAlpha(colors.background, 0.78),
-          colors.background,
-        ]}
-        end={{ x: 0.5, y: 1 }}
-        locations={[0, 0.58, 1]}
-        pointerEvents="none"
-        start={{ x: 0.5, y: 0 }}
-        style={[styles.bottomScrim, { height: 104 + insets.bottom }]}
-      />
+      <BottomSafeAreaGradient fadeHeight={128} />
       <View
         pointerEvents="box-none"
         style={[
@@ -304,7 +323,7 @@ export function IconPicker({
           </Text>
         </Pressable>
       </View>
-    </PickerModal>
+    </>
   );
 }
 
@@ -312,13 +331,6 @@ const styles = StyleSheet.create({
   iconSlot: {
     alignItems: "center",
     width: "16.666667%",
-  },
-  bottomScrim: {
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    zIndex: 10,
   },
   actionDock: {
     left: 0,

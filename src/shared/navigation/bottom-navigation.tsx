@@ -1,29 +1,26 @@
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Pressable,
-    StyleSheet,
-    View,
-    type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
 } from "react-native";
 import Animated, {
-    Easing,
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
-import {
-  colorWithAlpha,
-  useAppThemeColors,
-} from "@/shared/theme/app-theme";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 
 import { navigationItems } from "./navigation-config";
 import type { TabId } from "./types";
@@ -150,18 +147,7 @@ export function BottomNavigation({
 
   return (
     <>
-      <LinearGradient
-        colors={[
-          colorWithAlpha(colors.background, 0),
-          colorWithAlpha(colors.background, 0.78),
-          colors.background,
-        ]}
-        end={{ x: 0.5, y: 1 }}
-        locations={[0, 0.58, 1]}
-        pointerEvents="none"
-        start={{ x: 0.5, y: 0 }}
-        style={[styles.bottomScrim, { height: 104 + insets.bottom }]}
-      />
+      <BottomSafeAreaGradient fadeHeight={128} />
 
       <View style={[styles.dock, { bottom: Math.max(insets.bottom, 10) }]}>
         <View
@@ -273,13 +259,6 @@ export function BottomNavigation({
 }
 
 const styles = StyleSheet.create({
-  bottomScrim: {
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    zIndex: 10,
-  },
   dock: {
     alignItems: "center",
     flexDirection: "row",

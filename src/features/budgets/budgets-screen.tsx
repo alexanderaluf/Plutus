@@ -1,14 +1,11 @@
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { BlurTargetView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
 import { BottomSheet, Button } from "heroui-native";
 import { Animated, I18nManager, View } from "react-native";
 import { useTranslation } from "react-i18next";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { selectBudgets } from "@/data/selectors/document-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
@@ -143,10 +140,7 @@ export function BudgetsScreen() {
   );
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: c.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <BlurTargetView ref={target} style={{ flex: 1 }}>
         <Animated.FlatList
           data={budgets}
@@ -257,22 +251,7 @@ export function BudgetsScreen() {
           </Button>
         </BudgetHeader>
       </CollapsingHeader>
-      <LinearGradient
-        pointerEvents="none"
-        colors={
-          c.isDark
-            ? ["rgba(0,0,0,0)", "rgba(0,0,0,.72)", "#000000"]
-            : ["rgba(255,255,255,0)", "rgba(255,255,255,.8)", c.background]
-        }
-        locations={[0, 0.54, 1]}
-        style={{
-          position: "absolute",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: 138 + insets.bottom,
-        }}
-      />
+      <BottomSafeAreaGradient fadeHeight={162} zIndex={0} />
       <View
         style={{
           position: "absolute",
@@ -327,6 +306,6 @@ export function BudgetsScreen() {
         onChange={setSort}
         onClose={() => setSheet(null)}
       />
-    </SafeAreaView>
+    </View>
   );
 }

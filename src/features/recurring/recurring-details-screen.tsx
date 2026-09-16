@@ -3,10 +3,7 @@ import { Button } from "heroui-native";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Animated, Pressable, View } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import { useLocalData } from "@/data/local-data-provider";
 import { belongsToProfile, identity } from "@/data/model/category-record";
@@ -117,10 +114,7 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
       : 0;
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: c.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <Animated.ScrollView
         contentContainerStyle={{
           padding: 14,
@@ -499,6 +493,6 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
           onDismiss={() => setTransactionId(null)}
         />
       )}
-    </SafeAreaView>
+    </View>
   );
 }

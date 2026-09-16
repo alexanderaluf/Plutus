@@ -1,5 +1,16 @@
 # Bottom Action Button and Safe-Area Gradient
 
+The shared `BottomSafeAreaGradient` is the current implementation. Render it
+over a viewport that reaches the phone bottom. It draws one translucent fade
+through the entire navigation inset; do not append a solid safe-area band or
+pad the viewport. Reserve safe space in scroll content and action offsets.
+
+Expo Go uses its own native navigation-bar contrast settings. In light mode,
+Android's button navigation can therefore show a white system scrim even when
+the app gradient is translucent. Test this behavior in the application's own
+Android build with `expo-navigation-bar` configured with `enforceContrast: false`;
+SDK 57 does not expose a runtime override for Expo Go's contrast setting.
+
 ## Purpose and Scope
 
 Use this pattern for a persistent primary action such as Add account or Save
@@ -29,10 +40,10 @@ Read the installed SDK's documentation before implementing. This project uses
 
 | Element                                | Reference value                            |
 | -------------------------------------- | ------------------------------------------ |
-| Root safe-area edges                   | Top only                                   |
+| Root safe-area edges                   | None; inset scroll content and controls    |
 | Scroll content bottom padding          | 104 + insets.bottom                        |
-| Gradient fade distance above safe area | 128                                        |
-| Total gradient height                  | 128 + insets.bottom                        |
+| Gradient fade distance above safe area | 152                                        |
+| Total gradient height                  | 152 + insets.bottom                        |
 | Gradient anchor                        | Absolute bottom 0, left/right 0, zIndex 10 |
 | Button dock bottom                     | Math.max(insets.bottom, 10)                |
 | Button dock horizontal padding         | 12, with left/right 0                      |
@@ -47,7 +58,7 @@ dock is a sibling of the scroll content, not a child of it. Both scrim and dock
 are positioned within the same full-height content container. Do not use a
 negative offset relative to another floating control or put the action in a card.
 
-Use `SafeAreaView edges={["top"]}` with `theme.background`. Applying bottom
+Use a full-height `View` with `theme.background`. Applying bottom
 safe-area padding to the entire screen prevents the gradient from reaching the
 system controls. No ancestor may reserve another opaque bottom footer or crop
 the screen before its bottom edge.
@@ -59,20 +70,15 @@ dark mode it is black; in light mode it is the current light background. Do not
 hard-code black for both themes, and do not substitute white to imitate an
 Android system surface.
 
-Let `fadeHeight = 128`, `totalHeight = fadeHeight + insets.bottom`, and
-`safeAreaStart = fadeHeight / totalHeight`. Use four stops:
+The shared component defaults to a height of `152 + insets.bottom` and uses three stops across the entire height:
 
-| Location             | Color                          |
-| -------------------- | ------------------------------ |
-| 0                    | Theme background at alpha 0    |
-| 0.54 * safeAreaStart | Theme background at alpha 0.72 |
-| safeAreaStart        | Opaque theme background        |
-| 1                    | Opaque theme background        |
+| Location | Color                          |
+| -------- | ------------------------------ |
+| 0        | Theme background at alpha 0    |
+| 0.54     | Theme background at alpha 0.36 |
+| 1        | Theme background at alpha 0.92 |
 
-This completes the fade at the top of the bottom inset, then stays solid through
-the system area. It avoids placing a separate opaque rectangle over a still
-translucent gradient, which introduces an abrupt boundary. With a zero bottom
-inset the last two stops coincide at 1 with identical colors.
+The fade stays translucent through the safe area, with no opaque plateau or separate rectangle.
 
 The scrim covers more space than the button, but it must not intercept touches.
 Use `pointerEvents="none"` on the gradient and `pointerEvents="box-none"` on the
@@ -86,10 +92,10 @@ overlays. Do not add another ScrollView, SafeAreaView, or KeyboardAvoidingView
 inside it. The parent scroll content must reserve `104 + insets.bottom` points.
 
 ```tsx
-import { LinearGradient } from "expo-linear-gradient";
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
 type BottomActionProps = {
@@ -111,26 +117,11 @@ export function BottomActionSection({
 }: BottomActionProps) {
   const theme = useAppThemeColors();
   const insets = useSafeAreaInsets();
-  const fadeHeight = 128;
-  const totalHeight = fadeHeight + insets.bottom;
-  const safeAreaStart = fadeHeight / totalHeight;
   const visibleLabel = busy ? busyLabel : label;
 
   return (
     <>
-      <LinearGradient
-        colors={[
-          colorWithAlpha(theme.background, 0),
-          colorWithAlpha(theme.background, 0.72),
-          theme.background,
-          theme.background,
-        ]}
-        locations={[0, 0.54 * safeAreaStart, safeAreaStart, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        pointerEvents="none"
-        style={[styles.bottomScrim, { height: totalHeight }]}
-      />
+      <BottomSafeAreaGradient />
       <View
         pointerEvents="box-none"
         style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}

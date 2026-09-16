@@ -212,6 +212,10 @@ function mountManageProfilesScreen() {
         "react-native": { ScrollView: "ScrollView" },
         "react-i18next": { useTranslation: () => ({ t: (key) => key }) },
         "react-native-safe-area-context": { SafeAreaView: "SafeAreaView" },
+        "@/shared/ui/edge-to-edge-layout": {
+          EdgeToEdgeLayout: "SafeAreaView",
+          EdgeToEdgeScrollView: "ScrollView",
+        },
         "@/shared/theme/app-theme": {
           useAppThemeColors: () => ({ background: "#fff" }),
         },

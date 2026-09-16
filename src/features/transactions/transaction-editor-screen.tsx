@@ -1,9 +1,12 @@
+import {
+  TopSafeAreaGradient,
+  BottomSafeAreaGradient,
+} from "@/shared/ui/safe-area-gradients";
 import { formatAppDate } from "@/data/model/onboarding";
 import { selectAppPreferences } from "@/data/selectors/document-selectors";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { BlurTargetView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
-import { LinearGradient } from "expo-linear-gradient";
 import { uuid } from "expo-modules-core";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BottomSheet, Button, Input } from "heroui-native";
@@ -20,10 +23,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   deleteAttachment,
@@ -754,10 +754,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   const missingSource = !!sourceId && !sourceDraft;
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: theme.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.fill}
@@ -776,7 +773,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 { useNativeDriver: true },
               )}
             >
-              <View style={styles.headerSpace} />
+              <View style={[styles.headerSpace, { height: 56 + insets.top }]} />
               <View style={styles.selectorSpace} />
               <View
                 pointerEvents={isSaving ? "none" : "auto"}
@@ -1234,18 +1231,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             </Animated.ScrollView>
           </BlurTargetView>
 
-          <LinearGradient
-            colors={[
-              theme.background,
-              colorWithAlpha(theme.background, 0.82),
-              colorWithAlpha(theme.background, 0),
-            ]}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            pointerEvents="none"
-            style={styles.topScrim}
-          />
+          <TopSafeAreaGradient headerHidden={headerHidden} />
 
           <View
             pointerEvents={headerHidden ? "none" : "box-none"}
@@ -1253,7 +1239,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             importantForAccessibility={
               headerHidden ? "no-hide-descendants" : "auto"
             }
-            style={styles.headerClip}
+            style={[styles.headerClip, { top: insets.top }]}
           >
             <Animated.View
               style={[
@@ -1289,6 +1275,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             pointerEvents={isSaving ? "none" : "auto"}
             style={[
               styles.selectorDock,
+              { top: 64 + insets.top },
               { transform: [{ translateY: topControlsTranslateY }] },
             ]}
           >
@@ -1302,24 +1289,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             />
           </Animated.View>
 
-          <LinearGradient
-            colors={[
-              colorWithAlpha(theme.background, 0),
-              colorWithAlpha(theme.background, 0.72),
-              theme.background,
-              theme.background,
-            ]}
-            locations={[
-              0,
-              (128 * 0.54) / (128 + insets.bottom),
-              128 / (128 + insets.bottom),
-              1,
-            ]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            pointerEvents="none"
-            style={[styles.bottomScrim, { height: 128 + insets.bottom }]}
-          />
+          <BottomSafeAreaGradient />
 
           <View
             pointerEvents="box-none"
@@ -1473,7 +1443,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           onDismiss={() => setCategorySheetParentId(null)}
         />
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -1481,14 +1451,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   headerSpace: { height: 56 },
   selectorSpace: { height: 84 },
-  topScrim: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    zIndex: 10,
-  },
   headerClip: {
     position: "absolute",
     top: 0,
@@ -1510,13 +1472,6 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     zIndex: 20,
-  },
-  bottomScrim: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
   },
   actionDock: {
     position: "absolute",

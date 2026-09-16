@@ -1,6 +1,6 @@
 import { useThemeColor } from "heroui-native";
 import { useEffect } from "react";
-import { Appearance } from "react-native";
+import { Appearance, processColor } from "react-native";
 import { Uniwind, useUniwind } from "uniwind";
 
 import { useLocalData } from "@/data/local-data-provider";
@@ -75,9 +75,9 @@ export const ACCENT_OPTIONS: AccentOption[] = [
 
 export function colorWithAlpha(color: string, alpha: number) {
   const normalized = color.trim();
-  const match = normalized.match(/^#([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
-  if (!match) return normalized;
-  return `rgba(${parseInt(match[1], 16)}, ${parseInt(match[2], 16)}, ${parseInt(match[3], 16)}, ${Math.min(Math.max(alpha, 0), 1)})`;
+  const processed = processColor(normalized);
+  if (typeof processed !== "number") return normalized;
+  return `rgba(${(processed >>> 16) & 255}, ${(processed >>> 8) & 255}, ${processed & 255}, ${Math.min(Math.max(alpha, 0), 1)})`;
 }
 
 export function useAppThemeColors() {

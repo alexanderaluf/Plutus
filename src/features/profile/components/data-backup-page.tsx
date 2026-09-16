@@ -1,5 +1,6 @@
+import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { useTranslation } from "react-i18next";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 
@@ -9,7 +10,7 @@ export function DataBackupPage() {
   const { t } = useTranslation();
 
   return (
-    <ScrollView
+    <EdgeToEdgeScrollView
       className="flex-1"
       contentContainerClassName="gap-5 px-4 pt-4"
       contentContainerStyle={{ paddingBottom: 32 }}
@@ -25,6 +26,6 @@ export function DataBackupPage() {
         </Text>
       </View>
       <BackupManagement />
-    </ScrollView>
+    </EdgeToEdgeScrollView>
   );
 }

@@ -1,19 +1,20 @@
+import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 import Animated, {
-    Easing,
-    FadeInDown,
-    ReduceMotion,
+  Easing,
+  FadeInDown,
+  ReduceMotion,
 } from "react-native-reanimated";
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
-    THEME_MODES,
-    type AccentColorId,
-    type ThemeMode,
+  THEME_MODES,
+  type AccentColorId,
+  type ThemeMode,
 } from "@/data/model/backup-document";
 import { colorForeground } from "@/shared/icons/colors";
 import { ACCENT_OPTIONS } from "@/shared/theme/app-theme";
@@ -61,7 +62,7 @@ export function ThemeSettingsPage() {
   }
 
   return (
-    <ScrollView
+    <EdgeToEdgeScrollView
       className="flex-1"
       contentContainerClassName="gap-6 px-4 pt-3"
       contentContainerStyle={{ paddingBottom: 32 }}
@@ -150,6 +151,6 @@ export function ThemeSettingsPage() {
           )}
         </Text>
       ) : null}
-    </ScrollView>
+    </EdgeToEdgeScrollView>
   );
 }

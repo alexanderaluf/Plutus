@@ -1,5 +1,8 @@
+import {
+  BottomSafeAreaGradient,
+  TopSafeAreaGradient,
+} from "@/shared/ui/safe-area-gradients";
 import { BlurTargetView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
 import { Button } from "heroui-native";
 import {
   useEffect,
@@ -15,11 +18,8 @@ import {
   Pressable,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { RecordIcon } from "@/shared/ui/record-icon";
@@ -28,30 +28,7 @@ import { formatCurrency } from "@/shared/lib/currency";
 import { colorForeground } from "@/shared/icons/colors";
 
 export function RecurringScrim() {
-  const c = useAppThemeColors(),
-    insets = useSafeAreaInsets(),
-    height = 128 + insets.bottom,
-    edge = 128 / height;
-  return (
-    <LinearGradient
-      colors={[
-        colorWithAlpha(c.background, 0),
-        colorWithAlpha(c.background, 0.72),
-        c.background,
-        c.background,
-      ]}
-      locations={[0, 0.54 * edge, edge, 1]}
-      pointerEvents="none"
-      style={{
-        position: "absolute",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height,
-        zIndex: 10,
-      }}
-    />
-  );
+  return <BottomSafeAreaGradient />;
 }
 export function RecurringAction({
   label,
@@ -156,10 +133,7 @@ export function RecurringEditorShell({
     extrapolate: "clamp",
   });
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: c.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: c.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -176,7 +150,7 @@ export function RecurringEditorShell({
                 { useNativeDriver: true },
               )}
             >
-              <View style={{ height: 140 }} />
+              <View style={{ height: 140 + insets.top }} />
               <View
                 pointerEvents={busy ? "none" : "auto"}
                 className="gap-5 px-4"
@@ -185,30 +159,14 @@ export function RecurringEditorShell({
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
-          <LinearGradient
-            colors={[
-              c.background,
-              colorWithAlpha(c.background, 0.82),
-              colorWithAlpha(c.background, 0),
-            ]}
-            locations={[0, 0.58, 1]}
-            pointerEvents="none"
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 80,
-              zIndex: 10,
-            }}
-          />
+          <TopSafeAreaGradient headerHidden={hidden} />
           <View
             pointerEvents={hidden ? "none" : "box-none"}
             accessibilityElementsHidden={hidden}
             importantForAccessibility={hidden ? "no-hide-descendants" : "auto"}
             style={{
               position: "absolute",
-              top: 0,
+              top: insets.top,
               left: 16,
               right: 16,
               height: 56,
@@ -247,7 +205,7 @@ export function RecurringEditorShell({
             pointerEvents={busy ? "none" : "auto"}
             style={{
               position: "absolute",
-              top: 64,
+              top: 64 + insets.top,
               left: 12,
               right: 12,
               zIndex: 20,
@@ -266,7 +224,7 @@ export function RecurringEditorShell({
           {bottomOverlay}
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 export function RecurringBadge({

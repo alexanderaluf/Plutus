@@ -1,5 +1,10 @@
 # Bottom Glass Selector Implementation Guide
 
+The shared `BottomSafeAreaGradient` is the current implementation. Render it
+over a viewport that reaches the phone bottom. It draws one translucent fade
+through the entire navigation inset; do not append a solid safe-area band or
+pad the viewport. Reserve safe space in scroll content and action offsets.
+
 Use this guide when building a segmented selector that floats near the bottom safe area, such as Expense / Income / Transfer or Daily / Weekly / Monthly / Yearly.
 
 The canonical implementations in this repository are:
@@ -17,7 +22,7 @@ This pattern uses packages already installed in the project:
 
 ```tsx
 import { BlurTargetView, BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { useRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
@@ -43,7 +48,7 @@ The screen must have these layers, from back to front:
 The selector must not participate in normal document layout. Position it absolutely near the bottom safe area and reserve equivalent padding in the scrollable content.
 
 ```tsx
-<SafeAreaView edges={["top"]} style={styles.screen}>
+<View style={[styles.screen, { backgroundColor: theme.background }]}>
   <BlurTargetView ref={blurTargetRef} style={styles.content}>
     <FlatList
       data={items}
@@ -53,14 +58,7 @@ The selector must not participate in normal document layout. Position it absolut
     />
   </BlurTargetView>
 
-  <LinearGradient
-    colors={["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.72)", "#000000"]}
-    locations={[0, 0.54, 1]}
-    start={{ x: 0.5, y: 0 }}
-    end={{ x: 0.5, y: 1 }}
-    pointerEvents="none"
-    style={[styles.bottomScrim, { height: 128 + insets.bottom }]}
-  />
+  <BottomSafeAreaGradient />
 
   <View style={[styles.selectorDock, { bottom: Math.max(insets.bottom, 10) }]}>
     <GlassSegmentedControl
@@ -71,14 +69,13 @@ The selector must not participate in normal document layout. Position it absolut
       onChange={setValue}
     />
   </View>
-</SafeAreaView>
+</View>
 ```
 
 ```tsx
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#000000",
   },
   content: {
     flex: 1,
@@ -196,7 +193,7 @@ Use the safe-area inset to size the gradient and position the selector:
 ```tsx
 const insets = useSafeAreaInsets();
 
-const gradientHeight = 128 + insets.bottom;
+// BottomSafeAreaGradient defaults to 152 + insets.bottom.
 const selectorBottom = Math.max(insets.bottom, 10);
 ```
 
@@ -217,19 +214,9 @@ Set `pointerEvents="none"` on the gradient so it never blocks selector, list, or
 
 On Android, the navigation-button area may be a separate system surface. Expo SDK 57 controls navigation-button style and visibility but does not expose runtime navigation-bar background-color APIs.
 
-The app must already be drawing edge-to-edge for the screen gradient to appear behind the OS buttons. The Categories screen achieves this by using only the top safe-area edge and drawing its scrim to `bottom: 0`.
+The app must already be drawing edge-to-edge for the screen gradient to appear behind the OS buttons. The Categories screen uses `EdgeToEdgeLayout` with full-height list content and a scrim at `bottom: 0`.
 
-Use neutral black gradient colors in this app:
-
-```tsx
-const BOTTOM_SCRIM_COLORS = [
-  "rgba(0, 0, 0, 0)",
-  "rgba(0, 0, 0, 0.72)",
-  "#000000",
-] as const;
-```
-
-Do not use blue-gray or charcoal RGB values for the final stop. They make Samsung's navigation area look gray.
+Use the shared theme-derived translucent gradient in both themes. Disable Android navigation-bar contrast in the native configuration so the system does not add a light or dark rectangle over it.
 
 ## Segmented Selector Styling
 

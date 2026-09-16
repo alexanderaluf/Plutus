@@ -3,7 +3,6 @@ import { Slot, usePathname, useRouter } from "expo-router";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BottomNavigation } from "./bottom-navigation";
 import { getTabFromPathname, navigationItems } from "./navigation-config";
@@ -39,17 +38,11 @@ export function TabShell() {
       tabId === "reports"
         ? t("navigation.actions.filterReports")
         : t("navigation.actions.searchTransactions");
-    Alert.alert(
-      action,
-      t("navigation.actions.unavailable", { action }),
-    );
+    Alert.alert(action, t("navigation.actions.unavailable", { action }));
   }
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: theme.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={{ flex: 1 }}>
         <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
           <Slot />
@@ -62,6 +55,6 @@ export function TabShell() {
           onChange={handleTabChange}
         />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

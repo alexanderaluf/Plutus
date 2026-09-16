@@ -1,7 +1,8 @@
+import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { Button, Input } from "heroui-native";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { useLocalData } from "@/data/local-data-provider";
 import { convertCurrency } from "@/data/model/exchange-rate";
@@ -166,7 +167,7 @@ export function CurrencyConverterPage() {
 
   return (
     <>
-      <ScrollView
+      <EdgeToEdgeScrollView
         className="flex-1"
         contentContainerClassName="gap-5 px-4 pt-4"
         contentContainerStyle={{ paddingBottom: 28 }}
@@ -244,7 +245,7 @@ export function CurrencyConverterPage() {
             {error}
           </Text>
         ) : null}
-      </ScrollView>
+      </EdgeToEdgeScrollView>
 
       <CurrencySelectorSheet
         currencies={currencies}

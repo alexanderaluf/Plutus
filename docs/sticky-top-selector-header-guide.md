@@ -38,29 +38,31 @@ their existing feature providers; scrolling and selection are temporary UI state
 
 All offsets are relative to the content area below the top safe-area inset.
 React Native numeric layout values are density-independent units, not physical
-screenshot pixels. Do not add `insets.top` again inside a top-padded SafeAreaView.
+screenshot pixels. The viewport reaches the phone edges. Apply `insets.top`
+to the initial scroll spacer and the header/selector docks, never to viewport
+padding. The gradient starts at phone coordinate zero.
 
 ## Geometry and Layering
 
-| Element                                   | Required reference value                  |
-| ----------------------------------------- | ----------------------------------------- |
-| Header spacer in scroll content           | 56                                        |
-| Selector spacer in scroll content         | 84                                        |
-| Initial combined space before form fields | 140                                       |
-| Header dock                               | Top 0, left/right 16                      |
-| Selector dock                             | Top 64, left/right 12                     |
-| Selector/header upward travel             | 56, clamped                               |
-| Header opacity range                      | Scroll 0 to 40                            |
-| Top gradient                              | Height 80, top 0, left/right 0, zIndex 10 |
-| Header and selector overlays              | zIndex 20; selector rendered after header |
-| Segment minimum height                    | Android 52, iOS 48                        |
+| Element                                   | Required reference value                                                                               |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Header spacer in scroll content           | insets.top + 56                                                                                        |
+| Selector spacer in scroll content         | 84                                                                                                     |
+| Initial combined space before form fields | insets.top + 140                                                                                       |
+| Header dock                               | Top insets.top, left/right 16                                                                          |
+| Selector dock                             | Top insets.top + 64, left/right 12                                                                     |
+| Selector/header upward travel             | 56, clamped                                                                                            |
+| Header opacity range                      | Scroll 0 to 40                                                                                         |
+| Top gradient                              | Height insets.top + 96 with title visible; insets.top + 32 once hidden; top 0, left/right 0, zIndex 10 |
+| Header and selector overlays              | zIndex 20; selector rendered after header                                                              |
+| Segment minimum height                    | Android 52, iOS 48                                                                                     |
 
 The segment minimum height is not the entire glass shell height: the shared
 control also has track margins and a border. Preserve the 84-point spacer.
 
 Use this hierarchy, from back to front, under the existing root providers:
 
-1. `SafeAreaView edges={["top"]}` with `theme.background` and `flex: 1`.
+1. A full-height `View` with `theme.background` and `flex: 1`.
 2. `KeyboardAvoidingView`, then one full-height screen-local container.
 3. `BlurTargetView` containing only the scrollable content and its spacers.
 4. A non-interactive top gradient, outside the blur target.
@@ -86,7 +88,7 @@ form fields. The feature owns `value`, `onChange`, `onBack`, and save behavior.
 
 ```tsx
 import { BlurTargetView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
+import { TopSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { Button } from "heroui-native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -97,11 +99,8 @@ import {
   Text,
   View,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 
@@ -158,10 +157,7 @@ export function StickyTopSection<Value extends string>({
   });
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.fill, { backgroundColor: theme.background }]}
-    >
+    <View style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.fill}
@@ -178,7 +174,7 @@ export function StickyTopSection<Value extends string>({
                 { useNativeDriver: true },
               )}
             >
-              <View style={{ height: 56 }} />
+              <View style={{ height: insets.top + 56 }} />
               <View style={{ height: 84 }} />
               <View
                 pointerEvents={busy ? "none" : "auto"}
@@ -188,20 +184,9 @@ export function StickyTopSection<Value extends string>({
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
-          <LinearGradient
-            colors={[
-              theme.background,
-              colorWithAlpha(theme.background, 0.82),
-              colorWithAlpha(theme.background, 0),
-            ]}
-            locations={[0, 0.58, 1]}
-            start={{ x: 0.5, y: 0 }}
-            end={{ x: 0.5, y: 1 }}
-            pointerEvents="none"
-            style={styles.topScrim}
-          />
+          <TopSafeAreaGradient headerHidden={headerHidden} />
           <View
-            style={styles.headerClip}
+            style={[styles.headerClip, { top: insets.top }]}
             pointerEvents={headerHidden ? "none" : "box-none"}
             accessibilityElementsHidden={headerHidden}
             importantForAccessibility={
@@ -232,7 +217,10 @@ export function StickyTopSection<Value extends string>({
           </View>
           <Animated.View
             pointerEvents={busy ? "none" : "auto"}
-            style={[styles.selectorDock, { transform: [{ translateY }] }]}
+            style={[
+              styles.selectorDock,
+              { top: insets.top + 64, transform: [{ translateY }] },
+            ]}
           >
             <GlassSegmentedControl
               accessibilityLabel={selectorLabel}
@@ -246,20 +234,12 @@ export function StickyTopSection<Value extends string>({
           {bottomOverlay}
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  topScrim: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 80,
-    zIndex: 10,
-  },
   headerClip: {
     position: "absolute",
     top: 0,
@@ -302,9 +282,10 @@ threshold. Negative overscroll is clamped so the header does not over-fade.
 
 - iOS BlurView does not require an explicit target. The same shared component
   and sibling layout can be used on both platforms without an iOS-specific fork.
-- Keep the top safe-area padding for the notch/Dynamic Island. The root view
-  paints the status-bar area with `theme.background`; the 80-point scrim starts
-  below that inset. Do not move the header into the status-bar area.
+- Keep header and selector controls below the notch/Dynamic Island using
+  their dock offsets. The scrolling viewport and gradient start at the phone
+  edge. The shared gradient is one continuous translucent fade through the
+  safe area, with no separate opaque status-bar band.
 - Use `KeyboardAvoidingView` with `padding` as in the reference. Verify keyboard
   opening, dismissal, bounce, and scrolling back to zero without changing dock sizes.
 
@@ -312,6 +293,12 @@ threshold. Negative overscroll is clamped so the header does not over-fade.
 
 Always derive the gradient from `theme.background` using `colorWithAlpha`.
 Dark mode resolves to black; light mode resolves to the light theme background.
+The shared top gradient spans `insets.top + 96` while the title is visible
+and `insets.top + 32` once hidden. Its theme-derived translucent stops fade
+through the safe area to clear content. There is no solid safe-area band.
+Pass header visibility to `TopSafeAreaGradient`; Home receives this through
+`CollapsingHeader`, independently of its selector. These are threshold-driven
+changes at offset 40, with no per-frame height animation or extra timing.
 Never hard-code black in light mode or white as an Android workaround. Keep the
 header above the gradient so it is fully readable at rest.
 

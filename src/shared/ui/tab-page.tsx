@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { Animated as NativeAnimated, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Easing,
   FadeInDown,
@@ -31,6 +32,7 @@ export function TabPage({
   headerHeight?: number;
 }>) {
   const sections = Children.toArray(children);
+  const insets = useSafeAreaInsets();
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
 
   return (
@@ -38,7 +40,10 @@ export function TabPage({
       <NativeAnimated.ScrollView
         className="flex-1"
         contentContainerClassName="gap-7 px-5"
-        contentContainerStyle={{ paddingBottom: contentBottomInset }}
+        contentContainerStyle={{
+          paddingBottom: contentBottomInset + insets.bottom,
+          paddingTop: header ? 0 : insets.top,
+        }}
         contentInsetAdjustmentBehavior="never"
         keyboardShouldPersistTaps="handled"
         onScroll={header ? onScroll : undefined}

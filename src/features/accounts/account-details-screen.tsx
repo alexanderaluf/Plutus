@@ -1,3 +1,8 @@
+import {
+  EdgeToEdgeLayout,
+  EdgeToEdgeScrollView,
+} from "@/shared/ui/edge-to-edge-layout";
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { useLocalData } from "@/data/local-data-provider";
 import { deleteAccountFromDocument } from "@/data/model/account-record";
 import {
@@ -11,18 +16,14 @@ import { FilledIcon } from "@/shared/ui/filled-icon";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { useAppLocalization } from "@/localization/localization-provider";
-import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
-import { LinearGradient } from "expo-linear-gradient";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { BlurTargetView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BottomSheet, Button } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccountCard } from "./components/account-card";
 import { AccountPeriodSelector } from "./components/account-period-selector";
 import type { AccountPeriod } from "./types";
@@ -151,29 +152,28 @@ export function AccountDetailsScreen() {
 
   if (!account)
     return (
-      <SafeAreaView
-        style={[styles.screen, { backgroundColor: theme.background }]}
-      >
-        <Text className="px-5 py-6 text-foreground">
-          {t("accounts.common.accountNotFound")}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.dismissTo("/accounts")}
-          style={styles.action}
+      <EdgeToEdgeLayout>
+        <EdgeToEdgeScrollView
+          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24 }}
         >
-          <Text className="text-accent">
-            {t("accounts.common.backToAccounts")}
+          <Text className="px-5 py-6 text-foreground">
+            {t("accounts.common.accountNotFound")}
           </Text>
-        </Pressable>
-      </SafeAreaView>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.dismissTo("/accounts")}
+            style={styles.action}
+          >
+            <Text className="text-accent">
+              {t("accounts.common.backToAccounts")}
+            </Text>
+          </Pressable>
+        </EdgeToEdgeScrollView>
+      </EdgeToEdgeLayout>
     );
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={[styles.screen, { backgroundColor: theme.background }]}
-    >
+    <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
         <Animated.FlatList
           data={visible}
@@ -332,15 +332,7 @@ export function AccountDetailsScreen() {
             </Text>
           }
         />
-        <LinearGradient
-          pointerEvents="none"
-          colors={[
-            colorWithAlpha(theme.background, 0),
-            colorWithAlpha(theme.background, 0.82),
-            theme.background,
-          ]}
-          style={[styles.scrim, { height: 110 + insets.bottom }]}
-        />
+        <BottomSafeAreaGradient fadeHeight={134} />
       </BlurTargetView>
       <CollapsingHeader
         headerHidden={headerHidden}
@@ -506,7 +498,7 @@ export function AccountDetailsScreen() {
           </AppBottomSheetPortal>
         </BottomSheet>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -537,7 +529,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     borderBottomWidth: 1,
   },
-  scrim: { position: "absolute", bottom: 0, left: 0, right: 0 },
   dock: { position: "absolute", left: 12, right: 12 },
   action: {
     minHeight: 52,

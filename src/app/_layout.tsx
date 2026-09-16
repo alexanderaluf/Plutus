@@ -71,15 +71,9 @@ function AppNavigation() {
     },
   };
 
-  useEffect(() => {
-    void SystemUI.setBackgroundColorAsync(background);
-  }, [background]);
-
   return (
     <ThemeProvider value={navigationTheme}>
       <View style={{ flex: 1, backgroundColor: background }}>
-        <StatusBar style={isDark ? "light" : "dark"} />
-        <NavigationBar style={isDark ? "light" : "dark"} />
         <Stack
           screenOptions={{
             headerShown: false,
@@ -88,6 +82,19 @@ function AppNavigation() {
         />
       </View>
     </ThemeProvider>
+  );
+}
+
+function AppSystemBars() {
+  const { background, isDark } = useAppThemeColors();
+  useEffect(() => {
+    void SystemUI.setBackgroundColorAsync(background);
+  }, [background]);
+  return (
+    <>
+      <StatusBar style={isDark ? "light" : "dark"} />
+      <NavigationBar style={isDark ? "light" : "dark"} />
+    </>
   );
 }
 
@@ -115,6 +122,7 @@ export default function RootLayout() {
             <LocalizationProvider>
               <LocalizedHeroUIProvider>
                 <AppThemeController />
+                <AppSystemBars />
                 <AppBottomSheetPortalLayer>
                   <View style={{ flex: 1 }}>
                     <OnboardingGate>

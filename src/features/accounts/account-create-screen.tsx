@@ -1,59 +1,60 @@
+import {
+  TopSafeAreaGradient,
+  BottomSafeAreaGradient,
+} from "@/shared/ui/safe-area-gradients";
 import { BlurTargetView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
+import { useCollapsingHeader } from "@/shared/ui/collapsing-header";
 import { uuid } from "expo-modules-core";
 import { useRouter } from "expo-router";
 import { Button, Switch as HeroSwitch, Input } from "heroui-native";
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
-    Animated,
-    I18nManager,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    View,
+  Alert,
+  Animated,
+  I18nManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  View,
 } from "react-native";
-import {
-    SafeAreaView,
-    useSafeAreaInsets,
-} from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
-    ACCOUNT_TYPES,
-    CARD_COMPANIES,
-    addAccountToDocument,
-    parseAccountAmount,
-    updateAccountInDocument,
-    validateAccountDraft,
-    type AccountDraft,
+  ACCOUNT_TYPES,
+  CARD_COMPANIES,
+  addAccountToDocument,
+  parseAccountAmount,
+  updateAccountInDocument,
+  validateAccountDraft,
+  type AccountDraft,
 } from "@/data/model/account-record";
 import { createDefaultSavingsDetails } from "@/data/model/savings-account";
 import {
-    selectAccountDraft,
-    selectBankAccounts,
+  selectAccountDraft,
+  selectBankAccounts,
 } from "@/data/selectors/document-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
 import { currencies } from "@/features/profile/data/currencies-data";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { useAppLocalization } from "@/localization/localization-provider";
-import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import {
-    PickerModal as AccountPicker,
-    IconPicker,
+  PickerModal as AccountPicker,
+  IconPicker,
 } from "@/shared/ui/icon-picker";
 import { ACCOUNT_COLORS, colorForeground } from "./account-options";
 import {
-    AccountCurrencyChangeSheet,
-    type CurrencyChangeRequest,
+  AccountCurrencyChangeSheet,
+  type CurrencyChangeRequest,
 } from "./components/account-currency-change-sheet";
 import { AccountIcon } from "./components/account-icon";
 import { CardCompanyLogo } from "./components/card-company-logo";
@@ -197,7 +198,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
   const [error, setError] = useState("");
   const saving = useRef(false);
   const blurTargetRef = useRef<View | null>(null);
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const { scrollY, headerHidden } = useCollapsingHeader();
   const accountId = useRef<string | null>(null);
   const iconChosen = useRef(!!editId);
   const color = /^#[a-f\d]{6}$/i.test(draft.color)
@@ -269,9 +270,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
             (latest.amount !== originalAccount.amount ||
               latest.currencyCode !== originalAccount.currencyCode)
           )
-            throw new Error(
-              t("accounts.form.staleBalance"),
-            );
+            throw new Error(t("accounts.form.staleBalance"));
         }
         return editId
           ? updateAccountInDocument(current, draft, editId, now)
@@ -281,9 +280,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
       else router.dismissTo("/accounts");
     } catch (reason) {
       const message =
-        reason instanceof Error
-          ? reason.message
-          : t("accounts.form.saveError");
+        reason instanceof Error ? reason.message : t("accounts.form.saveError");
       setError(message);
       Alert.alert(t("accounts.form.saveErrorTitle"), message);
     } finally {
@@ -293,10 +290,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
   }
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: theme.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -315,7 +309,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               scrollEventThrottle={16}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.headerSpace} />
+              <View style={[styles.headerSpace, { height: 56 + insets.top }]} />
               <View style={styles.selectorSpace} />
               <View
                 pointerEvents={isSaving ? "none" : "auto"}
@@ -672,22 +666,17 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
-          <LinearGradient
-            colors={[
-              theme.background,
-              colorWithAlpha(theme.background, 0.82),
-              colorWithAlpha(theme.background, 0),
-            ]}
-            end={{ x: 0.5, y: 1 }}
-            locations={[0, 0.58, 1]}
-            pointerEvents="none"
-            start={{ x: 0.5, y: 0 }}
-            style={styles.topScrim}
-          />
+          <TopSafeAreaGradient headerHidden={headerHidden} />
           <Animated.View
+            pointerEvents={headerHidden ? "none" : "auto"}
+            accessibilityElementsHidden={headerHidden}
+            importantForAccessibility={
+              headerHidden ? "no-hide-descendants" : "auto"
+            }
             style={[
               styles.headerDock,
               {
+                top: insets.top,
                 opacity: headerOpacity,
                 transform: [{ translateY: topControlsTranslateY }],
               },
@@ -715,6 +704,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
             pointerEvents={isSaving ? "none" : "auto"}
             style={[
               styles.selectorDock,
+              { top: 64 + insets.top },
               {
                 transform: [{ translateY: topControlsTranslateY }],
               },
@@ -736,24 +726,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               }}
             />
           </Animated.View>
-          <LinearGradient
-            colors={[
-              colorWithAlpha(theme.background, 0),
-              colorWithAlpha(theme.background, 0.72),
-              theme.background,
-              theme.background,
-            ]}
-            end={{ x: 0.5, y: 1 }}
-            locations={[
-              0,
-              (128 * 0.54) / (128 + insets.bottom),
-              128 / (128 + insets.bottom),
-              1,
-            ]}
-            pointerEvents="none"
-            start={{ x: 0.5, y: 0 }}
-            style={[styles.bottomScrim, { height: 128 + insets.bottom }]}
-          />
+          <BottomSafeAreaGradient />
           <View
             pointerEvents="box-none"
             style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
@@ -989,7 +962,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
           </ScrollView>
         </AccountPicker>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -999,14 +972,6 @@ const styles = StyleSheet.create({
   },
   scrollTarget: {
     flex: 1,
-  },
-  topScrim: {
-    height: 80,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    top: 0,
-    zIndex: 10,
   },
   headerDock: {
     alignItems: "center",
@@ -1030,13 +995,6 @@ const styles = StyleSheet.create({
     right: 12,
     top: 64,
     zIndex: 20,
-  },
-  bottomScrim: {
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    zIndex: 10,
   },
   actionDock: {
     gap: 6,

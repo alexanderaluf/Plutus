@@ -1,9 +1,8 @@
-import { LinearGradient } from "expo-linear-gradient";
+import { TopSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import type { PropsWithChildren } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Platform, StyleSheet, View } from "react-native";
-
-import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import { Animated, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export const COLLAPSING_HEADER_HEIGHT = 56;
 const HEADER_FADE_DISTANCE = 40;
@@ -36,7 +35,8 @@ export function CollapsingHeaderSpacer({
 }: {
   height?: number;
 }) {
-  return <View aria-hidden style={{ height }} />;
+  const insets = useSafeAreaInsets();
+  return <View aria-hidden style={{ height: height + insets.top }} />;
 }
 
 export function CollapsingHeader({
@@ -45,7 +45,7 @@ export function CollapsingHeader({
   horizontalInset = 16,
   headerHidden,
   scrollY,
-  topInset = 0,
+  topInset,
 }: PropsWithChildren<{
   height?: number;
   horizontalInset?: number;
@@ -53,7 +53,7 @@ export function CollapsingHeader({
   scrollY: Animated.Value;
   topInset?: number;
 }>) {
-  const theme = useAppThemeColors();
+  const insets = useSafeAreaInsets();
   const translateY = scrollY.interpolate({
     inputRange: [0, COLLAPSING_HEADER_HEIGHT],
     outputRange: [0, -COLLAPSING_HEADER_HEIGHT],
@@ -67,16 +67,7 @@ export function CollapsingHeader({
 
   return (
     <>
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          theme.background,
-          colorWithAlpha(theme.background, 0.82),
-          colorWithAlpha(theme.background, 0),
-        ]}
-        locations={[0, 0.58, 1]}
-        style={[styles.gradient, { top: topInset }]}
-      />
+      <TopSafeAreaGradient headerHidden={headerHidden} />
       <View
         pointerEvents={headerHidden ? "none" : "auto"}
         accessibilityElementsHidden={headerHidden}
@@ -89,7 +80,7 @@ export function CollapsingHeader({
             height,
             left: horizontalInset,
             right: horizontalInset,
-            top: topInset,
+            top: topInset ?? insets.top,
           },
         ]}
       >
@@ -102,13 +93,6 @@ export function CollapsingHeader({
 }
 
 const styles = StyleSheet.create({
-  gradient: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: Platform.OS === "ios" ? 24 : 80,
-    zIndex: 10,
-  },
   clip: {
     position: "absolute",
     zIndex: 20,

@@ -110,7 +110,10 @@ function mount({
         return to;
       },
     },
-    "expo-linear-gradient": { LinearGradient: "LinearGradient" },
+    "@/shared/ui/safe-area-gradients": {
+      BottomSafeAreaGradient: "BottomSafeAreaGradient",
+      TopSafeAreaGradient: "TopSafeAreaGradient",
+    },
     "@/shared/theme/app-theme": {
       colorWithAlpha: (color) => color,
       useAppThemeColors: () => ({
