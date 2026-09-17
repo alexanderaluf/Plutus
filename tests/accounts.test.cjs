@@ -57,6 +57,7 @@ const {
   selectBankAccounts,
   selectAccountDraft,
   selectAccountTransactions,
+  getCreditCardBillingCycle,
 } = require("../src/data/selectors/document-selectors.ts");
 const {
   createJsonBackupDocument,
@@ -322,6 +323,8 @@ test("reject malformed amounts, card details and missing owners before mutation"
     { currencyCode: "?" },
     { icon: "material:account-balance", iconPath: null },
     { icon: "material:account-balance", iconPath: "invalid" },
+    { creditLimit: "-100" },
+    { creditLimit: "invalid" },
   ])
     assert.throws(() => add(createDefaultBackup(), changes));
   assert.throws(
@@ -650,6 +653,110 @@ test("days 29 to 31 settle on the last day of a shorter month", () => {
       .lastPaymentPeriod,
     "2027-02",
   );
+});
+
+test("credit card billing cycle calculates dynamic dates for any paymentDay and handles month transitions", () => {
+  // Scenario 1: paymentDay = 5
+  // When anchor is Sept 3, 2026 (before payday on Sept 5):
+  // Current cycle is Aug 5, 2026 to Sept 4, 2026. Next payday is Sept 5, 2026. Days left: 2.
+  const cycle5Before = getCreditCardBillingCycle(5, new Date(2026, 8, 3, 10));
+  assert.equal(cycle5Before.cycleStart.getFullYear(), 2026);
+  assert.equal(cycle5Before.cycleStart.getMonth(), 7); // August
+  assert.equal(cycle5Before.cycleStart.getDate(), 5);
+  assert.equal(cycle5Before.cycleEnd.getFullYear(), 2026);
+  assert.equal(cycle5Before.cycleEnd.getMonth(), 8); // September
+  assert.equal(cycle5Before.cycleEnd.getDate(), 4);
+  assert.equal(cycle5Before.nextPaymentDate.getDate(), 5);
+  assert.equal(cycle5Before.daysUntilPayment, 2);
+
+  // When anchor is Sept 5, 2026 (on payday):
+  // Current cycle is Sept 5, 2026 to Oct 4, 2026. Next payday is Oct 5, 2026.
+  const cycle5On = getCreditCardBillingCycle(5, new Date(2026, 8, 5, 10));
+  assert.equal(cycle5On.cycleStart.getFullYear(), 2026);
+  assert.equal(cycle5On.cycleStart.getMonth(), 8); // September
+  assert.equal(cycle5On.cycleStart.getDate(), 5);
+  assert.equal(cycle5On.cycleEnd.getFullYear(), 2026);
+  assert.equal(cycle5On.cycleEnd.getMonth(), 9); // October
+  assert.equal(cycle5On.cycleEnd.getDate(), 4);
+  assert.equal(cycle5On.nextPaymentDate.getDate(), 5);
+
+  // Scenario 2: paymentDay = 1
+  // When anchor is Sept 15, 2026:
+  // Current cycle is Sept 1, 2026 to Sept 30, 2026. Next payday is Oct 1, 2026.
+  const cycle1 = getCreditCardBillingCycle(1, new Date(2026, 8, 15, 10));
+  assert.equal(cycle1.cycleStart.getMonth(), 8); // September
+  assert.equal(cycle1.cycleStart.getDate(), 1);
+  assert.equal(cycle1.cycleEnd.getMonth(), 8); // September
+  assert.equal(cycle1.cycleEnd.getDate(), 30);
+  assert.equal(cycle1.nextPaymentDate.getMonth(), 9); // October
+  assert.equal(cycle1.nextPaymentDate.getDate(), 1);
+
+  // Scenario 3: paymentDay = 10 (Israeli typical)
+  // When anchor is Sept 9, 2026: cycle Aug 10 to Sept 9 (inclusive), next payment Sept 10.
+  const cycle10 = getCreditCardBillingCycle(10, new Date(2026, 8, 9, 10));
+  assert.equal(cycle10.cycleStart.getMonth(), 7); // August
+  assert.equal(cycle10.cycleStart.getDate(), 10);
+  assert.equal(cycle10.cycleEnd.getMonth(), 8); // September
+  assert.equal(cycle10.cycleEnd.getDate(), 9);
+  assert.equal(cycle10.nextPaymentDate.getDate(), 10);
+  assert.equal(cycle10.daysUntilPayment, 1);
+});
+
+test("credit limit, available credit, overdraft, and frame restoration on payday", () => {
+  const current = createDefaultBackup();
+  const card = current.accounts.find((a) => a.uuid === "account-credit");
+  const bank = current.accounts.find((a) => a.uuid === "account-checking");
+  bank.amount = 10000;
+  card.creditLimit = 6000;
+  card.amount = -2532; // 2532 spent
+  card.paymentDay = 10;
+  card.lastPaymentPeriod = null;
+
+  // Before payday (Sept 7):
+  const accountsBefore = selectAccounts(current, new Date(2026, 8, 7, 12));
+  const cardBefore = accountsBefore.find((a) => a.id === "account-credit");
+  assert.equal(cardBefore.creditLimit, 6000);
+  assert.equal(cardBefore.currentSpent, 2532);
+  assert.equal(cardBefore.availableCredit, 3468);
+  assert.equal(cardBefore.isOverdraft, false);
+  assert.equal(cardBefore.overdraftAmount, 0);
+  assert.equal(cardBefore.creditUtilization, 42); // 2532 / 6000 = 42.2% -> 42%
+
+  // Overdraft condition: card has spent 6500 (exceeding 6000 limit)
+  card.amount = -6500;
+  const accountsOverdraft = selectAccounts(current, new Date(2026, 8, 7, 12));
+  const cardOverdraft = accountsOverdraft.find(
+    (a) => a.id === "account-credit",
+  );
+  assert.equal(cardOverdraft.currentSpent, 6500);
+  assert.equal(cardOverdraft.availableCredit, -500);
+  assert.equal(cardOverdraft.isOverdraft, true);
+  assert.equal(cardOverdraft.overdraftAmount, 500);
+  assert.equal(cardOverdraft.creditUtilization, 108);
+
+  // Restore spending to 2532 for settlement test
+  card.amount = -2532;
+
+  // Payday arrives on Sept 10:
+  const paidDoc = settleDueCardPayments(current, new Date(2026, 8, 10, 12));
+  const paidCardRecord = paidDoc.accounts.find(
+    (a) => a.uuid === "account-credit",
+  );
+  const paidBankRecord = paidDoc.accounts.find(
+    (a) => a.uuid === "account-checking",
+  );
+  assert.equal(paidCardRecord.amount, 0);
+  assert.equal(paidBankRecord.amount, 10000 - 2532);
+
+  // Available credit restored to initial full credit limit (6000 ILS)!
+  const accountsAfter = selectAccounts(paidDoc, new Date(2026, 8, 10, 12));
+  const cardAfter = accountsAfter.find((a) => a.id === "account-credit");
+  assert.equal(cardAfter.creditLimit, 6000);
+  assert.equal(cardAfter.currentSpent, 0);
+  assert.equal(cardAfter.availableCredit, 6000);
+  assert.equal(cardAfter.isOverdraft, false);
+  assert.equal(cardAfter.overdraftAmount, 0);
+  assert.equal(cardAfter.creditUtilization, 0);
 });
 
 const rateNow = new Date("2026-09-10T12:00:00.000Z");

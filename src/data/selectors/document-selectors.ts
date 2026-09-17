@@ -12,7 +12,9 @@ import type {
   Account,
   AccountPeriod,
   AccountTransaction,
+  CreditCardBillingCycle,
 } from "@/features/accounts/types";
+import { dueDateInMonth } from "../model/card-payment";
 import type { BudgetCategory } from "@/features/home/types";
 import type { DailySpend, SpendingCategory } from "@/features/reports/types";
 import type { SearchResult } from "@/features/search/types";
@@ -138,7 +140,105 @@ export function selectAccountBalances(document: BackupDocument) {
   return ownedAccountRecords(document).map(accountBalance);
 }
 
-export function selectAccounts(document: BackupDocument): Account[] {
+/** Calculate the billing cycle for a credit card based on its user-configured monthly paymentDay. */
+export function getCreditCardBillingCycle(
+  paymentDay: number,
+  anchor: Date | string = new Date(),
+): CreditCardBillingCycle {
+  const anchorDate =
+    anchor instanceof Date && !Number.isNaN(anchor.getTime())
+      ? anchor
+      : typeof anchor === "string" && !Number.isNaN(new Date(anchor).getTime())
+        ? new Date(anchor)
+        : new Date();
+  const currentDay = anchorDate.getDate();
+  const currentYear = anchorDate.getFullYear();
+  const currentMonth = anchorDate.getMonth();
+
+  const thisMonthDueDay = dueDateInMonth(anchorDate, paymentDay);
+
+  let nextPaymentYear = currentYear;
+  let nextPaymentMonth = currentMonth;
+  let cycleStartYear = currentYear;
+  let cycleStartMonth = currentMonth;
+
+  if (currentDay >= thisMonthDueDay) {
+    nextPaymentMonth = currentMonth + 1;
+    cycleStartMonth = currentMonth;
+  } else {
+    nextPaymentMonth = currentMonth;
+    cycleStartMonth = currentMonth - 1;
+  }
+
+  const nextPaymentMonthDate = new Date(nextPaymentYear, nextPaymentMonth, 1);
+  const nextPaymentDueDay = dueDateInMonth(nextPaymentMonthDate, paymentDay);
+  const nextPaymentDate = new Date(
+    nextPaymentMonthDate.getFullYear(),
+    nextPaymentMonthDate.getMonth(),
+    nextPaymentDueDay,
+    12,
+    0,
+    0,
+    0,
+  );
+
+  const cycleStartMonthDate = new Date(cycleStartYear, cycleStartMonth, 1);
+  const cycleStartDueDay = dueDateInMonth(cycleStartMonthDate, paymentDay);
+  const cycleStartDate = new Date(
+    cycleStartMonthDate.getFullYear(),
+    cycleStartMonthDate.getMonth(),
+    cycleStartDueDay,
+    0,
+    0,
+    0,
+    0,
+  );
+
+  const cycleEndDate = new Date(
+    nextPaymentDate.getFullYear(),
+    nextPaymentDate.getMonth(),
+    nextPaymentDate.getDate() - 1,
+    23,
+    59,
+    59,
+    999,
+  );
+
+  const todayMidnight = new Date(
+    currentYear,
+    currentMonth,
+    currentDay,
+    0,
+    0,
+    0,
+    0,
+  ).getTime();
+  const paymentMidnight = new Date(
+    nextPaymentDate.getFullYear(),
+    nextPaymentDate.getMonth(),
+    nextPaymentDate.getDate(),
+    0,
+    0,
+    0,
+    0,
+  ).getTime();
+  const daysUntilPayment = Math.max(
+    0,
+    Math.round((paymentMidnight - todayMidnight) / (1000 * 60 * 60 * 24)),
+  );
+
+  return {
+    cycleStart: cycleStartDate,
+    cycleEnd: cycleEndDate,
+    nextPaymentDate,
+    daysUntilPayment,
+  };
+}
+
+export function selectAccounts(
+  document: BackupDocument,
+  now = new Date(),
+): Account[] {
   return ownedAccountRecords(document).map((record, index) => {
     const institution = text(record.bankName, i18n.t("common.localAccount"));
     const normalized = `${text(record.name)} ${institution}`.toLowerCase();
@@ -167,6 +267,39 @@ export function selectAccounts(document: BackupDocument): Account[] {
       /^[Mm]/.test(storedIconPath) &&
       storedIconPath.length <= 20_000;
 
+    const paymentDay =
+      typeof record.paymentDay === "number" &&
+      Number.isInteger(record.paymentDay) &&
+      record.paymentDay >= 1 &&
+      record.paymentDay <= 31
+        ? record.paymentDay
+        : null;
+    const isCredit = kind === "credit";
+    const billingCycle =
+      isCredit && paymentDay != null
+        ? getCreditCardBillingCycle(paymentDay, now)
+        : null;
+    const creditLimit =
+      isCredit &&
+      typeof record.creditLimit === "number" &&
+      Number.isFinite(record.creditLimit)
+        ? record.creditLimit
+        : null;
+    const balanceNum = number(record.amount);
+    const currentSpent = isCredit ? Math.max(0, -balanceNum) : 0;
+    const availableCredit =
+      isCredit && creditLimit != null ? creditLimit - currentSpent : null;
+    const isOverdraft =
+      isCredit && creditLimit != null ? currentSpent > creditLimit : false;
+    const overdraftAmount =
+      isCredit && creditLimit != null
+        ? Math.max(0, currentSpent - creditLimit)
+        : 0;
+    const creditUtilization =
+      isCredit && creditLimit != null && creditLimit > 0
+        ? Math.round((currentSpent / creditLimit) * 100)
+        : 0;
+
     return {
       ...accountBalance(record, index),
       accountNumber: text(record.accountNumber),
@@ -175,7 +308,7 @@ export function selectAccounts(document: BackupDocument): Account[] {
           (user) => user.uuid === record.user || user.id === record.user,
         )?.name,
       ),
-      ...accountActivityTotals(document, record),
+      ...accountActivityTotals(document, record, billingCycle),
       name: text(record.name, `Account ${index + 1}`),
       institution,
       kind,
@@ -221,13 +354,14 @@ export function selectAccounts(document: BackupDocument): Account[] {
             record.linkedBankAccountId,
         )?.name,
       ),
-      paymentDay:
-        typeof record.paymentDay === "number" &&
-        Number.isInteger(record.paymentDay) &&
-        record.paymentDay >= 1 &&
-        record.paymentDay <= 31
-          ? record.paymentDay
-          : null,
+      paymentDay,
+      creditLimit,
+      currentSpent,
+      availableCredit,
+      isOverdraft,
+      overdraftAmount,
+      creditUtilization,
+      billingCycle,
     };
   });
 }
@@ -238,7 +372,11 @@ function belongsToAccount(transaction: JsonObject, account: JsonObject) {
   );
 }
 
-function accountActivityTotals(document: BackupDocument, account: JsonObject) {
+function accountActivityTotals(
+  document: BackupDocument,
+  account: JsonObject,
+  billingCycle: CreditCardBillingCycle | null = null,
+) {
   const records = document.transactions.filter((item) =>
     belongsToAccount(item, account),
   );
@@ -253,6 +391,17 @@ function accountActivityTotals(document: BackupDocument, account: JsonObject) {
       timestamp < monthEnd
     );
   });
+  const thisCycle = billingCycle
+    ? records.filter((item) => {
+        const timestamp = new Date(text(item.date, text(item.createdAt))).getTime();
+        return (
+          Number.isFinite(timestamp) &&
+          timestamp >= billingCycle.cycleStart.getTime() &&
+          timestamp <= billingCycle.cycleEnd.getTime()
+        );
+      })
+    : thisMonth;
+
   const total = (items: JsonObject[], type: number) =>
     items
       .filter((item) => item.type === type)
@@ -266,6 +415,8 @@ function accountActivityTotals(document: BackupDocument, account: JsonObject) {
     expense: total(records, 0),
     monthlyIncome: total(thisMonth, 1),
     monthlyExpense: total(thisMonth, 0),
+    cycleIncome: total(thisCycle, 1),
+    cycleExpense: total(thisCycle, 0),
   };
 }
 
@@ -367,6 +518,11 @@ export function selectAccountDraft(
     cardLastFour: account.lastFour,
     cardCompany: account.cardCompany,
     paymentDay: account.paymentDay,
+    creditLimit:
+      typeof record?.creditLimit === "number" &&
+      Number.isFinite(record.creditLimit)
+        ? String(record.creditLimit)
+        : "",
     bankName: account.bankName,
     linkedBankAccountId: account.linkedBankAccountId,
     savingsDetails: savingsDetailsToDraft(record?.savingsDetails),

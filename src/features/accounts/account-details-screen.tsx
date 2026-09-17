@@ -1,26 +1,32 @@
-import {
-  EdgeToEdgeLayout,
-  EdgeToEdgeScrollView,
-} from "@/shared/ui/edge-to-edge-layout";
-import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { useLocalData } from "@/data/local-data-provider";
 import { deleteAccountFromDocument } from "@/data/model/account-record";
 import {
-  accountPeriodRange,
-  filterAccountTransactions,
-  selectAccounts,
-  selectAccountTransactions,
+    accountPeriodRange,
+    filterAccountTransactions,
+    selectAccounts,
+    selectAccountTransactions,
 } from "@/data/selectors/document-selectors";
-import { formatCurrency } from "@/shared/lib/currency";
-import { FilledIcon } from "@/shared/ui/filled-icon";
-import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
-import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { useAppLocalization } from "@/localization/localization-provider";
+import { formatCurrency } from "@/shared/lib/currency";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
+import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
+import { Text } from "@/shared/ui/app-text";
+import {
+    CollapsingHeader,
+    CollapsingHeaderSpacer,
+    useCollapsingHeader,
+} from "@/shared/ui/collapsing-header";
+import {
+    EdgeToEdgeLayout,
+    EdgeToEdgeScrollView,
+} from "@/shared/ui/edge-to-edge-layout";
+import { FilledIcon } from "@/shared/ui/filled-icon";
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
+import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { BlurTargetView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
@@ -28,12 +34,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccountCard } from "./components/account-card";
 import { AccountPeriodSelector } from "./components/account-period-selector";
 import type { AccountPeriod } from "./types";
-import { Text } from "@/shared/ui/app-text";
-import {
-  CollapsingHeader,
-  CollapsingHeaderSpacer,
-  useCollapsingHeader,
-} from "@/shared/ui/collapsing-header";
 
 export function AccountDetailsScreen() {
   const { t, i18n } = useTranslation();
@@ -102,11 +102,7 @@ export function AccountDetailsScreen() {
   const isMenuMounted = menu !== null;
 
   useEffect(() => {
-    if (!isMenuMounted) {
-      setIsMenuOpen(false);
-      return;
-    }
-    const frame = requestAnimationFrame(() => setIsMenuOpen(true));
+    const frame = requestAnimationFrame(() => setIsMenuOpen(isMenuMounted));
     return () => cancelAnimationFrame(frame);
   }, [isMenuMounted]);
 
@@ -189,14 +185,14 @@ export function AccountDetailsScreen() {
           ListHeaderComponent={
             <View style={{ gap: 20 }}>
               <CollapsingHeaderSpacer />
-              <AccountCard account={account} />
+              <AccountCard account={account} showDetails />
               <View
                 style={[styles.summary, { backgroundColor: theme.surface }]}
               >
                 <Text className="font-manrope-bold text-base text-accent">
                   {allTime
-                    ? t("accounts.details.allTime")
-                    : t("accounts.details.activity", { period: periodLabel })}
+                  ? t("accounts.details.allTime")
+                  : t("accounts.details.activity", { period: periodLabel })}
                 </Text>
                 {(totals.length
                   ? totals

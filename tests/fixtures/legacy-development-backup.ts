@@ -6,8 +6,8 @@ import {
     type BackupCollectionKey,
     type BackupDocument,
 } from "../../src/data/model/backup-document";
-import { normalizeCategoryRecord } from "../../src/data/model/category-record";
 import { normalizeBudgetRecord } from "../../src/data/model/budget-record";
+import { normalizeCategoryRecord } from "../../src/data/model/category-record";
 import type { JsonObject } from "../../src/data/model/json";
 
 const now = "2026-09-06T00:00:00.000Z";
@@ -90,6 +90,7 @@ export function createLegacyDevelopmentBackup(): BackupDocument {
         cardLastFour: null,
         cardCompany: null,
         paymentDay: null,
+        creditLimit: null,
         linkedBankAccountId: null,
         savingsDetails: null,
         lastPaymentPeriod: null,
@@ -116,6 +117,7 @@ export function createLegacyDevelopmentBackup(): BackupDocument {
         cardLastFour: null,
         cardCompany: null,
         paymentDay: null,
+        creditLimit: null,
         linkedBankAccountId: null,
         savingsDetails: {
           isDetailed: true,
@@ -165,6 +167,7 @@ export function createLegacyDevelopmentBackup(): BackupDocument {
         cardLastFour: "4438",
         cardCompany: "Mastercard",
         paymentDay: 10,
+        creditLimit: null,
         linkedBankAccountId: "account-checking",
         savingsDetails: null,
         lastPaymentPeriod: null,

@@ -19,7 +19,7 @@ function localMonth(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function dueDateInMonth(date: Date, paymentDay: number) {
+export function dueDateInMonth(date: Date, paymentDay: number) {
   const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   return Math.min(paymentDay, lastDay);
 }

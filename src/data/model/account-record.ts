@@ -24,6 +24,7 @@ export const CARD_COMPANIES = [
 export interface AccountDraft {
   name: string;
   amount: string;
+  creditLimit?: string;
   accountNumber: string;
   accountType: AccountType;
   currencyCode: string;
@@ -86,6 +87,12 @@ export function validateAccountDraft(draft: AccountDraft) {
       draft.paymentDay! > 31
     )
       throw new Error(i18n.t("validation.account.paymentDay"));
+    if (draft.creditLimit && draft.creditLimit.trim()) {
+      const limit = parseAccountAmount(draft.creditLimit);
+      if (limit < 0) {
+        throw new Error(i18n.t("validation.account.invalidCreditLimit"));
+      }
+    }
   }
   if (draft.accountType === "bank" && !draft.bankName.trim())
     throw new Error(i18n.t("validation.account.bankName"));
@@ -149,6 +156,10 @@ export function addAccountToDocument(
     cardLastFour: draft.accountType === "card" ? draft.cardLastFour : null,
     cardCompany: draft.accountType === "card" ? draft.cardCompany : null,
     paymentDay: draft.accountType === "card" ? draft.paymentDay : null,
+    creditLimit:
+      draft.accountType === "card" && draft.creditLimit?.trim()
+        ? parseAccountAmount(draft.creditLimit)
+        : null,
     bankName: draft.accountType === "bank" ? draft.bankName.trim() : null,
     linkedBankAccountId:
       draft.accountType === "card"
@@ -183,6 +194,7 @@ export function normalizeAccountRecord(record: JsonObject): JsonObject {
     cardLastFour: null,
     cardCompany: null,
     paymentDay: null,
+    creditLimit: null,
     bankName: null,
     linkedBankAccountId: null,
     savingsDetails: null,

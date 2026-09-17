@@ -88,7 +88,7 @@ export function AccountsScreen() {
               }
               style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
-              <AccountCard account={item} />
+              <AccountCard account={item} showDetails={false} />
             </Pressable>
           </Animated.View>
         )}

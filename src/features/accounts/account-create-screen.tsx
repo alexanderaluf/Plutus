@@ -1,43 +1,43 @@
+import { useCollapsingHeader } from "@/shared/ui/collapsing-header";
 import {
-  TopSafeAreaGradient,
-  BottomSafeAreaGradient,
+    BottomSafeAreaGradient,
+    TopSafeAreaGradient,
 } from "@/shared/ui/safe-area-gradients";
 import { BlurTargetView } from "expo-blur";
-import { useCollapsingHeader } from "@/shared/ui/collapsing-header";
 import { uuid } from "expo-modules-core";
 import { useRouter } from "expo-router";
 import { Button, Switch as HeroSwitch, Input } from "heroui-native";
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
-  Animated,
-  I18nManager,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  View,
+    Alert,
+    Animated,
+    I18nManager,
+    Keyboard,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
-  ACCOUNT_TYPES,
-  CARD_COMPANIES,
-  addAccountToDocument,
-  parseAccountAmount,
-  updateAccountInDocument,
-  validateAccountDraft,
-  type AccountDraft,
+    ACCOUNT_TYPES,
+    CARD_COMPANIES,
+    addAccountToDocument,
+    parseAccountAmount,
+    updateAccountInDocument,
+    validateAccountDraft,
+    type AccountDraft,
 } from "@/data/model/account-record";
 import { createDefaultSavingsDetails } from "@/data/model/savings-account";
 import {
-  selectAccountDraft,
-  selectBankAccounts,
+    selectAccountDraft,
+    selectBankAccounts,
 } from "@/data/selectors/document-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
 import { currencies } from "@/features/profile/data/currencies-data";
@@ -48,13 +48,13 @@ import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import {
-  PickerModal as AccountPicker,
-  IconPicker,
+    PickerModal as AccountPicker,
+    IconPicker,
 } from "@/shared/ui/icon-picker";
 import { ACCOUNT_COLORS, colorForeground } from "./account-options";
 import {
-  AccountCurrencyChangeSheet,
-  type CurrencyChangeRequest,
+    AccountCurrencyChangeSheet,
+    type CurrencyChangeRequest,
 } from "./components/account-currency-change-sheet";
 import { AccountIcon } from "./components/account-icon";
 import { CardCompanyLogo } from "./components/card-company-logo";
@@ -175,6 +175,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
       (editId ? selectAccountDraft(document, editId) : null) ?? {
         name: "",
         amount: "",
+        creditLimit: "",
         accountNumber: "",
         accountType: "card",
         currencyCode: activeProfile.currencyCode.toUpperCase(),
@@ -245,8 +246,16 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
 
   async function save() {
     if (saving.current) return;
+    const draftToSave: AccountDraft = {
+      ...draft,
+      amount:
+        draft.accountType === "card" &&
+        Number(draft.amount.replace(",", ".")) > 0
+          ? `-${draft.amount.trim()}`
+          : draft.amount,
+    };
     try {
-      validateAccountDraft(draft);
+      validateAccountDraft(draftToSave);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -273,8 +282,8 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
             throw new Error(t("accounts.form.staleBalance"));
         }
         return editId
-          ? updateAccountInDocument(current, draft, editId, now)
-          : addAccountToDocument(current, draft, profileId, id, now);
+          ? updateAccountInDocument(current, draftToSave, editId, now)
+          : addAccountToDocument(current, draftToSave, profileId, id, now);
       });
       if (editId) router.back();
       else router.dismissTo("/accounts");
@@ -358,15 +367,42 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                     />
                   </View>
                 </View>
+                {draft.accountType === "card" && (
+                  <View className="gap-2">
+                    <Text className="font-manrope-medium text-sm text-muted">
+                      {t("accounts.form.creditLimit", {
+                        currency: draft.currencyCode,
+                      })}
+                    </Text>
+                    <Input
+                      accessibilityLabel={t(
+                        "accounts.form.creditLimitAccessibility",
+                      )}
+                      placeholder={t("accounts.form.creditLimitPlaceholder")}
+                      keyboardType="decimal-pad"
+                      value={draft.creditLimit ?? ""}
+                      onChangeText={(value) => change("creditLimit", value)}
+                      className="h-14 rounded-2xl bg-surface font-manrope-semibold"
+                      style={inputDirectionStyle}
+                    />
+                    <Text className="font-sans text-xs leading-5 text-muted">
+                      {t("accounts.form.creditLimitHelp")}
+                    </Text>
+                  </View>
+                )}
                 <View className="gap-2">
                   <Text className="font-manrope-medium text-sm text-muted">
-                    {draft.accountType === "savings"
-                      ? t("accounts.form.currentBalance", {
+                    {draft.accountType === "card"
+                      ? t("accounts.form.cardCurrentBalance", {
                           currency: draft.currencyCode,
                         })
-                      : t("accounts.form.openingBalance", {
-                          currency: draft.currencyCode,
-                        })}
+                      : draft.accountType === "savings"
+                        ? t("accounts.form.currentBalance", {
+                            currency: draft.currencyCode,
+                          })
+                        : t("accounts.form.openingBalance", {
+                            currency: draft.currencyCode,
+                          })}
                   </Text>
                   <View className="flex-row items-center gap-2">
                     <Button
@@ -398,8 +434,12 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                       style={inputDirectionStyle}
                     />
                   </View>
-                  {(draft.accountType === "card" ||
-                    draft.accountType === "bank") && (
+                  {draft.accountType === "card" && (
+                    <Text className="font-sans text-xs leading-5 text-muted">
+                      {t("accounts.form.cardCurrentBalanceHelp")}
+                    </Text>
+                  )}
+                  {draft.accountType === "bank" && (
                     <Text className="font-sans text-xs leading-5 text-muted">
                       {t("accounts.form.negativeBalanceHelp")}
                     </Text>
