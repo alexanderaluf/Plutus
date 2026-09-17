@@ -49,6 +49,9 @@ import {
 } from "react-native";
 import Animated, {
   Easing,
+  FadeInLeft,
+  FadeOutLeft,
+  LinearTransition,
   ReduceMotion,
   runOnJS,
   useAnimatedStyle,
@@ -58,8 +61,8 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const STEPS = [
-  "welcome",
   "language",
+  "welcome",
   "control",
   "name",
   "currency",
@@ -68,8 +71,8 @@ const STEPS = [
   "week",
 ] as const;
 const ICONS: FilledIconName[] = [
-  "wallet",
   "translate",
+  "wallet",
   "shield-check",
   "account",
   "currency-usd",
@@ -95,11 +98,17 @@ const TRANSITION = {
   easing: Easing.bezier(0.22, 1, 0.36, 1),
   reduceMotion: ReduceMotion.System,
 };
-// Availability lives in a shared catalog. Russian is retained for existing
-// installations; the requested initial setup currently offers English/Hebrew.
-const SETUP_LANGUAGES = LANGUAGE_OPTIONS.filter(
-  (option) => option.isAvailable && option.code !== "ru",
-);
+const ACTION_EASING = Easing.bezier(0.23, 1, 0.32, 1);
+const ACTION_LAYOUT_TRANSITION = LinearTransition.duration(220)
+  .easing(ACTION_EASING)
+  .reduceMotion(ReduceMotion.System);
+const BACK_ENTERING = FadeInLeft.duration(220)
+  .easing(ACTION_EASING)
+  .reduceMotion(ReduceMotion.System);
+const BACK_EXITING = FadeOutLeft.duration(180)
+  .easing(ACTION_EASING)
+  .reduceMotion(ReduceMotion.System);
+const SETUP_LANGUAGES = LANGUAGE_OPTIONS.filter((option) => option.isAvailable);
 
 export function OnboardingScreen({
   onBusyChange,
@@ -119,9 +128,7 @@ export function OnboardingScreen({
   const [step, setStep] = useState(0);
   const [leavingStep, setLeavingStep] = useState<number | null>(null);
   const [demo, setDemo] = useState(false);
-  const [language, setLanguage] = useState<AppLanguage>(
-    activeLanguage === "he" ? "he" : "en",
-  );
+  const [language, setLanguage] = useState<AppLanguage>(activeLanguage);
   const [name, setName] = useState("");
   const [currency, setCurrency] = useState<CurrencyOption | null>(null);
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -472,20 +479,20 @@ export function OnboardingScreen({
       return (
         <>
           {option("database-import", t("onboarding.restore"), restore)}
-          {option("experiment", t("onboarding.demo"), () => {
-            setDemo(true);
-            goToStep(1, 1);
-          })}
+          {option(
+            "experiment",
+            t("onboarding.demo"),
+            () => {
+              setDemo(true);
+              goToStep(2, 1);
+            },
+            t("onboarding.demoDescription"),
+          )}
         </>
       );
     if (stepKey === "language")
       return (
         <>
-          {demo && (
-            <Text className="mb-1 text-center font-sans text-xs leading-4 text-muted">
-              {t("onboarding.demoDescription")}
-            </Text>
-          )}
           {SETUP_LANGUAGES.map((languageOption) =>
             choice(
               languageOption.nativeName,
@@ -517,8 +524,8 @@ export function OnboardingScreen({
           )}
         </>
       );
-    if (stepKey === "name")
-      return (
+    if (stepKey === "name") {
+      const nameInput = (
         <TextInput
           value={name}
           onChangeText={setName}
@@ -534,17 +541,38 @@ export function OnboardingScreen({
           accessibilityLabel={t("onboarding.namePlaceholder")}
           placeholder={t("onboarding.namePlaceholder")}
           placeholderTextColor={theme.muted}
-          className="font-sans text-base text-foreground"
+          className={
+            Platform.OS === "ios"
+              ? "font-sans text-foreground"
+              : "font-sans text-base text-foreground"
+          }
           style={[
-            styles.row,
+            Platform.OS === "ios" ? styles.nameInputIOS : styles.row,
             {
-              backgroundColor: theme.surfaceSecondary,
+              backgroundColor:
+                Platform.OS === "ios" ? "transparent" : theme.surfaceSecondary,
               borderColor: theme.border,
               textAlign: isRTL ? "right" : "left",
             },
           ]}
         />
       );
+      return Platform.OS === "ios" ? (
+        <View
+          style={[
+            styles.nameInputContainerIOS,
+            {
+              backgroundColor: theme.surfaceSecondary,
+              borderColor: theme.border,
+            },
+          ]}
+        >
+          {nameInput}
+        </View>
+      ) : (
+        nameInput
+      );
+    }
     if (stepKey === "currency")
       return option(
         "currency-usd",
@@ -627,25 +655,6 @@ export function OnboardingScreen({
             }}
           >
             <View style={styles.header}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t("onboarding.back")}
-                disabled={busy || step === 0}
-                onPress={() => goToStep(step - 1, -1)}
-                style={({ pressed }) => [
-                  styles.back,
-                  {
-                    backgroundColor: theme.surfaceSecondary,
-                    opacity: step === 0 ? 0 : pressed ? 0.72 : 1,
-                  },
-                ]}
-              >
-                <FilledIcon
-                  name="arrow-left"
-                  color={theme.foreground}
-                  size={20}
-                />
-              </Pressable>
               <Text
                 accessibilityLiveRegion="polite"
                 className="font-sans text-xs text-muted"
@@ -655,7 +664,10 @@ export function OnboardingScreen({
                   total: STEPS.length,
                 })}
               </Text>
-              <Text className="font-sans text-xs text-foreground">
+              <Text
+                className="font-sans text-xs text-foreground"
+                style={styles.languageIndicator}
+              >
                 {language.toUpperCase()}
               </Text>
             </View>
@@ -693,40 +705,83 @@ export function OnboardingScreen({
           </View>
           <TopSafeAreaGradient />
           <BottomSafeAreaGradient />
-          <View
+          <Animated.View
             pointerEvents="box-none"
             style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
           >
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={actionLabel}
-              accessibilityState={{ busy, disabled }}
-              disabled={disabled}
-              onPress={() => {
-                if (key === "welcome") setDemo(false);
-                void next();
-              }}
-              style={({ pressed }) => [
-                styles.action,
-                { backgroundColor: theme.accent },
-                pressed && styles.pressed,
-                disabled && styles.disabled,
-              ]}
-            >
-              <FilledIcon
-                name={key === "week" ? "check" : "chevron-right"}
-                size={24}
-                tone="accent-foreground"
-              />
-              <Text
-                numberOfLines={1}
-                style={{ flexShrink: 1 }}
-                className="font-manrope-bold text-base text-accent-foreground"
+            {step > 0 && (
+              <Animated.View
+                entering={BACK_ENTERING}
+                exiting={BACK_EXITING}
+                layout={ACTION_LAYOUT_TRANSITION}
+                style={styles.actionSlot}
               >
-                {actionLabel}
-              </Text>
-            </Pressable>
-          </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("onboarding.back")}
+                  disabled={busy}
+                  onPress={() => goToStep(step - 1, -1)}
+                  style={({ pressed }) => [
+                    styles.action,
+                    styles.backAction,
+                    {
+                      backgroundColor: theme.surfaceSecondary,
+                      borderColor: theme.border,
+                    },
+                    pressed && styles.pressed,
+                    busy && styles.disabled,
+                  ]}
+                >
+                  <FilledIcon
+                    name="arrow-left"
+                    color={theme.foreground}
+                    size={22}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={{ flexShrink: 1 }}
+                    className="font-manrope-bold text-base text-foreground"
+                  >
+                    {t("onboarding.back")}
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            )}
+            <Animated.View
+              layout={ACTION_LAYOUT_TRANSITION}
+              style={styles.actionSlot}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={actionLabel}
+                accessibilityState={{ busy, disabled }}
+                disabled={disabled}
+                onPress={() => {
+                  if (key === "welcome") setDemo(false);
+                  void next();
+                }}
+                style={({ pressed }) => [
+                  styles.action,
+                  { backgroundColor: theme.accent },
+                  pressed && styles.pressed,
+                  disabled && styles.disabled,
+                ]}
+              >
+                <FilledIcon
+                  name={key === "week" ? "check" : "chevron-right"}
+                  size={24}
+                  tone="accent-foreground"
+                />
+                <Text
+                  numberOfLines={1}
+                  style={{ flexShrink: 1 }}
+                  className="font-manrope-bold text-base text-accent-foreground"
+                >
+                  {actionLabel}
+                </Text>
+              </Pressable>
+            </Animated.View>
+          </Animated.View>
         </View>
       </KeyboardAvoidingView>
       <CurrencySelectorSheet
@@ -760,16 +815,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     height: 48,
-    justifyContent: "space-between",
+    justifyContent: "center",
     paddingHorizontal: 16,
   },
-  back: {
-    alignItems: "center",
-    borderRadius: 18,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
+  languageIndicator: { position: "absolute", right: 16 },
   track: {
     borderRadius: 999,
     height: 3,
@@ -794,6 +843,24 @@ const styles = StyleSheet.create({
     minHeight: 54,
     paddingHorizontal: 16,
     paddingVertical: 10,
+  },
+  nameInputContainerIOS: {
+    alignItems: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 54,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  nameInputIOS: {
+    alignSelf: "center",
+    flex: 1,
+    // Let UITextField use the font's natural line metrics. Tailwind's text-base
+    // also sets a 24px line height, which offsets the single-line iOS baseline.
+    fontSize: 16,
+    margin: 0,
+    padding: 0,
   },
   mark: {
     alignItems: "center",
@@ -822,7 +889,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   actionDock: {
-    gap: 6,
+    flexDirection: "row",
+    gap: 8,
     left: 0,
     paddingHorizontal: 12,
     position: "absolute",
@@ -838,6 +906,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     overflow: "hidden",
   },
+  actionSlot: { flex: 1 },
+  backAction: { borderWidth: 1 },
   pressed: { opacity: 0.72 },
   disabled: { opacity: 0.5 },
 });

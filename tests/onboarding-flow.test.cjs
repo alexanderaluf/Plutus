@@ -27,6 +27,7 @@ function mount({
   confirm = true,
   failCommit = false,
   failAttachments = false,
+  platform = "android",
 } = {}) {
   const slots = [];
   let cursor = 0,
@@ -37,6 +38,11 @@ function mount({
   const events = [],
     alerts = [];
   const button = Object.assign(() => {}, { Label: "Label" });
+  const layoutAnimation = {
+    duration: () => layoutAnimation,
+    easing: () => layoutAnimation,
+    reduceMotion: () => layoutAnimation,
+  };
   const context = {
     get document() {
       return document;
@@ -84,7 +90,7 @@ function mount({
       Pressable: "Pressable",
       KeyboardAvoidingView: "KeyboardAvoidingView",
       ActivityIndicator: "ActivityIndicator",
-      Platform: { OS: "android" },
+      Platform: { OS: platform },
       BackHandler: {},
       Keyboard: {
         dismiss: () => events.push("keyboard-dismiss"),
@@ -101,6 +107,9 @@ function mount({
     "react-native-reanimated": {
       default: { View: "Animated.View" },
       Easing: { bezier: () => () => 0 },
+      FadeInLeft: layoutAnimation,
+      FadeOutLeft: layoutAnimation,
+      LinearTransition: layoutAnimation,
       ReduceMotion: { System: "system" },
       runOnJS: (fn) => fn,
       useAnimatedStyle: (worklet) => worklet(),
@@ -245,14 +254,14 @@ function mount({
 }
 
 async function fill(app, demo = false) {
-  await app.press(demo ? "onboarding.demo" : "onboarding.fresh");
   assert.equal(app.document.users.length, 0);
-  assert.equal(app.radio("Русский"), undefined);
+  assert.ok(app.radio("Русский"));
   app.radio("עברית").props.onPress();
   app.render();
   assert.equal(app.language, "he");
   assert.equal(app.document._local.appLanguage, "en");
   await app.press("onboarding.continue");
+  await app.press(demo ? "onboarding.demo" : "onboarding.fresh");
   assert.equal(app.action("onboarding.agree").props.disabled, true);
   let checks = app
     .nodes()
@@ -289,6 +298,60 @@ async function fill(app, demo = false) {
   assert.equal(app.writes, 0);
   assert.equal(app.document.users.length, 0);
 }
+
+async function showWelcome(app) {
+  await app.press("onboarding.continue");
+  app.events.length = 0;
+}
+
+test("language selection is the first onboarding step and includes Russian", async () => {
+  const app = mount();
+  assert.equal(app.action("onboarding.fresh"), undefined);
+  assert.equal(app.action("onboarding.back"), undefined);
+  assert.ok(app.radio("English"));
+  assert.ok(app.radio("עברית"));
+  app.radio("Русский").props.onPress();
+  app.render();
+  assert.equal(app.language, "ru");
+  await showWelcome(app);
+  assert.ok(app.action("onboarding.fresh"));
+  assert.ok(app.action("onboarding.back"));
+  await app.press("onboarding.back");
+  assert.equal(app.action("onboarding.fresh"), undefined);
+  assert.equal(app.action("onboarding.back"), undefined);
+});
+
+test("the iOS name field validates input, submits from the keyboard and retains its draft", async () => {
+  const app = mount({ platform: "ios" });
+  await app.press("onboarding.continue");
+  await app.press("onboarding.fresh");
+  for (const check of app
+    .nodes()
+    .filter((node) => node.props?.accessibilityRole === "checkbox")) {
+    check.props.onPress();
+  }
+  app.render();
+  await app.press("onboarding.agree");
+
+  const nameInput = () => app.nodes().find((node) => node.type === "TextInput");
+  assert.ok(nameInput());
+  nameInput().props.onChangeText("   ");
+  app.render();
+  assert.equal(app.action("onboarding.continue").props.disabled, true);
+  nameInput().props.onSubmitEditing();
+  app.render();
+  assert.ok(nameInput());
+
+  nameInput().props.onChangeText("Alex");
+  app.render();
+  assert.equal(app.action("onboarding.continue").props.disabled, false);
+  nameInput().props.onSubmitEditing();
+  app.render();
+  assert.equal(nameInput(), undefined);
+  await app.press("onboarding.back");
+  assert.equal(nameInput().props.value, "Alex");
+  assert.equal(app.writes, 0);
+});
 
 test("fresh flow validates both checkboxes, name and currency; keeps drafts until one awaited final write", async () => {
   const app = mount();
@@ -362,6 +425,7 @@ const restored = () => ({
 
 test("local restore requires confirmation and completes staged attachments before releasing the gate", async () => {
   const app = mount({ imported: restored() });
+  await showWelcome(app);
   await app.press("onboarding.restore");
   assert.deepEqual(app.events, [
     "busy",
@@ -373,6 +437,7 @@ test("local restore requires confirmation and completes staged attachments befor
   assert.equal(app.document.users[0].uuid, "restored");
   assert.equal(app.document._local.dataMode, "restored");
   const cancelled = mount({ imported: restored(), confirm: false });
+  await showWelcome(cancelled);
   await cancelled.press("onboarding.restore");
   assert.deepEqual(cancelled.events, ["busy", "idle"]);
   assert.equal(cancelled.document.users.length, 0);
@@ -380,6 +445,7 @@ test("local restore requires confirmation and completes staged attachments befor
 
 test("attachment commit failure rolls back the restored document and stays in setup", async () => {
   const app = mount({ imported: restored(), failAttachments: true });
+  await showWelcome(app);
   await app.press("onboarding.restore");
   assert.deepEqual(app.events, [
     "busy",
@@ -400,6 +466,7 @@ test("CSV and backups missing a user cannot bypass setup or overwrite data", asy
     { format: "json", document: createDefaultBackup() },
   ]) {
     const app = mount({ imported });
+    await showWelcome(app);
     await app.press("onboarding.restore");
     assert.deepEqual(app.events, ["busy", "idle"]);
     assert.equal(app.document.users.length, 0);
