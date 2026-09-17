@@ -300,9 +300,10 @@ export function HomeScreen() {
                     accessibilityLabel={t(
                       "home.sectionSelector.accessibilityLabel",
                     )}
+                    fitLabels
                     minHeight={44}
-                    multilineLabels
                     options={selectorOptions}
+                    tabPaddingHorizontal={4}
                     textSize={12}
                     value={section}
                     onChange={onSectionChange}
@@ -396,9 +397,10 @@ export function HomeScreen() {
             <GlassSegmentedControl
               accessibilityLabel={t("home.sectionSelector.accessibilityLabel")}
               blurTarget={blurTargetRef}
+              fitLabels
               minHeight={44}
-              multilineLabels
               options={selectorOptions}
+              tabPaddingHorizontal={4}
               textSize={12}
               value={section}
               onChange={onSectionChange}

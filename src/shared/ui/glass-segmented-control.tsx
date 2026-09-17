@@ -19,10 +19,12 @@ type SegmentOption<Value extends SegmentValue> = {
 type GlassSegmentedControlProps<Value extends SegmentValue> = {
   accessibilityLabel?: string;
   blurTarget?: RefObject<View | null>;
+  fitLabels?: boolean;
   minHeight?: number;
   multilineLabels?: boolean;
   onChange: (value: Value) => void;
   options: readonly SegmentOption<Value>[];
+  tabPaddingHorizontal?: number;
   textSize?: number;
   value: Value;
 };
@@ -30,10 +32,12 @@ type GlassSegmentedControlProps<Value extends SegmentValue> = {
 export function GlassSegmentedControl<Value extends SegmentValue>({
   accessibilityLabel,
   blurTarget,
+  fitLabels = false,
   minHeight = 48,
   multilineLabels = false,
   onChange,
   options,
+  tabPaddingHorizontal = 8,
   textSize = 14,
   value,
 }: GlassSegmentedControlProps<Value>) {
@@ -44,7 +48,7 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
   const indicatorX = useSharedValue(0);
   const indicatorWidth = useSharedValue(0);
   const [trackWidth, setTrackWidth] = useState(0);
-  const [isReady, setIsReady] = useState(false);
+  const isReady = Boolean(frames[String(value)] && trackWidth);
 
   useEffect(() => {
     const frame = frames[String(value)];
@@ -61,7 +65,6 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
       stiffness: 230,
       reduceMotion: ReduceMotion.System,
     });
-    setIsReady(true);
   }, [frames, indicatorWidth, indicatorX, trackWidth, value]);
 
   const indicatorStyle = useAnimatedStyle(() => ({
@@ -134,13 +137,15 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
               onPress={() => onChange(option.value)}
               style={({ pressed }) => [
                 styles.tab,
-                { minHeight },
+                { minHeight, paddingHorizontal: tabPaddingHorizontal },
                 pressed && styles.pressed,
               ]}
             >
               <Text
-                adjustsFontSizeToFit={multilineLabels}
-                minimumFontScale={multilineLabels ? 0.78 : undefined}
+                adjustsFontSizeToFit={fitLabels || multilineLabels}
+                minimumFontScale={
+                  fitLabels || multilineLabels ? 0.78 : undefined
+                }
                 numberOfLines={multilineLabels ? 2 : 1}
                 className="font-manrope-bold"
                 style={{
