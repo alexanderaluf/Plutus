@@ -67,6 +67,592 @@ const { MATERIAL_ROUNDED_FILLED_ICONS } = require(
   path.join(sourceRoot, "shared/icons/material-rounded-filled-icons.ts"),
 );
 
+// Selects the fixture's display-text language; identities, amounts, dates and
+// currencies stay identical across languages so the three files only differ in text.
+const LANG = ["en", "he", "ru"].includes(process.argv[2])
+  ? process.argv[2]
+  : "en";
+const LOCALES = {
+  en: {
+    profiles: {
+      main: "Personal",
+      business: "Freelance business",
+      travel: "Travel fund",
+    },
+    currencyName: "Israeli Shekel",
+    savingsProviderName: "Migdal Savings",
+    accounts: {
+      bankA: "Bank Hapoalim — Checking",
+      bankB: "Bank Leumi — Household",
+      cardA1: "Visa — Everyday spending",
+      cardA2: "Mastercard — Online shopping",
+      cardB1: "Amex — Travel & dining",
+      cardB2: "Isracard — Subscriptions",
+      savings: "Emergency savings",
+      cash: "Cash wallet",
+      businessCash: "Freelance cash box",
+      travelCash: "Travel cash",
+    },
+    topCategories: {
+      digital: "Digital life & subscriptions",
+      pets: "Pets & animal care",
+      giving: "Gifts, charity & community",
+      freelance: "Freelance & side income",
+      refunds: "Refunds & reimbursements",
+      transfers: "Transfers between my accounts",
+    },
+    bizTravelCategories: {
+      businessSales: "Client invoice payments",
+      businessCosts: "Freelance operating costs",
+      travelExpense: "European trip spending",
+      travelIncome: "Travel fund top-up",
+    },
+    transferCategories: {
+      "bank-transfer": "Bank-to-bank transfer",
+      "save-transfer": "Savings contribution",
+      "cash-transfer": "Cash withdrawal",
+    },
+    transferNames: [
+      "Transfer to household account",
+      "Emergency savings contribution",
+      "Cash withdrawal",
+    ],
+    leaf: {
+      "fresh-food": ["Fruits and vegetables", "Farmers market produce"],
+      supermarket: ["Weekly supermarket run", "Household supplies"],
+      bakery: ["Fresh bread", "Bakery treats"],
+      "specialty-food": ["Imported groceries", "Deli shop"],
+      coffee: ["Coffee", "Latte on the way to work"],
+      restaurants: ["Dinner out", "Restaurant with friends"],
+      takeaway: ["Takeout order", "Delivery dinner"],
+      "work-lunch": ["Lunch at work", "Office cafeteria"],
+      fuel: ["Gas station fill-up", "Fuel"],
+      parking: ["Parking", "Mall parking"],
+      "car-service": ["Car service", "Oil change"],
+      "car-insurance": ["Car insurance payment", "Car insurance renewal"],
+      bus: ["Bus fare", "Bus pass top-up"],
+      trains: ["Train ticket", "Train pass"],
+      taxi: ["Taxi ride", "Ride share"],
+      flights: ["Flight tickets", "Airline baggage fee"],
+      hotels: ["Hotel booking", "Weekend hotel stay"],
+      clothing: ["New clothes", "Shoes"],
+      electronics: ["Electronics purchase", "New headphones"],
+      furniture: ["New furniture", "Home decor"],
+      books: ["Books", "New novel"],
+      courses: ["Online course", "Certification course"],
+      "school-supplies": ["School supplies", "Notebooks and stationery"],
+      movies: ["Movie night", "Cinema tickets"],
+      concerts: ["Concert tickets", "Live show"],
+      games: ["New video game", "Board game night"],
+      pharmacy: ["Pharmacy", "Medicine"],
+      dentist: ["Dentist appointment", "Dental cleaning"],
+      doctor: ["Doctor visit", "Clinic appointment"],
+      fitness: ["Gym class", "Fitness gear"],
+      electricity: ["Electricity bill", "Power bill"],
+      water: ["Water bill", "Municipal water"],
+      gas: ["Cooking gas refill", "Gas bill"],
+      maintenance: ["Home repair", "Handyman visit"],
+      "home-insurance": ["Home insurance payment", "Home insurance renewal"],
+      "property-tax": ["Municipal tax", "Property tax payment"],
+      "monthly-rent": ["Monthly rent", "Rent payment"],
+      "bank-fees": ["Bank fee", "Account maintenance fee"],
+      "pet-food": ["Pet food", "Dog food"],
+      vet: ["Vet visit", "Vet checkup"],
+      "pet-supplies": ["Pet toys", "Pet supplies"],
+      gifts: ["Birthday gift", "Gift for a friend"],
+      charity: ["Donation", "Charity contribution"],
+      community: ["Community event", "Local fundraiser"],
+      misc: ["Small purchase", "Miscellaneous expense"],
+      "salary-base": ["Monthly salary", "Salary payment"],
+      "salary-bonus": ["Year-end bonus", "Performance bonus"],
+      "salary-overtime": ["Overtime pay", "Extra shift pay"],
+      consulting: ["Consulting invoice", "Client payment"],
+      "design-work": ["Design project payment", "Freelance design invoice"],
+      royalties: ["Royalty payment", "Licensing payment"],
+      dividends: ["Dividend payout", "Investment dividend"],
+      interest: ["Interest earned", "Savings interest"],
+      "expense-refund": ["Expense reimbursement", "Refund from work"],
+      "purchase-refund": ["Store refund", "Returned item refund"],
+      cashback: ["Credit card cashback", "Cashback reward"],
+    },
+    genericServices: {
+      "Gym membership": "Gym membership",
+      "Mobile data plan": "Mobile data plan",
+      "Home internet": "Home internet",
+    },
+    subscriptionSuffix: " subscription",
+    otherRecurring: {
+      weekly: "Weekly fitness class",
+      fortnightly: "Fortnightly consulting retainer",
+      quarterly: "Quarterly home insurance",
+      "half-year": "Six-month learning pass",
+      yearly: "Annual domain registration",
+      daily: "Daily transit pass",
+    },
+    archivedRecurringName: "Magazine subscription",
+    pendingRecurringName: "Monthly charity donation",
+    fxTransactionName: "Design software license",
+    tinyTransactionName: "Rounding change",
+    exchangeRateSource: "Exchange rate at time of purchase",
+    labels: [
+      "Essential",
+      "Optional",
+      "Work",
+      "Family",
+      "Holiday",
+      "Tax deductible",
+      "Subscription",
+      "Refund",
+      "Cash",
+      "Large purchase",
+      "Weekend",
+      "Impulse buy",
+    ],
+    places: [
+      "Tel Aviv supermarket",
+      "Jerusalem cafe",
+      "Haifa station",
+      "Home office",
+      "Neighborhood pharmacy",
+      "Online checkout",
+      "Eilat hotel",
+      "City gym",
+      "Community center",
+      "Berlin bookshop",
+    ],
+    peoples: [
+      "Dana Cohen",
+      "Noam Levi",
+      "Maya Rosen",
+      "Sam Taylor",
+      "Employer",
+      "Freelance client",
+      "Landlord",
+      "Vet clinic",
+    ],
+    budgets: {
+      groceries: "Groceries",
+      dining: "Dining & coffee",
+      digital: "Digital subscriptions",
+      transport: "Transport & car",
+      health: "Health & pet care",
+      learning: "Learning & courses",
+      overall: "Yearly expenses",
+      income: "Salary & freelance income",
+      weekly: "Entertainment",
+      daily: "Coffee",
+      "past-trip": "Summer trip",
+      "future-trip": "Autumn trip",
+      "saving-transfers": "Savings",
+      "cycle-31": "Utilities",
+    },
+    assets: ["Laptop", "Bicycle", "Home equipment"],
+    goals: ["Emergency fund", "Winter holiday", "New laptop", "Education fund"],
+    loans: ["Car loan", "Family loan"],
+    achievements: [
+      "First transaction",
+      "Five months tracked",
+      "Budget review completed",
+    ],
+    billSplitterName: "Dinner with friends",
+  },
+  he: {
+    profiles: { main: "אישי", business: "עסק פרילנס", travel: "קרן טיולים" },
+    currencyName: "שקל חדש",
+    savingsProviderName: "מגדל חיסכון",
+    accounts: {
+      bankA: "בנק הפועלים — עו״ש",
+      bankB: "בנק לאומי — משק בית",
+      cardA1: "ויזה — הוצאות יומיומיות",
+      cardA2: "מאסטרקארד — קניות אונליין",
+      cardB1: "אמריקן אקספרס — טיולים ומסעדות",
+      cardB2: "ישראכרט — מנויים",
+      savings: "חיסכון לשעת חירום",
+      cash: "ארנק מזומן",
+      businessCash: "קופת מזומן לפרילנס",
+      travelCash: "מזומן לטיולים",
+    },
+    topCategories: {
+      digital: "דיגיטלי ומנויים",
+      pets: "טיפול בחיות מחמד",
+      giving: "מתנות, צדקה וקהילה",
+      freelance: "פרילנס והכנסה נוספת",
+      refunds: "החזרים",
+      transfers: "העברות בין החשבונות שלי",
+    },
+    bizTravelCategories: {
+      businessSales: "תשלומי לקוחות",
+      businessCosts: "הוצאות תפעול לעסק",
+      travelExpense: "הוצאות בטיול באירופה",
+      travelIncome: "הפקדה לקרן הטיולים",
+    },
+    transferCategories: {
+      "bank-transfer": "העברה בין בנקים",
+      "save-transfer": "הפקדה לחיסכון",
+      "cash-transfer": "משיכת מזומן",
+    },
+    transferNames: [
+      "העברה לחשבון משק הבית",
+      "הפקדה חודשית לחיסכון חירום",
+      "משיכת מזומן",
+    ],
+    leaf: {
+      "fresh-food": ["פירות וירקות", "ירקות מהשוק"],
+      supermarket: ["קניות שבועיות בסופר", "מוצרי ניקיון לבית"],
+      bakery: ["לחם טרי", "מאפים מהמאפייה"],
+      "specialty-food": ["מכולת איכותית", "חנות מעדנים"],
+      coffee: ["קפה", "לאטה בדרך לעבודה"],
+      restaurants: ["ארוחת ערב במסעדה", "מסעדה עם חברים"],
+      takeaway: ["הזמנת טייק אווי", "משלוח לארוחת ערב"],
+      "work-lunch": ["ארוחת צהריים בעבודה", "קפיטריה במשרד"],
+      fuel: ["תדלוק בתחנת דלק", "דלק"],
+      parking: ["חניה", "חניון בקניון"],
+      "car-service": ["טיפול לרכב", "החלפת שמן"],
+      "car-insurance": ["תשלום ביטוח רכב", "חידוש ביטוח רכב"],
+      bus: ["נסיעה באוטובוס", "טעינת כרטיס רב-קו"],
+      trains: ["כרטיס רכבת", "מנוי רכבת"],
+      taxi: ["נסיעה במונית", "נסיעה בשירות שיתוף"],
+      flights: ["כרטיסי טיסה", "עמלת מזוודות"],
+      hotels: ["הזמנת מלון", "לינה בסוף שבוע"],
+      clothing: ["בגדים חדשים", "נעליים"],
+      electronics: ["רכישת מוצר אלקטרוני", "אוזניות חדשות"],
+      furniture: ["רהיטים חדשים", "עיצוב הבית"],
+      books: ["ספרים", "רומן חדש"],
+      courses: ["קורס אונליין", "קורס הסמכה"],
+      "school-supplies": ["ציוד לבית ספר", "מחברות וכלי כתיבה"],
+      movies: ["ערב קולנוע", "כרטיסים לסרט"],
+      concerts: ["כרטיסים להופעה", "מופע חי"],
+      games: ["משחק וידאו חדש", "ערב משחקי קופסה"],
+      pharmacy: ["בית מרקחת", "תרופות"],
+      dentist: ["תור לרופא שיניים", "ניקוי שיניים"],
+      doctor: ["ביקור אצל הרופא", "תור במרפאה"],
+      fitness: ["שיעור בחדר כושר", "ציוד כושר"],
+      electricity: ["חשבון חשמל", "חשבון חשמל חודשי"],
+      water: ["חשבון מים", "מים עירוניים"],
+      gas: ["מילוי בלון גז", "חשבון גז"],
+      maintenance: ["תיקון בבית", "ביקור איש תחזוקה"],
+      "home-insurance": ["תשלום ביטוח דירה", "חידוש ביטוח דירה"],
+      "property-tax": ["ארנונה", "תשלום ארנונה"],
+      "monthly-rent": ["שכר דירה חודשי", "תשלום שכירות"],
+      "bank-fees": ["עמלת בנק", "דמי ניהול חשבון"],
+      "pet-food": ["אוכל לחיית מחמד", "אוכל לכלב"],
+      vet: ["ביקור אצל וטרינר", "בדיקה וטרינרית"],
+      "pet-supplies": ["צעצועים לחיית מחמד", "ציוד לחיית מחמד"],
+      gifts: ["מתנת יום הולדת", "מתנה לחבר"],
+      charity: ["תרומה", "תרומה לצדקה"],
+      community: ["אירוע קהילתי", "גיוס כספים מקומי"],
+      misc: ["קנייה קטנה", "הוצאה שונות"],
+      "salary-base": ["משכורת חודשית", "תשלום משכורת"],
+      "salary-bonus": ["בונוס סוף שנה", "בונוס ביצועים"],
+      "salary-overtime": ["תשלום שעות נוספות", "תשלום למשמרת נוספת"],
+      consulting: ["חשבונית ייעוץ", "תשלום מלקוח"],
+      "design-work": ["תשלום עבור פרויקט עיצוב", "חשבונית עיצוב פרילנס"],
+      royalties: ["תשלום תמלוגים", "תשלום רישוי"],
+      dividends: ["חלוקת דיבידנד", "דיבידנד השקעה"],
+      interest: ["ריבית שהתקבלה", "ריבית על חיסכון"],
+      "expense-refund": ["החזר הוצאות", "החזר מהעבודה"],
+      "purchase-refund": ["החזר כספי מחנות", "החזר עבור מוצר שהוחזר"],
+      cashback: ["קאשבק מכרטיס אשראי", "תגמול קאשבק"],
+    },
+    genericServices: {
+      "Gym membership": "מנוי לחדר כושר",
+      "Mobile data plan": "חבילת גלישה סלולרית",
+      "Home internet": "אינטרנט ביתי",
+    },
+    subscriptionSuffix: " — מנוי",
+    otherRecurring: {
+      weekly: "שיעור כושר שבועי",
+      fortnightly: "ריטיינר ייעוץ דו-שבועי",
+      quarterly: "ביטוח דירה רבעוני",
+      "half-year": "כרטיס לימוד לחצי שנה",
+      yearly: "חידוש דומיין שנתי",
+      daily: "כרטיס תחבורה יומי",
+    },
+    archivedRecurringName: "מנוי למגזין",
+    pendingRecurringName: "תרומה חודשית לצדקה",
+    fxTransactionName: "רישיון לתוכנת עיצוב",
+    tinyTransactionName: "עודף קטן",
+    exchangeRateSource: "שער החליפין בעת הרכישה",
+    labels: [
+      "חיוני",
+      "אופציונלי",
+      "עבודה",
+      "משפחה",
+      "חופשה",
+      "ניכוי מס",
+      "מנוי",
+      "החזר",
+      "מזומן",
+      "רכישה גדולה",
+      "סוף שבוע",
+      "קנייה אימפולסיבית",
+    ],
+    places: [
+      "סופרמרקט בתל אביב",
+      "בית קפה בירושלים",
+      "תחנת רכבת בחיפה",
+      "משרד ביתי",
+      "בית מרקחת שכונתי",
+      "קופה אונליין",
+      "מלון באילת",
+      "חדר כושר בעיר",
+      "מרכז קהילתי",
+      "חנות ספרים בברלין",
+    ],
+    peoples: [
+      "דנה כהן",
+      "נועם לוי",
+      "מאיה רוזן",
+      "סם טיילור",
+      "מעסיק",
+      "לקוח פרילנס",
+      "בעל הדירה",
+      "מרפאה וטרינרית",
+    ],
+    budgets: {
+      groceries: "מכולת",
+      dining: "מסעדות וקפה",
+      digital: "מנויים דיגיטליים",
+      transport: "תחבורה ורכב",
+      health: "בריאות וחיות מחמד",
+      learning: "לימודים וקורסים",
+      overall: "הוצאות שנתיות",
+      income: "משכורת והכנסה מפרילנס",
+      weekly: "בילויים",
+      daily: "קפה",
+      "past-trip": "טיול קיץ",
+      "future-trip": "טיול סתיו",
+      "saving-transfers": "חיסכון",
+      "cycle-31": "חשבונות שירותים",
+    },
+    assets: ["מחשב נייד", "אופניים", "ציוד לבית"],
+    goals: ["קרן חירום", "חופשת חורף", "מחשב נייד חדש", "קרן לימודים"],
+    loans: ["הלוואת רכב", "הלוואה משפחתית"],
+    achievements: ["העסקה הראשונה", "חמישה חודשים במעקב", "בדיקת תקציב הושלמה"],
+    billSplitterName: "ארוחת ערב משותפת",
+  },
+  ru: {
+    profiles: {
+      main: "Личный",
+      business: "Фриланс-бизнес",
+      travel: "Дорожный фонд",
+    },
+    currencyName: "Новый израильский шекель",
+    savingsProviderName: "Мигдаль Сбережения",
+    accounts: {
+      bankA: "Банк Апоалим — текущий счёт",
+      bankB: "Банк Леуми — семейный счёт",
+      cardA1: "Visa — повседневные траты",
+      cardA2: "Mastercard — покупки онлайн",
+      cardB1: "Amex — путешествия и рестораны",
+      cardB2: "Isracard — подписки",
+      savings: "Резервный фонд",
+      cash: "Наличные",
+      businessCash: "Наличные для фриланса",
+      travelCash: "Наличные в поездках",
+    },
+    topCategories: {
+      digital: "Цифровые сервисы и подписки",
+      pets: "Питомцы и уход за животными",
+      giving: "Подарки, благотворительность и мероприятия",
+      freelance: "Фриланс и дополнительный доход",
+      refunds: "Возвраты",
+      transfers: "Переводы между моими счетами",
+    },
+    bizTravelCategories: {
+      businessSales: "Оплаты от клиентов",
+      businessCosts: "Операционные расходы фриланса",
+      travelExpense: "Расходы в поездке по Европе",
+      travelIncome: "Пополнение дорожного фонда",
+    },
+    transferCategories: {
+      "bank-transfer": "Перевод между банками",
+      "save-transfer": "Пополнение сбережений",
+      "cash-transfer": "Снятие наличных",
+    },
+    transferNames: [
+      "Перевод на семейный счёт",
+      "Ежемесячный взнос в резервный фонд",
+      "Снятие наличных",
+    ],
+    leaf: {
+      "fresh-food": ["Фрукты и овощи", "Овощи с рынка"],
+      supermarket: [
+        "Еженедельные покупки в супермаркете",
+        "Хозтовары для дома",
+      ],
+      bakery: ["Свежий хлеб", "Выпечка из пекарни"],
+      "specialty-food": ["Импортные продукты", "Магазин деликатесов"],
+      coffee: ["Кофе", "Латте по дороге на работу"],
+      restaurants: ["Ужин в ресторане", "Ресторан с друзьями"],
+      takeaway: ["Заказ на вынос", "Доставка ужина"],
+      "work-lunch": ["Обед на работе", "Столовая в офисе"],
+      fuel: ["Заправка", "Бензин"],
+      parking: ["Парковка", "Парковка у торгового центра"],
+      "car-service": ["Техобслуживание машины", "Замена масла"],
+      "car-insurance": ["Оплата страховки авто", "Продление страховки авто"],
+      bus: ["Проезд на автобусе", "Пополнение проездного"],
+      trains: ["Билет на поезд", "Проездной на электричку"],
+      taxi: ["Поездка на такси", "Поездка каршеринг"],
+      flights: ["Авиабилеты", "Оплата багажа"],
+      hotels: ["Бронь отеля", "Отель на выходные"],
+      clothing: ["Новая одежда", "Обувь"],
+      electronics: ["Покупка электроники", "Новые наушники"],
+      furniture: ["Новая мебель", "Товары для дома"],
+      books: ["Книги", "Новый роман"],
+      courses: ["Онлайн-курс", "Курс сертификации"],
+      "school-supplies": ["Школьные принадлежности", "Тетради и канцтовары"],
+      movies: ["Вечер в кино", "Билеты в кино"],
+      concerts: ["Билеты на концерт", "Живое выступление"],
+      games: ["Новая видеоигра", "Вечер настольных игр"],
+      pharmacy: ["Аптека", "Лекарства"],
+      dentist: ["Прием у стоматолога", "Чистка зубов"],
+      doctor: ["Визит к врачу", "Прием в клинике"],
+      fitness: ["Занятие в зале", "Спортивный инвентарь"],
+      electricity: ["Счет за электричество", "Оплата электроэнергии"],
+      water: ["Счет за воду", "Оплата водоснабжения"],
+      gas: ["Заправка газового баллона", "Счет за газ"],
+      maintenance: ["Ремонт по дому", "Вызов мастера"],
+      "home-insurance": [
+        "Оплата страховки квартиры",
+        "Продление страховки жилья",
+      ],
+      "property-tax": ["Муниципальный налог", "Оплата налога на имущество"],
+      "monthly-rent": ["Аренда за месяц", "Оплата аренды"],
+      "bank-fees": ["Банковская комиссия", "Плата за обслуживание счета"],
+      "pet-food": ["Корм для питомца", "Корм для собаки"],
+      vet: ["Визит к ветеринару", "Осмотр у ветеринара"],
+      "pet-supplies": ["Игрушки для питомца", "Товары для питомца"],
+      gifts: ["Подарок на день рождения", "Подарок другу"],
+      charity: ["Пожертвование", "Благотворительный взнос"],
+      community: ["Общественное мероприятие", "Местный сбор средств"],
+      misc: ["Мелкая покупка", "Прочие расходы"],
+      "salary-base": ["Ежемесячная зарплата", "Выплата зарплаты"],
+      "salary-bonus": ["Годовая премия", "Премия за результаты"],
+      "salary-overtime": ["Оплата сверхурочных", "Оплата дополнительной смены"],
+      consulting: ["Счет за консультацию", "Оплата от клиента"],
+      "design-work": ["Оплата за дизайн-проект", "Счет за фриланс-дизайн"],
+      royalties: ["Роялти", "Оплата за лицензию"],
+      dividends: ["Выплата дивидендов", "Дивиденды по инвестициям"],
+      interest: ["Начисленные проценты", "Проценты по вкладу"],
+      "expense-refund": ["Возмещение расходов", "Возврат от работы"],
+      "purchase-refund": ["Возврат средств из магазина", "Возврат за товар"],
+      cashback: ["Кэшбэк по карте", "Бонус кэшбэк"],
+    },
+    genericServices: {
+      "Gym membership": "Абонемент в спортзал",
+      "Mobile data plan": "Мобильный интернет",
+      "Home internet": "Домашний интернет",
+    },
+    subscriptionSuffix: " — подписка",
+    otherRecurring: {
+      weekly: "Еженедельное занятие фитнесом",
+      fortnightly: "Гонорар за консультации раз в две недели",
+      quarterly: "Квартальная страховка жилья",
+      "half-year": "Полугодовой абонемент на обучение",
+      yearly: "Ежегодная регистрация домена",
+      daily: "Ежедневный проездной",
+    },
+    archivedRecurringName: "Подписка на журнал",
+    pendingRecurringName: "Ежемесячное пожертвование на благотворительность",
+    fxTransactionName: "Лицензия на программу для дизайна",
+    tinyTransactionName: "Мелкая сдача",
+    exchangeRateSource: "Курс обмена на момент покупки",
+    labels: [
+      "Необходимое",
+      "Опционально",
+      "Работа",
+      "Семья",
+      "Отпуск",
+      "Налоговый вычет",
+      "Подписка",
+      "Возврат",
+      "Наличные",
+      "Крупная покупка",
+      "Выходные",
+      "Спонтанная покупка",
+    ],
+    places: [
+      "Супермаркет в Тель-Авиве",
+      "Кафе в Иерусалиме",
+      "Вокзал в Хайфе",
+      "Домашний офис",
+      "Соседняя аптека",
+      "Онлайн-оплата",
+      "Отель в Эйлате",
+      "Городской спортзал",
+      "Общественный центр",
+      "Книжный магазин в Берлине",
+    ],
+    peoples: [
+      "Дана Коэн",
+      "Ноам Леви",
+      "Майя Розен",
+      "Сэм Тейлор",
+      "Работодатель",
+      "Клиент-фрилансер",
+      "Арендодатель",
+      "Ветклиника",
+    ],
+    budgets: {
+      groceries: "Продукты",
+      dining: "Рестораны и кофе",
+      digital: "Цифровые подписки",
+      transport: "Транспорт и авто",
+      health: "Здоровье и питомцы",
+      learning: "Обучение и курсы",
+      overall: "Годовые расходы",
+      income: "Зарплата и доход фрилансера",
+      weekly: "Развлечения",
+      daily: "Кофе",
+      "past-trip": "Летняя поездка",
+      "future-trip": "Осенняя поездка",
+      "saving-transfers": "Сбережения",
+      "cycle-31": "Коммунальные услуги",
+    },
+    assets: ["Ноутбук", "Велосипед", "Техника для дома"],
+    goals: [
+      "Резервный фонд",
+      "Зимний отпуск",
+      "Новый ноутбук",
+      "Фонд на образование",
+    ],
+    loans: ["Автокредит", "Семейный займ"],
+    achievements: [
+      "Первая транзакция",
+      "Пять месяцев учёта",
+      "Проверка бюджета завершена",
+    ],
+    billSplitterName: "Совместный ужин",
+  },
+};
+const T = LOCALES[LANG];
+// Fixed synthetic reference rates for offline history; independent of the live exchange-rate cache.
+const FX = { USD: 3.7, EUR: 4.02 };
+function recCurrencyFor(index) {
+  const mod = index % 4;
+  return mod === 1 ? "USD" : mod === 3 ? "EUR" : "ILS";
+}
+function fxMix(index, when) {
+  const mod = index % 4;
+  if (mod !== 1 && mod !== 3) return {};
+  const code = mod === 1 ? "USD" : "EUR";
+  return {
+    currencyCode: code,
+    accountCurrencyCode: "ILS",
+    exchangeRate: FX[code],
+    exchangeRateDate: when.slice(0, 10),
+    exchangeRateFetchedAt: when,
+    exchangeRateSource: T.exchangeRateSource,
+  };
+}
+function subscriptionName(name) {
+  return T.genericServices[name] ?? name;
+}
+function subscriptionCategoryLabel(name) {
+  return subscriptionName(name) + T.subscriptionSuffix;
+}
+
 const icons = new Map(
   MATERIAL_ROUNDED_FILLED_ICONS.map((item) => [item.name, item.pathData]),
 );
@@ -142,9 +728,16 @@ function stamp(month, day, hour = 8, minute = 0) {
 }
 let document = createDefaultBackup();
 document.users = [
-  [main, "QA Personal — ILS", "ILS", "Israeli Shekel", "₪", "person"],
-  [business, "QA Freelance — USD", "USD", "US Dollar", "$", "business_center"],
-  [travel, "QA Travel — EUR", "EUR", "Euro", "€", "luggage"],
+  [main, T.profiles.main, "ILS", T.currencyName, "₪", "person"],
+  [
+    business,
+    T.profiles.business,
+    "ILS",
+    T.currencyName,
+    "₪",
+    "business_center",
+  ],
+  [travel, T.profiles.travel, "ILS", T.currencyName, "₪", "luggage"],
 ].map(([id, name, currency, currencyName, currencySymbol, icon], index) => ({
   uuid: id,
   name,
@@ -161,7 +754,7 @@ document._local = {
   selectedProfileId: main,
   mainCurrency: "ILS",
   dataMode: "restored",
-  appLanguage: "en",
+  appLanguage: LANG,
   themeMode: "system",
   dateFormat: "DD/MM/YYYY",
   weekStartDay: 0,
@@ -192,7 +785,7 @@ function category(key, name, icon, parent = null, type = 0, owner = main) {
     document,
     {
       name,
-      description: `Synthetic device-test category: ${name}. Exercise editing, filtering, icons, colors, and parent totals.`,
+      description: "",
       type,
       parentId: parent ? categories.get(parent) : null,
       ...visual(icon),
@@ -207,100 +800,107 @@ function category(key, name, icon, parent = null, type = 0, owner = main) {
   categoryIcons.add(`material:${icon}`);
   return id;
 }
-category("digital", "Digital life & subscriptions", "devices");
-category("pets", "Pets & animal care", "pets");
-category("giving", "Gifts, charity & community", "volunteer_activism");
-category("freelance", "Freelance & side income", "work", null, 1);
-category("refunds", "Refunds & reimbursements", "assignment_return", null, 1);
-category("transfers", "Transfers between my accounts", "sync_alt", null, 2);
+category("digital", T.topCategories.digital, "devices");
+category("pets", T.topCategories.pets, "pets");
+category("giving", T.topCategories.giving, "volunteer_activism");
+category("freelance", T.topCategories.freelance, "work", null, 1);
+category("refunds", T.topCategories.refunds, "assignment_return", null, 1);
+category("transfers", T.topCategories.transfers, "sync_alt", null, 2);
 const specs = [
-  ["fresh-food", "Fresh fruit & vegetables", "nutrition", "groceries"],
+  ["fresh-food", T.leaf["fresh-food"][0], "nutrition", "groceries"],
+  ["supermarket", T.leaf.supermarket[0], "shopping_basket", "groceries"],
+  ["bakery", T.leaf.bakery[0], "bakery_dining", "groceries"],
+  ["specialty-food", T.leaf["specialty-food"][0], "storefront", "groceries"],
+  ["coffee", T.leaf.coffee[0], "local_cafe", "food"],
+  ["restaurants", T.leaf.restaurants[0], "table_restaurant", "food"],
+  ["takeaway", T.leaf.takeaway[0], "takeout_dining", "food"],
+  ["work-lunch", T.leaf["work-lunch"][0], "lunch_dining", "food"],
+  ["fuel", T.leaf.fuel[0], "local_gas_station", "car"],
+  ["parking", T.leaf.parking[0], "local_parking", "car"],
+  ["car-service", T.leaf["car-service"][0], "car_repair", "car"],
+  ["car-insurance", T.leaf["car-insurance"][0], "car_crash", "car"],
+  ["bus", T.leaf.bus[0], "directions_bus", "travel"],
+  ["trains", T.leaf.trains[0], "train", "travel"],
+  ["taxi", T.leaf.taxi[0], "local_taxi", "travel"],
+  ["flights", T.leaf.flights[0], "flight_takeoff", "travel"],
+  ["hotels", T.leaf.hotels[0], "hotel", "travel"],
+  ["clothing", T.leaf.clothing[0], "checkroom", "shopping"],
+  ["electronics", T.leaf.electronics[0], "computer", "shopping"],
+  ["furniture", T.leaf.furniture[0], "chair", "shopping"],
+  ["books", T.leaf.books[0], "menu_book", "education"],
+  ["courses", T.leaf.courses[0], "cast_for_education", "education"],
+  ["school-supplies", T.leaf["school-supplies"][0], "draw", "education"],
+  ["movies", T.leaf.movies[0], "movie", "entertainment"],
+  ["concerts", T.leaf.concerts[0], "theater_comedy", "entertainment"],
+  ["games", T.leaf.games[0], "casino", "entertainment"],
+  ["pharmacy", T.leaf.pharmacy[0], "medication", "health"],
+  ["dentist", T.leaf.dentist[0], "dentistry", "health"],
+  ["doctor", T.leaf.doctor[0], "medical_services", "health"],
+  ["fitness", T.leaf.fitness[0], "fitness_center", "health"],
+  ["electricity", T.leaf.electricity[0], "bolt", "utilities"],
+  ["water", T.leaf.water[0], "water_drop", "utilities"],
+  ["gas", T.leaf.gas[0], "propane_tank", "utilities"],
+  ["maintenance", T.leaf.maintenance[0], "handyman", "housing"],
+  ["home-insurance", T.leaf["home-insurance"][0], "shield", "housing"],
+  ["property-tax", T.leaf["property-tax"][0], "location_city", "housing"],
+  ["monthly-rent", T.leaf["monthly-rent"][0], "home_work", "rent"],
+  ["bank-fees", T.leaf["bank-fees"][0], "account_balance", "bills"],
+  ["pet-food", T.leaf["pet-food"][0], "cruelty_free", "pets"],
+  ["vet", T.leaf.vet[0], "healing", "pets"],
   [
-    "supermarket",
-    "Supermarket & household staples",
-    "shopping_basket",
-    "groceries",
+    "pet-supplies",
+    T.leaf["pet-supplies"][0],
+    "sound_detection_dog_barking",
+    "pets",
   ],
-  ["bakery", "Bakery & bread", "bakery_dining", "groceries"],
-  [
-    "specialty-food",
-    "Specialty & international groceries",
-    "storefront",
-    "groceries",
-  ],
-  ["coffee", "Coffee & tea", "local_cafe", "food"],
-  ["restaurants", "Restaurants & dining out", "table_restaurant", "food"],
-  ["takeaway", "Takeaway & delivery", "takeout_dining", "food"],
-  ["work-lunch", "Lunch at work", "lunch_dining", "food"],
-  ["fuel", "Petrol & charging", "local_gas_station", "car"],
-  ["parking", "Parking & tolls", "local_parking", "car"],
-  ["car-service", "Car service & repairs", "car_repair", "car"],
-  ["car-insurance", "Car insurance", "car_crash", "car"],
-  ["bus", "Bus & light rail", "directions_bus", "travel"],
-  ["trains", "Train tickets", "train", "travel"],
-  ["taxi", "Taxi & rideshare", "local_taxi", "travel"],
-  ["flights", "Flights & baggage", "flight_takeoff", "travel"],
-  ["hotels", "Hotels & weekend stays", "hotel", "travel"],
-  ["clothing", "Clothes & accessories", "checkroom", "shopping"],
-  ["electronics", "Electronics & gadgets", "computer", "shopping"],
-  ["furniture", "Furniture & homeware", "chair", "shopping"],
-  ["books", "Books & learning material", "menu_book", "education"],
-  ["courses", "Courses & certifications", "cast_for_education", "education"],
-  ["school-supplies", "School supplies", "draw", "education"],
-  ["movies", "Cinema & film nights", "movie", "entertainment"],
-  ["concerts", "Concerts & live shows", "theater_comedy", "entertainment"],
-  ["games", "Games & hobbies", "casino", "entertainment"],
-  ["pharmacy", "Medicine & pharmacy", "medication", "health"],
-  ["dentist", "Dentist & dental care", "dentistry", "health"],
-  ["doctor", "Doctor & appointments", "medical_services", "health"],
-  ["fitness", "Fitness classes & equipment", "fitness_center", "health"],
-  ["electricity", "Electricity", "bolt", "utilities"],
-  ["water", "Water bill", "water_drop", "utilities"],
-  ["gas", "Cooking gas", "propane_tank", "utilities"],
-  ["maintenance", "Home maintenance", "handyman", "housing"],
-  ["home-insurance", "Home insurance", "shield", "housing"],
-  ["property-tax", "Municipal tax", "location_city", "housing"],
-  ["monthly-rent", "Monthly apartment rent", "home_work", "rent"],
-  ["bank-fees", "Bank & account fees", "account_balance", "bills"],
-  ["pet-food", "Pet food & treats", "cruelty_free", "pets"],
-  ["vet", "Veterinary care", "healing", "pets"],
-  ["pet-supplies", "Pet accessories", "sound_detection_dog_barking", "pets"],
-  ["gifts", "Birthday & family gifts", "featured_seasonal_and_gifts", "giving"],
-  ["charity", "Charitable donations", "favorite", "giving"],
-  ["community", "Community events", "diversity_3", "giving"],
-  ["misc", "Unplanned small purchases", "category", "others"],
-  ["salary-base", "Monthly salary", "badge", "salary", 1],
-  ["salary-bonus", "Performance bonus", "workspace_premium", "salary", 1],
-  ["salary-overtime", "Overtime payments", "more_time", "salary", 1],
-  ["consulting", "Consulting invoices", "psychology", "freelance", 1],
-  [
-    "design-work",
-    "Design & development invoices",
-    "design_services",
-    "freelance",
-    1,
-  ],
-  ["royalties", "Royalties & licensing", "copyright", "freelance", 1],
-  ["dividends", "Investment dividends", "monitoring", "investments", 1],
-  ["interest", "Interest earned", "percent", "savings", 1],
+  ["gifts", T.leaf.gifts[0], "featured_seasonal_and_gifts", "giving"],
+  ["charity", T.leaf.charity[0], "favorite", "giving"],
+  ["community", T.leaf.community[0], "diversity_3", "giving"],
+  ["misc", T.leaf.misc[0], "category", "others"],
+  ["salary-base", T.leaf["salary-base"][0], "badge", "salary", 1],
+  ["salary-bonus", T.leaf["salary-bonus"][0], "workspace_premium", "salary", 1],
+  ["salary-overtime", T.leaf["salary-overtime"][0], "more_time", "salary", 1],
+  ["consulting", T.leaf.consulting[0], "psychology", "freelance", 1],
+  ["design-work", T.leaf["design-work"][0], "design_services", "freelance", 1],
+  ["royalties", T.leaf.royalties[0], "copyright", "freelance", 1],
+  ["dividends", T.leaf.dividends[0], "monitoring", "investments", 1],
+  ["interest", T.leaf.interest[0], "percent", "savings", 1],
   [
     "expense-refund",
-    "Expense reimbursements",
+    T.leaf["expense-refund"][0],
     "currency_exchange",
     "refunds",
     1,
   ],
   [
     "purchase-refund",
-    "Returned-purchase refunds",
+    T.leaf["purchase-refund"][0],
     "keyboard_return",
     "refunds",
     1,
   ],
-  ["cashback", "Credit-card cashback", "credit_card_heart", "refunds", 1],
-  ["bank-transfer", "Bank-to-bank transfer", "swap_horiz", "transfers", 2],
-  ["save-transfer", "Savings contribution", "move_down", "transfers", 2],
-  ["cash-transfer", "Cash withdrawal", "atm", "transfers", 2],
+  ["cashback", T.leaf.cashback[0], "credit_card_heart", "refunds", 1],
+  [
+    "bank-transfer",
+    T.transferCategories["bank-transfer"],
+    "swap_horiz",
+    "transfers",
+    2,
+  ],
+  [
+    "save-transfer",
+    T.transferCategories["save-transfer"],
+    "move_down",
+    "transfers",
+    2,
+  ],
+  [
+    "cash-transfer",
+    T.transferCategories["cash-transfer"],
+    "atm",
+    "transfers",
+    2,
+  ],
 ];
 for (const [key, name, icon, parent, type = 0] of specs) {
   assert(categories.has(parent), `Missing reference-format parent: ${parent}`);
@@ -329,11 +929,16 @@ const services = [
   ["Home internet", 119, "wifi", 13],
 ];
 services.forEach(([name, , icon], i) =>
-  category(`subscription-${i}`, name + " subscription", icon, "digital"),
+  category(
+    `subscription-${i}`,
+    subscriptionCategoryLabel(name),
+    icon,
+    "digital",
+  ),
 );
 category(
   "business-sales",
-  "Client invoice payments",
+  T.bizTravelCategories.businessSales,
   "request_quote",
   null,
   1,
@@ -341,7 +946,7 @@ category(
 );
 category(
   "business-costs",
-  "Freelance operating costs",
+  T.bizTravelCategories.businessCosts,
   "point_of_sale",
   null,
   0,
@@ -349,7 +954,7 @@ category(
 );
 category(
   "travel-expense",
-  "European trip spending",
+  T.bizTravelCategories.travelExpense,
   "explore",
   null,
   0,
@@ -357,7 +962,7 @@ category(
 );
 category(
   "travel-income",
-  "Travel fund replenishment",
+  T.bizTravelCategories.travelIncome,
   "payments",
   null,
   1,
@@ -368,18 +973,18 @@ const accounts = new Map();
 const opening = {};
 function account(key, name, kind, balance, icon, owner = main, changes = {}) {
   const id = uuid("account-" + key),
-    currency = owner === business ? "USD" : owner === travel ? "EUR" : "ILS";
+    currency = "ILS";
   const savings = {
     ...createDefaultSavingsDetails(),
     isDetailed: true,
-    providerName: "QA Savings Institution",
+    providerName: T.savingsProviderName,
     contributedPrincipal: "15000",
     expectedAnnualReturnRate: "4.25",
     startDate: "2026-04-01",
     annualManagementFeeRate: "0.3",
     estimatedTaxRate: "25",
     taxJurisdiction: "IL",
-    notes: "Synthetic values for the withdrawal estimator.",
+    notes: "",
   };
   document = addAccountToDocument(
     document,
@@ -408,137 +1013,56 @@ function account(key, name, kind, balance, icon, owner = main, changes = {}) {
   accounts.set(key, id);
   opening[id] = balance;
 }
-account(
-  "bank-a",
-  "QA Yahav — Everyday bank",
-  "bank",
-  45000,
-  "account_balance_wallet",
-);
-account(
-  "bank-b",
-  "QA Leumi — Household bank",
-  "bank",
-  16000,
-  "assured_workload",
-);
-account(
-  "card-a1",
-  "QA Visa — Everyday purchases",
-  "card",
-  0,
-  "credit_card",
-  main,
-  {
-    linkedBankAccountId: accounts.get("bank-a"),
-    cardLastFour: "1111",
-    cardCompany: "Visa",
-    paymentDay: 5,
-  },
-);
-account(
-  "card-a2",
-  "QA Mastercard — Online shopping",
-  "card",
-  0,
-  "credit_score",
-  main,
-  {
-    linkedBankAccountId: accounts.get("bank-a"),
-    cardLastFour: "2222",
-    cardCompany: "Mastercard",
-    paymentDay: 10,
-  },
-);
-account("card-b1", "QA Amex — Travel & dining", "card", 0, "add_card", main, {
+account("bank-a", T.accounts.bankA, "bank", 45000, "account_balance_wallet");
+account("bank-b", T.accounts.bankB, "bank", 16000, "assured_workload");
+account("card-a1", T.accounts.cardA1, "card", 0, "credit_card", main, {
+  linkedBankAccountId: accounts.get("bank-a"),
+  cardLastFour: "1111",
+  cardCompany: "Visa",
+  paymentDay: 5,
+});
+account("card-a2", T.accounts.cardA2, "card", 0, "credit_score", main, {
+  linkedBankAccountId: accounts.get("bank-a"),
+  cardLastFour: "2222",
+  cardCompany: "Mastercard",
+  paymentDay: 10,
+});
+account("card-b1", T.accounts.cardB1, "card", 0, "add_card", main, {
   linkedBankAccountId: accounts.get("bank-b"),
   cardLastFour: "3333",
   cardCompany: "American Express",
   paymentDay: 20,
 });
-account(
-  "card-b2",
-  "QA Isracard — Subscriptions",
-  "card",
-  0,
-  "contactless",
-  main,
-  {
-    linkedBankAccountId: accounts.get("bank-b"),
-    cardLastFour: "4444",
-    cardCompany: "Isracard",
-    paymentDay: 31,
-  },
-);
-account("savings", "QA Emergency savings", "savings", 18000, "lock");
-account("cash", "QA Cash wallet", "cash", 700, "money");
+account("card-b2", T.accounts.cardB2, "card", 0, "contactless", main, {
+  linkedBankAccountId: accounts.get("bank-b"),
+  cardLastFour: "4444",
+  cardCompany: "Isracard",
+  paymentDay: 31,
+});
+account("savings", T.accounts.savings, "savings", 18000, "lock");
+account("cash", T.accounts.cash, "cash", 700, "money");
 account(
   "business-cash",
-  "QA Freelance USD wallet",
+  T.accounts.businessCash,
   "cash",
   1000,
   "attach_money",
   business,
 );
-account("travel-cash", "QA Travel EUR wallet", "cash", 1200, "euro", travel, {
+account("travel-cash", T.accounts.travelCash, "cash", 1200, "euro", travel, {
   isExcluded: true,
 });
 
 for (const [collection, names, icon] of [
-  [
-    "labels",
-    [
-      "Essential",
-      "Optional",
-      "Work",
-      "Family",
-      "Holiday",
-      "Tax deductible",
-      "Subscription",
-      "Refund",
-      "Cash",
-      "Large purchase",
-      "Weekend",
-      "QA edge case",
-    ],
-    "label",
-  ],
-  [
-    "places",
-    [
-      "Tel Aviv supermarket",
-      "Jerusalem cafe",
-      "Haifa station",
-      "Home office",
-      "Neighborhood pharmacy",
-      "Online checkout",
-      "Eilat hotel",
-      "City gym",
-      "Community center",
-      "Berlin bookshop",
-    ],
-    "location_on",
-  ],
-  [
-    "peoples",
-    [
-      "Dana Cohen (QA)",
-      "Noam Levi (QA)",
-      "Maya Rosen (QA)",
-      "Sam Taylor (QA)",
-      "Employer (QA)",
-      "Freelance client (QA)",
-      "Landlord (QA)",
-      "Pet clinic (QA)",
-    ],
-    "group",
-  ],
+  ["labels", T.labels, "label"],
+  ["places", T.places, "location_on"],
+  ["peoples", T.peoples, "group"],
 ])
   document[collection] = names.map((name, i) => ({
     uuid: uuid(`${collection}-${i}`),
     name,
     user: main,
-    description: `Synthetic ${collection} selector entry ${i + 1}.`,
+    description: "",
     ...visual(icon),
     createdAt: START,
     updatedAt: START,
@@ -559,7 +1083,7 @@ function budget(key, name, amount, icon, keys, changes = {}) {
       includeSubcategories: true,
       cycleDay: "1",
       showOnHome: true,
-      notes: `QA budget: ${name}. Inspect all six historical periods and edit its scope.`,
+      notes: "",
       ...visual(icon),
       ...changes,
     },
@@ -568,41 +1092,20 @@ function budget(key, name, amount, icon, keys, changes = {}) {
   );
   budgets.set(key, id);
 }
-budget("groceries", "Groceries & household essentials", 2600, "grocery", [
-  "groceries",
-]);
-budget("dining", "Dining & coffee — deliberately tight", 180, "ramen_dining", [
-  "food",
-]);
-budget("digital", "Digital subscriptions", 1500, "subscriptions", ["digital"]);
-budget(
-  "transport",
-  "Transport & car costs",
-  1800,
-  "commute",
-  ["travel", "car"],
-  {
-    accounts: [accounts.get("card-a1"), accounts.get("card-b1")],
-    rolling: true,
-  },
-);
-budget(
-  "health",
-  "Health & pet care",
-  1600,
-  "health_metrics",
-  ["health", "pets"],
-  { showOnHome: false },
-);
-budget(
-  "learning",
-  "Learning & development",
-  850,
-  "auto_stories",
-  ["education"],
-  { budgetMode: "Manual" },
-);
-budget("overall", "Overall yearly expense plan", 180000, "donut_large", [], {
+budget("groceries", T.budgets.groceries, 2600, "grocery", ["groceries"]);
+budget("dining", T.budgets.dining, 180, "ramen_dining", ["food"]);
+budget("digital", T.budgets.digital, 1500, "subscriptions", ["digital"]);
+budget("transport", T.budgets.transport, 1800, "commute", ["travel", "car"], {
+  accounts: [accounts.get("card-a1"), accounts.get("card-b1")],
+  rolling: true,
+});
+budget("health", T.budgets.health, 1600, "health_metrics", ["health", "pets"], {
+  showOnHome: false,
+});
+budget("learning", T.budgets.learning, 850, "auto_stories", ["education"], {
+  budgetMode: "Manual",
+});
+budget("overall", T.budgets.overall, 180000, "donut_large", [], {
   budgetType: "Overall",
   period: "Yearly",
   accounts: [...accounts]
@@ -611,34 +1114,27 @@ budget("overall", "Overall yearly expense plan", 180000, "donut_large", [], {
 });
 budget(
   "income",
-  "Monthly salary & freelance target",
+  T.budgets.income,
   22000,
   "trending_up",
   ["salary", "freelance", "refunds"],
   { transactionType: 1 },
 );
-budget("weekly", "Weekly entertainment", 420, "event", ["entertainment"], {
+budget("weekly", T.budgets.weekly, 420, "event", ["entertainment"], {
   period: "Weekly",
   showOnHome: false,
 });
-budget("daily", "Daily coffee cap", 25, "coffee_maker", ["coffee"], {
+budget("daily", T.budgets.daily, 25, "coffee_maker", ["coffee"], {
   period: "Daily",
   showOnHome: false,
 });
-budget(
-  "past-trip",
-  "Summer holiday — completed",
-  4200,
-  "beach_access",
-  ["travel"],
-  {
-    period: "Custom",
-    startDate: "2026-07-01",
-    endDate: "2026-07-31",
-    showOnHome: false,
-  },
-);
-budget("future-trip", "Autumn holiday — upcoming", 8000, "forest", ["travel"], {
+budget("past-trip", T.budgets["past-trip"], 4200, "beach_access", ["travel"], {
+  period: "Custom",
+  startDate: "2026-07-01",
+  endDate: "2026-07-31",
+  showOnHome: false,
+});
+budget("future-trip", T.budgets["future-trip"], 8000, "forest", ["travel"], {
   period: "Custom",
   startDate: "2026-10-01",
   endDate: "2026-10-31",
@@ -646,7 +1142,7 @@ budget("future-trip", "Autumn holiday — upcoming", 8000, "forest", ["travel"],
 });
 budget(
   "saving-transfers",
-  "Savings contributions",
+  T.budgets["saving-transfers"],
   1800,
   "account_tree",
   ["save-transfer"],
@@ -654,7 +1150,7 @@ budget(
 );
 budget(
   "cycle-31",
-  "Utilities — month-end cycle",
+  T.budgets["cycle-31"],
   950,
   "calendar_month",
   ["utilities"],
@@ -663,18 +1159,10 @@ budget(
 
 // Imported supplementary collections are preserved for backup/relationship tests.
 for (const [collection, names, icon] of [
-  ["assets", ["QA Laptop", "QA Bicycle", "QA Home equipment"], "inventory_2"],
-  [
-    "goals",
-    ["Emergency fund", "Winter holiday", "New laptop", "Education fund"],
-    "flag",
-  ],
-  ["loans", ["QA Car loan", "QA Family loan"], "real_estate_agent"],
-  [
-    "achievements",
-    ["First transaction", "Five months tracked", "Budget review completed"],
-    "trophy",
-  ],
+  ["assets", T.assets, "inventory_2"],
+  ["goals", T.goals, "flag"],
+  ["loans", T.loans, "real_estate_agent"],
+  ["achievements", T.achievements, "trophy"],
 ])
   document[collection] = names.map((name, i) => ({
     uuid: uuid(`${collection}-${i}`),
@@ -684,7 +1172,7 @@ for (const [collection, names, icon] of [
     targetAmount: (i + 1) * 6000,
     currencyCode: "ILS",
     account: accounts.get("bank-a"),
-    description: `Synthetic ${collection} backup-preservation record.`,
+    description: "",
     ...visual(icon),
     createdAt: START,
     updatedAt: AS_OF,
@@ -693,7 +1181,7 @@ for (const [collection, names, icon] of [
 document.billSplitters = [
   {
     uuid: uuid("split-dinner"),
-    name: "QA Shared dinner",
+    name: T.billSplitterName,
     amount: 240,
     currencyCode: "ILS",
     user: main,
@@ -739,10 +1227,8 @@ function draftEvent(key, month, day, changes, owner = main) {
     owner,
     draft: {
       ...createTransactionDraft(changes.type ?? 0),
-      currencyCode:
-        owner === business ? "USD" : owner === travel ? "EUR" : "ILS",
-      accountCurrencyCode:
-        owner === business ? "USD" : owner === travel ? "EUR" : "ILS",
+      currencyCode: "ILS",
+      accountCurrencyCode: "ILS",
       occurredAt: when,
       ...changes,
     },
@@ -789,9 +1275,13 @@ MONTHS.forEach((month, m) => {
             : Number(
                 (8 + ((i * 17 + m * 13) % 240) + (i % 100) / 100).toFixed(2),
               );
+    const hour = 7 + (i % 3),
+      minute = i % 60;
+    const when = stamp(month, day, hour, minute);
+    const variants = T.leaf[key] ?? [cat.name];
     draftEvent(`regular-${month}-${i}`, month, day, {
       type: income ? 1 : 0,
-      name: `${cat.name} · ${String(i + 1).padStart(3, "0")}`,
+      name: variants[i % variants.length],
       amount: String(amount),
       accountId: accounts.get(accountKey),
       categoryId: cat.uuid,
@@ -800,36 +1290,16 @@ MONTHS.forEach((month, m) => {
       placeId: document.places[(i + m) % document.places.length].uuid,
       personId: document.peoples[i % document.peoples.length].uuid,
       loanId: i % 91 === 0 ? document.loans[0].uuid : "",
-      hour: 7 + (i % 3),
-      minute: i % 60,
-      description: `QA ${month}, item ${i + 1}. ${cat.name}. Synthetic receipt-free ${income ? "income" : "expense"}; account ${accountKey}. Search tokens: ${["essential", "family", "work", "weekend"][i % 4]}. ${i % 23 === 0 ? 'Multilingual note: קניות לבית · кофе и книги · café ☕.\nSecond line: test wrapping, comma, and quoted "merchant".' : "Test editing amount, date, category and related selectors."}`,
+      hour,
+      minute,
+      description: "",
+      ...fxMix(i, when),
     });
   }
   for (const [index, name, source, target, value, key] of [
-    [
-      0,
-      "Move money to household bank",
-      "bank-a",
-      "bank-b",
-      3500,
-      "bank-transfer",
-    ],
-    [
-      1,
-      "Monthly emergency savings contribution",
-      "bank-a",
-      "savings",
-      1500,
-      "save-transfer",
-    ],
-    [
-      2,
-      "Cash withdrawal for daily purchases",
-      "bank-b",
-      "cash",
-      6000,
-      "cash-transfer",
-    ],
+    [0, T.transferNames[0], "bank-a", "bank-b", 3500, "bank-transfer"],
+    [1, T.transferNames[1], "bank-a", "savings", 1500, "save-transfer"],
+    [2, T.transferNames[2], "bank-b", "cash", 6000, "cash-transfer"],
   ])
     draftEvent(
       `transfer-${month}-${index}`,
@@ -844,63 +1314,63 @@ MONTHS.forEach((month, m) => {
         categoryId: categories.get(key),
         budgetId:
           key === "save-transfer" ? budgets.get("saving-transfers") : "",
-        description:
-          "Transfer: verify it appears on both accounts and is excluded from expense/income totals.",
+        description: "",
       },
     );
   for (let i = 0; i < 12; i++) {
     const owner = i < 6 ? business : travel,
       income = i % 3 === 0;
+    const categoryKey =
+      owner === business
+        ? income
+          ? "business-sales"
+          : "business-costs"
+        : income
+          ? "travel-income"
+          : "travel-expense";
+    const cat = document.categories.find(
+      (c) => c.uuid === categories.get(categoryKey),
+    );
+    const day = 1 + ((i * 2) % maxDay);
+    const when = stamp(month, day, 8, 0);
     draftEvent(
       `aux-${month}-${i}`,
       month,
-      1 + ((i * 2) % maxDay),
+      day,
       {
         type: income ? 1 : 0,
-        name: income
-          ? "QA secondary-profile income"
-          : "QA secondary-profile purchase",
+        name: cat.name,
         amount: String(income ? 850 + i * 10 : 15 + i * 7.45),
         accountId: accounts.get(
           owner === business ? "business-cash" : "travel-cash",
         ),
-        categoryId: categories.get(
-          owner === business
-            ? income
-              ? "business-sales"
-              : "business-costs"
-            : income
-              ? "travel-income"
-              : "travel-expense",
-        ),
-        description:
-          "Profile isolation: this record must be visible only in its owning profile.",
+        categoryId: cat.uuid,
+        description: "",
+        ...fxMix(i, when),
       },
       owner,
     );
   }
   draftEvent(`fx-${month}`, month, Math.min(15, maxDay), {
-    name: "QA USD software purchase paid from ILS bank",
+    name: T.fxTransactionName,
     amount: "49.99",
     currencyCode: "USD",
     accountCurrencyCode: "ILS",
-    exchangeRate: 3.7,
+    exchangeRate: FX.USD,
     exchangeRateDate: `${month}-01`,
     exchangeRateFetchedAt: stamp(month, 1),
-    exchangeRateSource: "QA synthetic fixed rate",
+    exchangeRateSource: T.exchangeRateSource,
     accountId: accounts.get("bank-a"),
     categoryId: categories.get("electronics"),
-    description:
-      "Cross-currency history: USD 49.99, ILS account conversion at synthetic rate 3.7.",
+    description: "",
   });
   draftEvent(`tiny-${month}`, month, Math.min(16, maxDay), {
-    name: "QA precision test — one agora",
+    name: T.tinyTransactionName,
     amount: "0.01",
     accountId: accounts.get("cash"),
     categoryId: categories.get("misc"),
     labelId: document.labels.at(-1).uuid,
-    description:
-      "Smallest positive ILS amount; verify formatting and edit/delete reversibility.",
+    description: "",
   });
 });
 
@@ -911,15 +1381,15 @@ services.forEach(([name, amount, icon, day], i) => {
     document,
     {
       ...recurringDefaults(new Date(startAt)),
-      name,
+      name: subscriptionName(name),
       amount: String(amount),
-      currencyCode: "ILS",
+      currencyCode: recCurrencyFor(i),
       startAt,
       account: accounts.get(mainSpendingAccounts[i % 4]),
       category: categories.get(`subscription-${i}`),
       budget: budgets.get("digital"),
       label: document.labels[6].uuid,
-      description: `QA monthly subscription ${i + 1}. Five complete months of processed payments, plus September when due. Synthetic plan price.`,
+      description: "",
       ...visual(icon),
       automatic: i % 2 === 0,
       reminderDays: [null, 0, 1, 2, 7][i % 5],
@@ -940,72 +1410,31 @@ services.forEach(([name, amount, icon, day], i) => {
   }
 });
 // Additional frequencies, skipped history, archived history, and a pending manual payment.
-for (const [key, name, period, icon, type, categoryKey, amount] of [
-  [
-    "weekly",
-    "QA Weekly fitness class",
-    "Weekly",
-    "sports_gymnastics",
-    0,
-    "fitness",
-    45,
-  ],
-  [
-    "fortnightly",
-    "QA Fortnightly consulting retainer",
-    "Fortnightly",
-    "edit_document",
-    1,
-    "consulting",
-    1250,
-  ],
-  [
-    "quarterly",
-    "QA Quarterly insurance",
-    "Quarterly",
-    "verified_user",
-    0,
-    "home-insurance",
-    420,
-  ],
-  [
-    "half-year",
-    "QA Six-month learning pass",
-    "Biannually",
-    "school",
-    0,
-    "courses",
-    600,
-  ],
-  [
-    "yearly",
-    "QA Annual domain registration",
-    "Yearly",
-    "language",
-    0,
-    "subscription-12",
-    85,
-  ],
-  ["daily", "QA Daily transit pass", "Daily", "tram", 0, "bus", 8],
-]) {
+for (const [idx, [key, period, icon, type, categoryKey, amount]] of [
+  ["weekly", "Weekly", "sports_gymnastics", 0, "fitness", 45],
+  ["fortnightly", "Fortnightly", "edit_document", 1, "consulting", 1250],
+  ["quarterly", "Quarterly", "verified_user", 0, "home-insurance", 420],
+  ["half-year", "Biannually", "school", 0, "courses", 600],
+  ["yearly", "Yearly", "language", 0, "subscription-12", 85],
+  ["daily", "Daily", "tram", 0, "bus", 8],
+].entries()) {
   const id = uuid("recurring-" + key),
     startAt = stamp("2026-04", 1);
   document = saveRecurring(
     document,
     {
       ...recurringDefaults(new Date(startAt)),
-      name,
+      name: T.otherRecurring[key],
       period,
       type,
       amount: String(amount),
-      currencyCode: "ILS",
+      currencyCode: recCurrencyFor(idx + 20),
       startAt,
       account: accounts.get("bank-a"),
       category: categories.get(categoryKey),
       ...visual(icon),
       automatic: false,
-      description:
-        "QA frequency, calendar navigation, paid/skipped history, and manual-payment fixture.",
+      description: "",
     },
     id,
     main,
@@ -1031,14 +1460,15 @@ document = saveRecurring(
   document,
   {
     ...recurringDefaults(new Date(archivedStart)),
-    name: "QA Archived magazine subscription",
+    name: T.archivedRecurringName,
     amount: "29",
-    currencyCode: "ILS",
+    currencyCode: recCurrencyFor(26),
     startAt: archivedStart,
     endAt: stamp("2026-08", 7),
     account: accounts.get("card-a2"),
     category: categories.get("books"),
     ...visual("newspaper"),
+    description: "",
   },
   archivedId,
   main,
@@ -1055,15 +1485,14 @@ document = saveRecurring(
   document,
   {
     ...recurringDefaults(new Date(stamp("2026-09", 12))),
-    name: "QA Pending manual donation — Pay or Skip",
+    name: T.pendingRecurringName,
     amount: "75",
-    currencyCode: "ILS",
+    currencyCode: recCurrencyFor(27),
     startAt: stamp("2026-09", 12),
     account: accounts.get("bank-a"),
     category: categories.get("charity"),
     ...visual("heart_plus"),
-    description:
-      "Intentionally overdue and manual: test Pay, Skip, edit, and archive.",
+    description: "",
   },
   pendingId,
   main,
@@ -1097,14 +1526,25 @@ for (
           null,
         );
       else {
+        const recCurrency = String(record.currencyCode ?? "ILS");
+        const needsFx = recCurrency !== "ILS";
+        const rate = needsFx ? FX[recCurrency] : null;
         document = saveTransaction(
           document,
           {
             ...createTransactionDraft(record.type),
             name: record.name,
             amount: String(record.amount),
-            currencyCode: "ILS",
+            currencyCode: recCurrency,
             accountCurrencyCode: "ILS",
+            ...(needsFx
+              ? {
+                  exchangeRate: rate,
+                  exchangeRateDate: event.when.slice(0, 10),
+                  exchangeRateFetchedAt: event.when,
+                  exchangeRateSource: T.exchangeRateSource,
+                }
+              : {}),
             accountId: record.account,
             categoryId: record.category,
             budgetId: record.budget,
@@ -1122,11 +1562,11 @@ for (
           scheduledAt: event.when,
           processedAt: event.when,
           originalAmount: record.amount,
-          originalCurrencyCode: "ILS",
-          originalExchangeRate: 1,
-          originalExchangeRateDate: null,
-          originalExchangeRateFetchedAt: null,
-          originalExchangeRateSource: null,
+          originalCurrencyCode: recCurrency,
+          originalExchangeRate: needsFx ? rate : 1,
+          originalExchangeRateDate: needsFx ? event.when.slice(0, 10) : null,
+          originalExchangeRateFetchedAt: needsFx ? event.when : null,
+          originalExchangeRateSource: needsFx ? T.exchangeRateSource : null,
         });
         document = completeOccurrence(
           document,
@@ -1173,7 +1613,6 @@ for (let i = 0; i < 12; i++) {
     (t) => t.type === i % 3 && t.user === main && !t.cardPaymentPeriod,
   );
   const draft = transactionDraftFromRecord(document, sample.uuid);
-  draft.name = `QA Template ${i + 1}: ${sample.type === 0 ? "expense" : sample.type === 1 ? "income" : "transfer"}`;
   document = saveTransactionTemplate(
     document,
     draft,
@@ -1250,6 +1689,7 @@ document._testDataset = {
   name: "Plutus comprehensive on-device test standard",
   version: 1,
   seed: "plutus-device-test-v1",
+  language: LANG,
   asOf: AS_OF,
   historyStart: "2026-04-01",
   historyEnd: "2026-09-16",
@@ -1258,7 +1698,7 @@ document._testDataset = {
   referenceFormat: "plutus-2026-09-15T07-07-22-246Z.json",
   synthetic: true,
   description:
-    "Five complete months plus current-month activity. All entities are fictional. JSON has no binary attachments. Extra collections test backup preservation; they do not imply implemented UI features.",
+    "Five complete months plus current-month activity. All entities are fictional. JSON has no binary attachments. Extra collections test backup preservation; they do not imply implemented UI features. Roughly half of the non-transfer transactions and recurring payments are originally recorded in USD or EUR and converted to the ILS account currency to exercise currency-conversion handling.",
   monthlyTransactionCounts: monthlyCounts,
   collectionCounts: Object.fromEntries(
     Object.entries(document)
@@ -1417,7 +1857,7 @@ for (const r of document.recurrings) {
         "Recurring history links to payment",
       );
     }
-  if (services.some(([name]) => name === r.name))
+  if (services.some(([name]) => subscriptionName(name) === r.name))
     for (const month of MONTHS.slice(0, 5)) {
       assert(
         entries.some(
@@ -1452,7 +1892,11 @@ assert(
   "Past and upcoming budgets",
 );
 const regular = document.transactions.find(
-  (t) => !t.recurring && !t.cardPaymentPeriod && t.type === 0,
+  (t) =>
+    !t.recurring &&
+    !t.cardPaymentPeriod &&
+    t.type === 0 &&
+    t.currencyCode === t.accountCurrencyCode,
 );
 const edited = saveTransaction(
   document,
@@ -1523,7 +1967,11 @@ assert(
   "No accidental automatic catch-up at the baseline",
 );
 
-const out = path.join(root, "test-data/plutus-device-test-2026-09.json");
+const suffix = LANG === "en" ? "" : `-${LANG}`;
+const out = path.join(
+  root,
+  `test-data/plutus-device-test-2026-09${suffix}.json`,
+);
 fs.mkdirSync(path.dirname(out), { recursive: true });
 fs.writeFileSync(out, serialized);
 const summary = {
@@ -1535,7 +1983,7 @@ const summary = {
   budgetBaselines: baselineBudgets,
 };
 fs.writeFileSync(
-  path.join(root, "test-data/plutus-device-test-2026-09-summary.json"),
+  path.join(root, `test-data/plutus-device-test-2026-09${suffix}-summary.json`),
   JSON.stringify(summary, null, 2) + "\n",
 );
 console.log(
