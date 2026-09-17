@@ -47,11 +47,12 @@ export function ManageProfilesScreen() {
           onSelect={selectProfile}
         />
       </EdgeToEdgeScrollView>
-      <ProfileDeleteSheet
-        profile={profileToDelete}
-        isOpen={profileToDelete !== null}
-        onDismiss={() => setProfileToDelete(null)}
-      />
+      {profileToDelete && (
+        <ProfileDeleteSheet
+          profile={profileToDelete}
+          onDismiss={() => setProfileToDelete(null)}
+        />
+      )}
     </EdgeToEdgeLayout>
   );
 }
