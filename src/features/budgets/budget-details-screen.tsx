@@ -7,7 +7,8 @@ import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { belongsToProfile, identity } from "@/data/model/category-record";
 import { selectBudgets } from "@/data/selectors/document-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -36,7 +37,9 @@ import {
 } from "@/shared/ui/collapsing-header";
 
 export function BudgetDetailsScreen({ id }: { id: string }) {
-  const { t, i18n } = useTranslation();
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDate, formatDateRange } = useAppDate();
+  const { t } = useTranslation();
   const { document, updateDocument } = useLocalData(),
     now = useCategoryClock();
   const router = useRouter(),
@@ -184,9 +187,9 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
             </BudgetPanel>
             <BudgetPanel>
               <Text className="font-manrope-semibold text-foreground">
-                {b.range.start.toLocaleDateString(i18n.resolvedLanguage)} –{" "}
-                {new Date(b.range.end.getTime() - 1).toLocaleDateString(
-                  i18n.resolvedLanguage,
+                {formatDateRange(
+                  b.range.start,
+                  new Date(b.range.end.getTime() - 1),
                 )}
               </Text>
               <Text className="text-sm leading-6 text-muted">
@@ -223,9 +226,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
                 {t.categoryName} · {t.accountName}
               </Text>
               <Text className="mt-1 text-xs text-muted">
-                {new Date(t.timestamp).toLocaleDateString(
-                  i18n.resolvedLanguage,
-                )}
+                {formatDate(new Date(t.timestamp))}
               </Text>
             </View>
             <Text className="font-manrope-semibold text-foreground">

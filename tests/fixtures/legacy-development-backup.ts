@@ -42,6 +42,7 @@ export function createLegacyDevelopmentBackup(): BackupDocument {
       dataMode: "fresh",
       mainCurrency: "USD",
       dateFormat: "DD/MM/YYYY",
+      amountsHidden: false,
       monthStartDay: 1,
       weekStartDay: 0,
     },

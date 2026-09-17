@@ -20,7 +20,7 @@ import {
     type SavingsDetailsDraft,
 } from "@/data/model/savings-account";
 import { useAppLocalization } from "@/localization/localization-provider";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -38,6 +38,7 @@ export function SavingsDetailsForm({
   value,
   onChange,
 }: SavingsDetailsFormProps) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const { direction } = useAppLocalization();
   const theme = useAppThemeColors();
@@ -625,6 +626,7 @@ function EstimateRow({
   label: string;
   value: number;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   return (
     <View className="flex-row items-center justify-between gap-3">
       <Text className="font-sans text-xs text-muted">{label}</Text>

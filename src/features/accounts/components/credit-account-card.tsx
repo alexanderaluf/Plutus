@@ -1,8 +1,9 @@
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -22,6 +23,8 @@ export function CreditAccountCard({
   account: Account;
   showDetails?: boolean;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDayMonth } = useAppDate();
   const { t, i18n } = useTranslation();
   const theme = useAppThemeColors();
   const palette = cardPalette(account.color);
@@ -34,22 +37,13 @@ export function CreditAccountCard({
 
   const cyclePeriodText = account.billingCycle
     ? t("accounts.cards.cyclePeriod", {
-        start: account.billingCycle.cycleStart.toLocaleDateString(
-          i18n.resolvedLanguage,
-          { day: "2-digit", month: "short" },
-        ),
-        end: account.billingCycle.cycleEnd.toLocaleDateString(
-          i18n.resolvedLanguage,
-          { day: "2-digit", month: "short" },
-        ),
+        start: formatDayMonth(account.billingCycle.cycleStart),
+        end: formatDayMonth(account.billingCycle.cycleEnd),
       })
     : null;
 
   const nextPaydayFormatted = account.billingCycle
-    ? account.billingCycle.nextPaymentDate.toLocaleDateString(
-        i18n.resolvedLanguage,
-        { day: "numeric", month: "short" },
-      )
+    ? formatDayMonth(account.billingCycle.nextPaymentDate)
     : account.paymentDay != null
       ? t("accounts.cards.paysDay", {
           day: String(account.paymentDay).padStart(2, "0"),
@@ -491,6 +485,7 @@ function ActivityStat({
   label: string;
   prefix?: string;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   return (
     <View style={styles.activityStat}>
       <View style={styles.activityStatHeader}>

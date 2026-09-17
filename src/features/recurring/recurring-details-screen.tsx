@@ -33,6 +33,7 @@ import {
   RecurringBadge,
   RecurringScrim,
 } from "./components/recurring-ui";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { useRecurringActions } from "./use-recurring-actions";
 import { useRecurringClock } from "./recurring-screen";
 
@@ -40,9 +41,10 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
   const { document, updateDocument } = useLocalData(),
     { activeProfileId, activeProfile } = useProfiles(),
     router = useRouter(),
-    { t, i18n } = useTranslation(),
+    { t } = useTranslation(),
     c = useAppThemeColors(),
     insets = useSafeAreaInsets(),
+    { formatDateTime } = useAppDate(),
     now = useRecurringClock();
   const item = selectRecurrings(document, now).find((r) => r.id === id),
     actions = useRecurringActions();
@@ -89,11 +91,7 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
       setBusy(false);
     }
   }
-  const date = (value: string | Date) =>
-    new Date(value).toLocaleString(i18n.resolvedLanguage, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+  const date = (value: string | Date) => formatDateTime(new Date(value));
   const days = item?.next
     ? Math.max(0, Math.ceil((item.next.getTime() - now.getTime()) / 86_400_000))
     : 0;

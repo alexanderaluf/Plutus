@@ -215,6 +215,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
                 </Text>
               ) : (
                 <CategoryFormSections
+                  collapsable={false}
                   pointerEvents={isSaving ? "none" : "auto"}
                   className="gap-5 px-5"
                 >
@@ -398,6 +399,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
           <TopSafeAreaGradient headerHidden={headerHidden} />
 
           <View
+            collapsable={false}
             pointerEvents={headerHidden ? "none" : "box-none"}
             accessibilityElementsHidden={headerHidden}
             importantForAccessibility={
@@ -434,6 +436,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
           </View>
 
           <Animated.View
+            collapsable={false}
             pointerEvents={isSaving ? "none" : "auto"}
             style={[
               styles.selectorDock,

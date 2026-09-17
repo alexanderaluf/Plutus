@@ -11,7 +11,7 @@ import { useLocalData } from "@/data/local-data-provider";
 import { selectBudgets } from "@/data/selectors/document-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -105,6 +105,7 @@ function BudgetSortSheet({
 }
 
 export function BudgetsScreen() {
+  const { formatCurrency } = useCurrencyFormat();
   const { t, i18n } = useTranslation();
   const labels = useBudgetLabels();
   const { document } = useLocalData(),

@@ -19,7 +19,8 @@ import {
 } from "@/data/selectors/document-selectors";
 import { AccountPeriodSelector } from "@/features/accounts/components/account-period-selector";
 import type { AccountPeriod } from "@/features/accounts/types";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import {
@@ -31,7 +32,9 @@ import {
 import { useCategoryClock } from "./use-category-clock";
 
 export function CategoryDetailsScreen() {
-  const { t, i18n } = useTranslation();
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDate, formatDateRange } = useAppDate();
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { document } = useLocalData();
@@ -159,7 +162,7 @@ export function CategoryDetailsScreen() {
                   <Button.Label className="text-sm text-muted">
                     {allTime
                       ? t("categories.details.allHistory")
-                      : `${start.toLocaleDateString(i18n.resolvedLanguage)} – ${new Date(end.getTime() - 1).toLocaleDateString(i18n.resolvedLanguage)}`}
+                      : formatDateRange(start, new Date(end.getTime() - 1))}
                   </Button.Label>
                 </Button>
                 <Button
@@ -262,9 +265,7 @@ export function CategoryDetailsScreen() {
                       <Text className="font-sans text-xs text-muted">
                         {item.timestamp == null
                           ? t("categories.details.unknownDate")
-                          : new Date(item.timestamp).toLocaleDateString(
-                              i18n.resolvedLanguage,
-                            )}
+                          : formatDate(new Date(item.timestamp))}
                       </Text>
                     </View>
                     <Text

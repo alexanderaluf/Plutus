@@ -1,27 +1,32 @@
 import { Chip } from "heroui-native";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useLocalData } from "@/data/local-data-provider";
-import {
-  selectDailySpending,
-  selectMonthlySummary,
-  selectSpendingCategories,
-} from "@/data/selectors/document-selectors";
+import { selectProfileReport } from "@/data/selectors/report-selectors";
+import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { useProfiles } from "@/features/profile/profile-provider";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { PageHeader } from "@/shared/ui/page-header";
 import { TabPage } from "@/shared/ui/tab-page";
 
-import { CategoryBreakdown } from "./components/category-breakdown";
-import { SpendingChartCard } from "./components/spending-chart-card";
+import { CategoryDonutCard } from "./components/category-donut-card";
+import { HealthScoreCard } from "./components/health-score-card";
+import { InsightsCard } from "./components/insights-card";
+import { ProfileStatsCard } from "./components/profile-stats-card";
+import { SpendingPaceCard } from "./components/spending-pace-card";
+import { TrendChartCard } from "./components/trend-chart-card";
 
 export function ReportsScreen() {
   const { activeProfile } = useProfiles();
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
   const { document } = useLocalData();
-  const summary = selectMonthlySummary(document);
-  const dailySpending = selectDailySpending(document);
-  const spendingCategories = selectSpendingCategories(document);
-  const dailyAverage = summary.spent / Math.max(new Date().getDate(), 1);
+  const { formatDayMonth } = useAppDate();
+  const now = useCategoryClock();
+  const report = useMemo(
+    () => selectProfileReport(document, activeProfile.currencyCode, now),
+    [document, activeProfile.currencyCode, now],
+  );
 
   return (
     <TabPage
@@ -31,9 +36,9 @@ export function ReportsScreen() {
           action={
             <Chip color="default" size="sm" variant="secondary">
               <Chip.Label className="font-manrope-bold">
-                {new Date().toLocaleDateString(i18n.resolvedLanguage, {
-                  month: "long",
-                })}
+                {`${formatDayMonth(report.period.start)} – ${formatDayMonth(
+                  new Date(report.period.end.getTime() - 1),
+                )}`}
               </Chip.Label>
             </Chip>
           }
@@ -43,17 +48,12 @@ export function ReportsScreen() {
         />
       }
     >
-      <SpendingChartCard
-        changePercent={0}
-        dailyAverage={dailyAverage}
-        dailySpending={dailySpending}
-        totalSpent={summary.spent}
-        currencyCode={activeProfile.currencyCode}
-      />
-      <CategoryBreakdown
-        categories={spendingCategories}
-        currencyCode={activeProfile.currencyCode}
-      />
+      <CategoryDonutCard report={report} />
+      <HealthScoreCard report={report} />
+      <InsightsCard report={report} />
+      <ProfileStatsCard report={report} />
+      <TrendChartCard report={report} />
+      <SpendingPaceCard report={report} />
     </TabPage>
   );
 }

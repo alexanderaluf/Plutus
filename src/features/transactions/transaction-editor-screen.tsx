@@ -57,7 +57,7 @@ import { CurrencySelectorSheet } from "@/features/profile/components/currency-se
 import { currencies } from "@/features/profile/data/currencies-data";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { useAppLocalization } from "@/localization/localization-provider";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { DateTimePopover } from "@/shared/ui/date-time-popover";
@@ -118,6 +118,7 @@ function formatTransactionTime(value: Date, locale?: string) {
 }
 
 export function TransactionEditorScreen({ editId }: { editId?: string }) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t, i18n } = useTranslation();
   const { direction } = useAppLocalization();
   const router = useRouter();
@@ -834,6 +835,11 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
               <View style={[styles.headerSpace, { height: 56 + insets.top }]} />
               <View style={styles.selectorSpace} />
               <View
+                // Toggling pointerEvents flips whether Fabric can flatten this
+                // view away. Unflattening it mid-save reparents every child at
+                // once and crashes the Android mounting layer with "addViewAt:
+                // ... the specified child already has a parent".
+                collapsable={false}
                 pointerEvents={isSaving ? "none" : "auto"}
                 className="gap-4 px-5"
               >
@@ -1293,6 +1299,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           <TopSafeAreaGradient headerHidden={headerHidden} />
 
           <View
+            collapsable={false}
             pointerEvents={headerHidden ? "none" : "box-none"}
             accessibilityElementsHidden={headerHidden}
             importantForAccessibility={
@@ -1331,6 +1338,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           </View>
 
           <Animated.View
+            collapsable={false}
             pointerEvents={isSaving ? "none" : "auto"}
             style={[
               styles.selectorDock,

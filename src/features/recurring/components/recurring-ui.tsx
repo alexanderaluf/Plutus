@@ -24,7 +24,7 @@ import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { RecordIcon } from "@/shared/ui/record-icon";
 import { Text } from "@/shared/ui/app-text";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorForeground } from "@/shared/icons/colors";
 
 export function RecurringScrim() {
@@ -152,6 +152,11 @@ export function RecurringEditorShell({
             >
               <View style={{ height: 140 + insets.top }} />
               <View
+                // Toggling pointerEvents flips whether Fabric can flatten this
+                // view away. Unflattening it mid-save reparents every child at
+                // once and crashes the Android mounting layer with "addViewAt:
+                // ... the specified child already has a parent".
+                collapsable={false}
                 pointerEvents={busy ? "none" : "auto"}
                 className="gap-5 px-4"
               >
@@ -161,6 +166,7 @@ export function RecurringEditorShell({
           </BlurTargetView>
           <TopSafeAreaGradient headerHidden={hidden} />
           <View
+            collapsable={false}
             pointerEvents={hidden ? "none" : "box-none"}
             accessibilityElementsHidden={hidden}
             importantForAccessibility={hidden ? "no-hide-descendants" : "auto"}
@@ -202,6 +208,7 @@ export function RecurringEditorShell({
             </Animated.View>
           </View>
           <Animated.View
+            collapsable={false}
             pointerEvents={busy ? "none" : "auto"}
             style={{
               position: "absolute",
@@ -265,6 +272,7 @@ export function MoneyLines({
   emptyCurrency?: string;
   large?: boolean;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   return (
     <View className="gap-1">
       {(values.length

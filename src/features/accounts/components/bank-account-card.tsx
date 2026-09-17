@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -22,6 +22,7 @@ export function BankAccountCard({
   account: Account;
   showDetails?: boolean;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const theme = useAppThemeColors();
   const net = account.monthlyIncome - account.monthlyExpense;
@@ -305,6 +306,7 @@ function Stat({
   prefix?: string;
   value: number;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   return (
     <View style={styles.stat}>
       <View style={styles.statLabel}>

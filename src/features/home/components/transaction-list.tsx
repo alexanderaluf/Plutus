@@ -8,7 +8,7 @@ import { Pressable, View } from "react-native";
 import { Text } from "@/shared/ui/app-text";
 import { useTranslation } from "react-i18next";
 
-import { formatSignedCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha } from "@/shared/theme/app-theme";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
@@ -26,6 +26,7 @@ export const TransactionRow = memo(function TransactionRow({
   showBorder,
   onPress,
 }: TransactionRowProps) {
+  const { formatSignedCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const directionIcon: FilledIconName =
     transaction.amount >= 0 ? "arrow-bottom-left" : "arrow-top-right";

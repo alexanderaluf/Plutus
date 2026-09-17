@@ -1,9 +1,11 @@
-import { Button, Card } from "heroui-native";
+import { Button } from "heroui-native";
 import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 import { useTranslation } from "react-i18next";
 
+import { useLocalData } from "@/data/local-data-provider";
+import { selectProfileRecordCounts } from "@/data/selectors/document-selectors";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
 import type { UserProfile } from "../types";
@@ -18,6 +20,105 @@ type ProfileListProps = {
   onCreate: () => void;
 };
 
+type ProfileCardProps = Omit<ProfileListProps, "profiles" | "onCreate"> & {
+  profile: UserProfile;
+};
+
+function ProfileCard({
+  activeProfileId,
+  profile,
+  onSelect,
+  onEdit,
+  onDelete,
+}: ProfileCardProps) {
+  const { t } = useTranslation();
+  const { document } = useLocalData();
+  const isActive = profile.id === activeProfileId;
+  const counts = selectProfileRecordCounts(document, profile.id);
+  const roleLabel =
+    profile.role === "Personal"
+      ? t("profile.manage.roles.personal")
+      : profile.role === "Shared budget"
+        ? t("profile.manage.roles.sharedBudget")
+        : profile.role;
+
+  return (
+    <Pressable
+      accessibilityLabel={t("profile.manage.select", { name: profile.name })}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+      onPress={() => onSelect(profile.id)}
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+      className={`gap-4 rounded-3xl border bg-surface p-4 ${
+        isActive ? "border-accent" : "border-border"
+      }`}
+    >
+      <View className="flex-row items-center gap-3">
+        <ProfileAvatar
+          color={profile.color}
+          imageUri={profile.imageUri}
+          initials={profile.initials}
+          size="md"
+        />
+        <View className="flex-1">
+          <Text
+            numberOfLines={1}
+            className="font-manrope-bold text-base text-foreground"
+          >
+            {profile.name}
+          </Text>
+          <Text numberOfLines={1} className="mt-0.5 font-sans text-sm text-muted">
+            {`${roleLabel} · ${profile.currencyCode.toUpperCase()}`}
+          </Text>
+        </View>
+        {isActive ? (
+          <View className="flex-row items-center gap-1 rounded-full bg-accent/15 px-2.5 py-1">
+            <FilledIcon name="check" size={14} tone="accent" />
+            <Text className="font-manrope-semibold text-xs text-accent">
+              {t("profile.manage.card.active")}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View className="flex-row items-center justify-between border-t border-border pt-3">
+        <View className="flex-1 flex-row items-center gap-4">
+          <Text className="font-sans text-xs text-muted">
+            {t("profile.manage.card.accounts", { count: counts.accounts })}
+          </Text>
+          <Text className="font-sans text-xs text-muted">
+            {t("profile.manage.card.transactions", {
+              count: counts.transactions,
+            })}
+          </Text>
+        </View>
+        <View className="flex-row items-center">
+          <Button
+            accessibilityLabel={t("profile.manage.edit", { name: profile.name })}
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            onPress={() => onEdit(profile)}
+          >
+            <FilledIcon name="pencil" size={18} tone="muted" />
+          </Button>
+          <Button
+            accessibilityLabel={t("profile.manage.delete.accessibility", {
+              name: profile.name,
+            })}
+            isIconOnly
+            size="sm"
+            variant="ghost"
+            onPress={() => onDelete(profile)}
+          >
+            <FilledIcon name="delete" size={18} tone="danger" />
+          </Button>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 export function ProfileList({
   profiles,
   activeProfileId,
@@ -28,24 +129,16 @@ export function ProfileList({
 }: ProfileListProps) {
   const { t } = useTranslation();
 
-  function getRoleLabel(role: string) {
-    if (role === "Personal") return t("profile.manage.roles.personal");
-    if (role === "Shared budget") {
-      return t("profile.manage.roles.sharedBudget");
-    }
-    return role;
-  }
-
   return (
-    <Card className="border border-border bg-surface p-0">
-      <Card.Header className="flex-row items-center justify-between px-5 pb-2 pt-5">
-        <View>
-          <Card.Title className="font-manrope-bold text-lg text-foreground">
+    <View className="gap-4">
+      <View className="flex-row items-center justify-between gap-3">
+        <View className="flex-1">
+          <Text className="font-manrope-bold text-lg text-foreground">
             {t("profile.manage.profiles")}
-          </Card.Title>
-          <Card.Description className="mt-1 font-sans text-muted">
+          </Text>
+          <Text className="mt-1 font-sans text-sm text-muted">
             {t("profile.manage.description")}
-          </Card.Description>
+          </Text>
         </View>
         <Button
           accessibilityLabel={t("profile.manage.create")}
@@ -56,75 +149,18 @@ export function ProfileList({
         >
           <FilledIcon name="plus" size={20} tone="accent-foreground" />
         </Button>
-      </Card.Header>
+      </View>
 
-      <Card.Body className="px-5 pb-3">
-        {profiles.map((profile, index) => {
-          const isActive = profile.id === activeProfileId;
-
-          return (
-            <View
-              key={profile.id}
-              className={`flex-row items-center py-3 ${
-                index < profiles.length - 1 ? "border-b border-border" : ""
-              }`}
-            >
-              <Pressable
-                accessibilityLabel={t("profile.manage.select", {
-                  name: profile.name,
-                })}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-                className="flex-1 flex-row items-center"
-                onPress={() => onSelect(profile.id)}
-              >
-                <ProfileAvatar
-                  color={profile.color}
-                  imageUri={profile.imageUri}
-                  initials={profile.initials}
-                  size="md"
-                />
-                <View className="ms-3 flex-1">
-                  <Text className="font-manrope-bold text-sm text-foreground">
-                    {profile.name}
-                  </Text>
-                  <Text className="mt-0.5 font-sans text-xs text-muted">
-                    {getRoleLabel(profile.role)}
-                  </Text>
-                </View>
-
-                {isActive ? (
-                  <View className="me-1 size-7 items-center justify-center rounded-full bg-accent/15">
-                    <FilledIcon name="check" size={18} tone="accent" />
-                  </View>
-                ) : null}
-              </Pressable>
-              <Button
-                accessibilityLabel={t("profile.manage.edit", {
-                  name: profile.name,
-                })}
-                isIconOnly
-                size="sm"
-                variant="ghost"
-                onPress={() => onEdit(profile)}
-              >
-                <FilledIcon name="pencil" size={18} tone="muted" />
-              </Button>
-              <Button
-                accessibilityLabel={t("profile.manage.delete.accessibility", {
-                  name: profile.name,
-                })}
-                isIconOnly
-                size="sm"
-                variant="ghost"
-                onPress={() => onDelete(profile)}
-              >
-                <FilledIcon name="delete" size={18} tone="danger" />
-              </Button>
-            </View>
-          );
-        })}
-      </Card.Body>
-    </Card>
+      {profiles.map((profile) => (
+        <ProfileCard
+          key={profile.id}
+          activeProfileId={activeProfileId}
+          profile={profile}
+          onDelete={onDelete}
+          onEdit={onEdit}
+          onSelect={onSelect}
+        />
+      ))}
+    </View>
   );
 }

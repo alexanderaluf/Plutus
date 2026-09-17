@@ -263,6 +263,13 @@ export const en = {
         personal: "Personal",
         sharedBudget: "Shared budget",
       },
+      card: {
+        active: "Active",
+        accounts_one: "{{count}} account",
+        accounts_other: "{{count}} accounts",
+        transactions_one: "{{count}} transaction",
+        transactions_other: "{{count}} transactions",
+      },
     },
     avatarAccessibility: "Profile {{initials}}",
     photo: {
@@ -1176,7 +1183,12 @@ export const en = {
   home: {
     loadError: "Home data could not be loaded. Your saved data is unchanged.",
     retryLoad: "Try again",
-    greeting: "Good morning, {{name}}",
+    greetings: {
+      morning: "Good morning, {{name}}",
+      afternoon: "Good afternoon, {{name}}",
+      evening: "Good evening, {{name}}",
+      night: "Good night, {{name}}",
+    },
     openProfile: "Open profile",
     overview: {
       title: "Overview",
@@ -1326,6 +1338,9 @@ export const en = {
       },
     },
     results: {
+      promptTitle: "Search your records",
+      promptDescription: "Type a merchant, category, or account name.",
+      truncated: "Showing the first {{count}} matches. Refine your search to narrow them.",
       emptyTitle: "No matching transactions",
       emptyDescription: "Try a merchant, category, or account name.",
       title: "Results",
@@ -1345,11 +1360,155 @@ export const en = {
       dayAccessibility: "{{day}} spending: {{amount}}",
       dailyAverage: "Daily average",
     },
+    donut: {
+      title: "Where your money goes",
+      subtitle: "By parent category",
+      total: "Total spent",
+      empty: "No spending recorded this month.",
+      other: "Other",
+      groups: "{{count}} subcategories",
+    },
     categories: {
       title: "Category breakdown",
       description: "Share of total spending",
       itemAccessibility: "{{label}}: {{amount}}, {{percentage}}",
       empty: "No spending categories this month.",
+      up: "+{{percent}}% vs last month",
+      down: "{{percent}}% vs last month",
+      new: "New this month",
+    },
+    health: {
+      title: "Financial health",
+      outOf: "out of 100",
+      bands: {
+        strong: "Strong",
+        steady: "Steady",
+        fragile: "Needs attention",
+      },
+      summary: {
+        strong:
+          "You are earning more than you spend and staying inside your limits.",
+        steady:
+          "The essentials are covered, but there is room to build more margin.",
+        fragile:
+          "Spending is outpacing what is coming in. Start with the actions below.",
+      },
+      empty: "Add income and spending to see your financial health.",
+    },
+    kpi: {
+      income: "Income",
+      expenses: "Expenses",
+      net: "Net",
+      savingsRate: "Savings rate",
+      vsPrevious: "vs last month",
+      noComparison: "No comparison yet",
+    },
+    trend: {
+      title: "Six-month trend",
+      description: "Income against expenses for each financial month",
+      income: "Income",
+      expenses: "Expenses",
+      empty: "No activity recorded in the last six months.",
+    },
+    pace: {
+      title: "This month's pace",
+      description: "Where spending is heading before the period closes",
+      spent: "Spent so far",
+      projected: "Projected by period end",
+      previous: "Last month's total",
+      elapsed: "{{percent}}% of the period has passed",
+    },
+    commitments: {
+      title: "Fixed commitments",
+      description: "Recurring payments measured against your income",
+      monthly: "Every month",
+      share: "{{percent}}% of income",
+      noIncome: "Add income to measure this",
+      budgets: "Budgets on track",
+      budgetsValue: "{{onTrack}} of {{total}}",
+      netWorth: "Net worth",
+      credit: "Credit used",
+    },
+    stats: {
+      title: "At a glance",
+      records: "Records",
+      activeDays: "Days with spending",
+      accounts: "Accounts",
+      averageExpense: "Average expense",
+      largest: "Largest expense",
+      recurring: "Recurring monthly",
+      netWorth: "Net worth",
+      budgets: "Budgets in limit",
+      credit: "Credit used",
+    },
+    insights: {
+      title: "What this means",
+      description: "Findings from your records, and what to do next",
+      recommendation: "What to do",
+      needsData: {
+        title: "Not enough records yet",
+        recommendation: "Add accounts and a few transactions.",
+      },
+      overspending: {
+        title: "Spending exceeds income",
+        recommendation: "Close a {{gap}} gap this period.",
+      },
+      budgetsOver: {
+        title: "{{count}} budget over limit",
+        recommendation: "Pause spending in \"{{name}}\".",
+      },
+      creditHigh: {
+        title: "Credit use {{utilization}}%",
+        recommendation: "Pay down before new purchases.",
+      },
+      lowSavings: {
+        title: "Keeping only {{rate}}%",
+        recommendation: "Set aside 20% when income lands.",
+      },
+      concentration: {
+        title: "{{name}} is {{share}}% of spending",
+        recommendation: "Trim here for the biggest effect.",
+      },
+      categorySpike: {
+        title: "{{name}} up {{percent}}%",
+        recommendation: "One-off? Otherwise budget it.",
+      },
+      recurringHeavy: {
+        title: "Fixed costs {{share}}% of income",
+        recommendation: "Cancel what you no longer use.",
+      },
+      creditModerate: {
+        title: "Credit use {{utilization}}%",
+        recommendation: "Bring it under 30%.",
+      },
+      pace: {
+        title: "On pace for {{projected}}",
+        recommendation: "Slow discretionary spending now.",
+      },
+      negativeNetWorth: {
+        title: "Owe {{amount}} more than held",
+        recommendation: "Put spare cash on the largest debt.",
+      },
+      budgetsAtRisk: {
+        title: "{{count}} budget near limit",
+        recommendation: "Ease off \"{{name}}\".",
+      },
+      strongSavings: {
+        title: "Saving {{rate}}% of income",
+        recommendation: "Keep it automatic.",
+      },
+      budgetsOnTrack: {
+        title: "All {{count}} budgets on track",
+        recommendation: "Leave the limits as they are.",
+      },
+      expensesDown: {
+        title: "Spending down {{percent}}%",
+        recommendation: "Move the difference to savings.",
+      },
+      maintain: {
+        title: "Position is stable",
+        recommendation: "Keep recording; review next period.",
+      },
     },
   },
   navigation: {

@@ -3,7 +3,8 @@ import { Button } from "heroui-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 import type { Recurring } from "@/data/selectors/recurring-selectors";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -22,9 +23,11 @@ export function RecurringCard({
   onProcess: () => void;
   onSkip: () => void;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDateTime } = useAppDate();
   const c = useAppThemeColors(),
     router = useRouter(),
-    { t, i18n } = useTranslation();
+    { t } = useTranslation();
   return (
     <View
       style={{
@@ -76,7 +79,7 @@ export function RecurringCard({
             />
             <Text className="flex-1 text-xs text-muted">
               {item.next
-                ? `${t("recurring.next")} ${item.next.toLocaleString(i18n.resolvedLanguage, { dateStyle: "medium", timeStyle: "short" })}`
+                ? `${t("recurring.next")} ${formatDateTime(item.next)}`
                 : t(item.valid ? "recurring.ended" : "recurring.unsupported")}
             </Text>
             {item.automatic && (

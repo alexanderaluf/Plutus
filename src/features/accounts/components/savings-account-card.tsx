@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { StyleSheet, View } from "react-native";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -21,6 +21,7 @@ export function SavingsAccountCard({
   account: Account;
   showDetails?: boolean;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const theme = useAppThemeColors();
   const summary = account.savingsSummary;
@@ -270,6 +271,7 @@ export function SavingsAccountCard({
 }
 
 function SimpleSavingsAccountCard({ account }: { account: Account }) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const theme = useAppThemeColors();
 

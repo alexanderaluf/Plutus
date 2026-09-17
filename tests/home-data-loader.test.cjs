@@ -404,23 +404,25 @@ test("currency formatting reuses formatters and still follows locale/sign change
   try {
     await i18n.changeLanguage("en");
     for (let i = 0; i < 100; i++) {
-      assert.equal(formatCurrency(-1, "USD"), "$1.00");
-      assert.equal(formatSignedCurrency(-1, "USD"), "-$1.00");
+      // The symbol always trails the amount, in every language.
+      assert.equal(formatCurrency(-1, "USD"), "1.00$");
+      assert.equal(formatSignedCurrency(-1, "USD"), "-1.00$");
     }
-    assert.equal(constructed, 2);
+    // Two cached entries (signed and unsigned), each deriving the locale symbol
+    // from a reference formatter plus the number formatter it reuses.
+    assert.equal(constructed, 4);
     await i18n.changeLanguage("ru");
     assert.equal(
       formatCurrency(1, "USD"),
-      new NumberFormat("ru", {
-        style: "currency",
-        currency: "USD",
+      `${new NumberFormat("ru", {
         minimumFractionDigits: 2,
-      }).format(1),
+        maximumFractionDigits: 2,
+      }).format(1)}$`,
     );
-    assert.equal(constructed, 3);
+    assert.equal(constructed, 6);
     await i18n.changeLanguage("en");
-    assert.equal(formatCurrency(1), "$1.00");
-    assert.equal(constructed, 3);
+    assert.equal(formatCurrency(1), "1.00$");
+    assert.equal(constructed, 6);
   } finally {
     Intl.NumberFormat = NumberFormat;
     await i18n.changeLanguage("en");

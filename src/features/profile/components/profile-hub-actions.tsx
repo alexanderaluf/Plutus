@@ -1,7 +1,6 @@
 import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
-import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
@@ -45,23 +44,8 @@ export function ProfileHubActions({
   onSettings,
 }: ProfileHubActionsProps) {
   const { t } = useTranslation();
-  const router = useRouter();
   return (
     <View className="gap-4">
-      <View className="overflow-hidden rounded-3xl">
-        <ActionRow
-          icon="wallet"
-          label={t("budgets.list.title")}
-          onPress={() => router.push("/budgets")}
-        />
-      </View>
-      <View className="overflow-hidden rounded-3xl">
-        <ActionRow
-          icon="shopping"
-          label={t("categories.common.title")}
-          onPress={() => router.push("/categories")}
-        />
-      </View>
       <View className="gap-0.5 overflow-hidden rounded-3xl bg-background">
         <ActionRow
           icon="plus"

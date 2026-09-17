@@ -1,7 +1,8 @@
 import { View } from "react-native";
 import { useTranslation } from "react-i18next";
 import type { selectRecurringTransactionSnapshot } from "@/data/selectors/recurring-selectors";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { Text } from "@/shared/ui/app-text";
 
 type RecurringTransactionSnapshot = NonNullable<
@@ -13,6 +14,8 @@ export function RecurringPaymentSnapshot({
 }: {
   snapshot: RecurringTransactionSnapshot | null;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDateTime } = useAppDate();
   const { t, i18n } = useTranslation();
   const rtl = i18n.dir(i18n.resolvedLanguage ?? i18n.language) === "rtl";
   const textStyle = {
@@ -20,11 +23,7 @@ export function RecurringPaymentSnapshot({
     textAlign: rtl ? ("right" as const) : ("left" as const),
   };
   if (!snapshot) return null;
-  const date = (value: string) =>
-    new Date(value).toLocaleString(i18n.resolvedLanguage, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+  const date = (value: string) => formatDateTime(new Date(value));
   const rows = [
     [
       t("recurring.original"),

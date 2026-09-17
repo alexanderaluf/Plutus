@@ -110,7 +110,8 @@ export function ProfileScreen() {
             className="items-center"
           >
             <ProfileAvatar
-              color={activeProfile.imageUri ? "#242424" : activeProfile.color}
+              // Left undefined so the avatar follows the theme accent color.
+              color={activeProfile.imageUri ? "#242424" : undefined}
               dimension={84}
               imageUri={activeProfile.imageUri}
               initials={activeProfile.initials}

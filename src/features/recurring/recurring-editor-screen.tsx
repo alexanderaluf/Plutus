@@ -1,3 +1,4 @@
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { useLocalData } from "@/data/local-data-provider";
 import {
   RECURRING_PERIODS,
@@ -98,6 +99,7 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
     router = useRouter(),
     c = useAppThemeColors(),
     { t, i18n } = useTranslation();
+  const { formatDate } = useAppDate();
   const existing = editId
     ? selectRecurrings(document).find((r) => r.id === editId)
     : null;
@@ -338,9 +340,7 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
                   </Text>
                   <Text className="font-manrope-semibold text-base text-foreground">
                     {key === "start"
-                      ? new Date(draft.startAt).toLocaleDateString(
-                          i18n.resolvedLanguage,
-                        )
+                      ? formatDate(new Date(draft.startAt))
                       : new Date(draft.startAt).toLocaleTimeString(
                           i18n.resolvedLanguage,
                           { hour: "2-digit", minute: "2-digit" },
@@ -472,9 +472,7 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
               </Text>
               <Text className="text-muted">
                 {draft.endAt
-                  ? new Date(draft.endAt).toLocaleDateString(
-                      i18n.resolvedLanguage,
-                    )
+                  ? formatDate(new Date(draft.endAt))
                   : t("recurring.noEnd")}
               </Text>
               <DateTimePopover

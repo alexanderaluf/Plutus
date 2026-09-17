@@ -252,6 +252,13 @@ export const he = {
         personal: "אישי",
         sharedBudget: "תקציב משותף",
       },
+      card: {
+        active: "פעיל",
+        accounts_one: "חשבון {{count}}",
+        accounts_other: "{{count}} חשבונות",
+        transactions_one: "תנועה {{count}}",
+        transactions_other: "{{count}} תנועות",
+      },
     },
     avatarAccessibility: "פרופיל {{initials}}",
     photo: {
@@ -1152,7 +1159,12 @@ export const he = {
   home: {
     loadError: "לא ניתן לטעון את נתוני הבית. הנתונים השמורים לא השתנו.",
     retryLoad: "נסו שוב",
-    greeting: "בוקר טוב, {{name}}",
+    greetings: {
+      morning: "בוקר טוב, {{name}}",
+      afternoon: "צהריים טובים, {{name}}",
+      evening: "ערב טוב, {{name}}",
+      night: "לילה טוב, {{name}}",
+    },
     openProfile: "פתיחת פרופיל",
     overview: {
       title: "סקירה",
@@ -1299,6 +1311,9 @@ export const he = {
       },
     },
     results: {
+      promptTitle: "חפשו ברשומות שלכם",
+      promptDescription: "הקלידו שם בית עסק, קטגוריה או חשבון.",
+      truncated: "מוצגות {{count}} התוצאות הראשונות. דייקו את החיפוש כדי לצמצם.",
       emptyTitle: "לא נמצאו עסקאות מתאימות",
       emptyDescription: "נסו לחפש לפי בית עסק, קטגוריה או שם חשבון.",
       title: "תוצאות",
@@ -1317,11 +1332,152 @@ export const he = {
       dayAccessibility: "הוצאות ב־{{day}}: {{amount}}",
       dailyAverage: "ממוצע יומי",
     },
+    donut: {
+      title: "לאן הכסף הולך",
+      subtitle: "לפי קטגוריית אב",
+      total: "סך ההוצאות",
+      empty: "לא נרשמו הוצאות החודש.",
+      other: "אחר",
+      groups: "{{count}} תת-קטגוריות",
+    },
     categories: {
       title: "פירוט לפי קטגוריות",
       description: "החלק מתוך סך ההוצאות",
       itemAccessibility: "{{label}}: {{amount}}, {{percentage}}",
       empty: "אין הוצאות לפי קטגוריות החודש.",
+      up: "‎+{{percent}}% מהחודש שעבר",
+      down: "‎{{percent}}% מהחודש שעבר",
+      new: "חדש החודש",
+    },
+    health: {
+      title: "בריאות פיננסית",
+      outOf: "מתוך 100",
+      bands: {
+        strong: "חזק",
+        steady: "יציב",
+        fragile: "דורש תשומת לב",
+      },
+      summary: {
+        strong: "אתם מכניסים יותר ממה שאתם מוציאים ונשארים בתוך המסגרת.",
+        steady: "ההוצאות הבסיסיות מכוסות, אבל אפשר להגדיל את המרווח.",
+        fragile: "ההוצאות גדולות מההכנסות. התחילו מהפעולות שלמטה.",
+      },
+      empty: "הוסיפו הכנסות והוצאות כדי לראות את המצב הפיננסי.",
+    },
+    kpi: {
+      income: "הכנסות",
+      expenses: "הוצאות",
+      net: "נטו",
+      savingsRate: "שיעור חיסכון",
+      vsPrevious: "מול החודש שעבר",
+      noComparison: "אין עדיין השוואה",
+    },
+    trend: {
+      title: "מגמה של שישה חודשים",
+      description: "הכנסות מול הוצאות בכל חודש פיננסי",
+      income: "הכנסות",
+      expenses: "הוצאות",
+      empty: "אין פעילות בששת החודשים האחרונים.",
+    },
+    pace: {
+      title: "הקצב החודש",
+      description: "לאן ההוצאות מובילות לפני סוף התקופה",
+      spent: "הוצאתם עד כה",
+      projected: "תחזית לסוף התקופה",
+      previous: "סך החודש שעבר",
+      elapsed: "עברו {{percent}}% מהתקופה",
+    },
+    commitments: {
+      title: "התחייבויות קבועות",
+      description: "תשלומים חוזרים ביחס להכנסה שלכם",
+      monthly: "בכל חודש",
+      share: "{{percent}}% מההכנסה",
+      noIncome: "הוסיפו הכנסה כדי למדוד זאת",
+      budgets: "תקציבים במסלול",
+      budgetsValue: "{{onTrack}} מתוך {{total}}",
+      netWorth: "שווי נקי",
+      credit: "ניצול אשראי",
+    },
+    stats: {
+      title: "במבט מהיר",
+      records: "רשומות",
+      activeDays: "ימים עם הוצאות",
+      accounts: "חשבונות",
+      averageExpense: "הוצאה ממוצעת",
+      largest: "ההוצאה הגדולה",
+      recurring: "קבוע בחודש",
+      netWorth: "שווי נקי",
+      budgets: "תקציבים במסגרת",
+      credit: "ניצול אשראי",
+    },
+    insights: {
+      title: "מה זה אומר",
+      description: "ממצאים מהנתונים שלכם, ומה לעשות הלאה",
+      recommendation: "מה לעשות",
+      needsData: {
+        title: "אין עדיין מספיק נתונים",
+        recommendation: "הוסיפו חשבונות וכמה תנועות.",
+      },
+      overspending: {
+        title: "ההוצאות גבוהות מההכנסות",
+        recommendation: "סגרו פער של {{gap}} בתקופה.",
+      },
+      budgetsOver: {
+        title: "{{count}} תקציבים בחריגה",
+        recommendation: "עצרו הוצאות ב״{{name}}״.",
+      },
+      creditHigh: {
+        title: "ניצול אשראי {{utilization}}%",
+        recommendation: "החזירו חוב לפני רכישות חדשות.",
+      },
+      lowSavings: {
+        title: "נשמרים רק {{rate}}%",
+        recommendation: "הפרישו 20% עם קבלת ההכנסה.",
+      },
+      concentration: {
+        title: "{{name}} הם {{share}}% מההוצאות",
+        recommendation: "קיצוץ כאן ישפיע הכי הרבה.",
+      },
+      categorySpike: {
+        title: "{{name}} עלתה ב־{{percent}}%",
+        recommendation: "חד־פעמי? אחרת הגדירו תקציב.",
+      },
+      recurringHeavy: {
+        title: "קבועות {{share}}% מההכנסה",
+        recommendation: "בטלו מה שאינכם משתמשים בו.",
+      },
+      creditModerate: {
+        title: "ניצול אשראי {{utilization}}%",
+        recommendation: "רדו מתחת ל־30%.",
+      },
+      pace: {
+        title: "בקצב ל־{{projected}}",
+        recommendation: "האטו הוצאות לא הכרחיות.",
+      },
+      negativeNetWorth: {
+        title: "חוב עודף של {{amount}}",
+        recommendation: "הפנו עודפים לחוב הגדול.",
+      },
+      budgetsAtRisk: {
+        title: "{{count}} תקציבים קרובים לגבול",
+        recommendation: "האטו ב״{{name}}״.",
+      },
+      strongSavings: {
+        title: "חוסכים {{rate}}% מההכנסה",
+        recommendation: "שמרו על זה אוטומטי.",
+      },
+      budgetsOnTrack: {
+        title: "כל {{count}} התקציבים במסלול",
+        recommendation: "השאירו את המסגרות.",
+      },
+      expensesDown: {
+        title: "ההוצאות ירדו ב־{{percent}}%",
+        recommendation: "העבירו את ההפרש לחיסכון.",
+      },
+      maintain: {
+        title: "המצב יציב",
+        recommendation: "המשיכו לרשום ובדקו בתקופה הבאה.",
+      },
     },
   },
   navigation: {

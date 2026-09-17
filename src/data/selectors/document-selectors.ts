@@ -28,6 +28,7 @@ import type { AccountDraft } from "../model/account-record";
 import {
   identity,
   references,
+  categoryParent,
   createProfileMatcher,
 } from "../model/category-record";
 import {
@@ -121,6 +122,25 @@ function ownedAccountRecords(document: BackupDocument) {
       record.user === profileId ||
       (owner?.id != null && record.user === owner.id),
   );
+}
+
+/** Mirrors `ownedAccountRecords`: unassigned records belong to every profile. */
+export function selectProfileRecordCounts(
+  document: BackupDocument,
+  profileId: string,
+) {
+  const owner = document.users.find(
+    (user) => String(user.uuid ?? user.id) === profileId,
+  );
+  const owns = (record: JsonObject) =>
+    record.user == null ||
+    record.user === profileId ||
+    (owner?.id != null && record.user === owner.id);
+
+  return {
+    accounts: document.accounts.filter(owns).length,
+    transactions: document.transactions.filter(owns).length,
+  };
 }
 
 function accountBalance(record: JsonObject, index: number) {
@@ -897,6 +917,86 @@ function includedTransactions(document: BackupDocument) {
     .filter(belongs);
 }
 
+/**
+ * Searching projects only the records it returns. The previous approach built a
+ * view model for every transaction (with a linear account/category lookup each)
+ * before the screen could paint, which froze navigation on large profiles.
+ */
+export function selectSearchMatches(
+  document: BackupDocument,
+  query: string,
+  limit = 60,
+): { results: SearchResult[]; total: number } {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return { results: [], total: 0 };
+
+  // Built once per search instead of once per transaction.
+  const names = (records: JsonObject[]) => {
+    const byId = new Map<string, string>();
+    for (const record of records) {
+      const name = text(record.name);
+      for (const key of [record.uuid, record.id])
+        if (key != null) byId.set(String(key), name);
+    }
+    return byId;
+  };
+  const categoryNames = names(document.categories);
+  const accountNames = names(document.accounts);
+  const accountsById = new Map<string, JsonObject>();
+  for (const record of document.accounts)
+    for (const key of [record.uuid, record.id])
+      if (key != null) accountsById.set(String(key), record);
+
+  const results: SearchResult[] = [];
+  let total = 0;
+
+  for (let index = 0; index < document.transactions.length; index++) {
+    const record = document.transactions[index];
+    const category = text(
+      record.categoryName,
+      record.category == null
+        ? i18n.t("common.uncategorized")
+        : (categoryNames.get(String(record.category)) ??
+          String(record.category)),
+    );
+    const account = text(
+      record.accountName,
+      record.account == null
+        ? i18n.t("common.uncategorized")
+        : (accountNames.get(String(record.account)) ?? String(record.account)),
+    );
+    const title = text(record.name, i18n.t("common.untitledTransaction"));
+    const matches = [title, category, account].some((value) =>
+      value.toLocaleLowerCase().includes(needle),
+    );
+    if (!matches) continue;
+
+    total++;
+    if (results.length >= limit) continue;
+
+    const accountRecord =
+      record.account == null
+        ? undefined
+        : accountsById.get(String(record.account));
+    const currencyCode = text(
+      record.currencyCode,
+      text(accountRecord?.currencyCode, "USD"),
+    ).toUpperCase();
+    results.push({
+      id: recordId(record, index),
+      title,
+      category,
+      account,
+      date: transactionDate(record, document),
+      amount: transactionAmount(record),
+      currencyCode: /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : "USD",
+      icon: categoryIcon(category),
+    });
+  }
+
+  return { results, total };
+}
+
 export function selectSearchResults(document: BackupDocument): SearchResult[] {
   return document.transactions.map((record, index) => {
     const category = text(
@@ -938,6 +1038,200 @@ function reportingAmount(document: BackupDocument, transaction: JsonObject) {
     money?.amount ??
     Math.abs(number(transaction.accountAmount, number(transaction.amount)))
   );
+}
+
+/** Income and expense totals for an arbitrary window, in the profile currency. */
+export function selectMonthlyLedger(
+  document: BackupDocument,
+  start: Date,
+  end: Date,
+  now = new Date(),
+) {
+  let income = 0;
+  let expense = 0;
+  for (const record of includedTransactions(document)) {
+    const date = new Date(text(record.date, text(record.createdAt)));
+    if (!Number.isFinite(date.getTime())) continue;
+    if (date < start || date >= end || date > now) continue;
+    const amount = reportingAmount(document, record);
+    if (number(record.type) === 1) income += amount;
+    else expense += amount;
+  }
+  return { income, expense };
+}
+
+/** Flat per-transaction facts for a window, used for counts and extremes. */
+export function selectPeriodTransactions(
+  document: BackupDocument,
+  start: Date,
+  end: Date,
+  now = new Date(),
+) {
+  const entries: {
+    id: string;
+    label: string;
+    amount: number;
+    isIncome: boolean;
+    day: string;
+  }[] = [];
+  for (const record of includedTransactions(document)) {
+    const date = new Date(text(record.date, text(record.createdAt)));
+    if (!Number.isFinite(date.getTime())) continue;
+    if (date < start || date >= end || date > now) continue;
+    entries.push({
+      id: text(record.uuid, String(record.id ?? entries.length)),
+      label: text(
+        record.name,
+        text(
+          record.categoryName,
+          lookupName(document.categories, record.category),
+        ),
+      ),
+      amount: reportingAmount(document, record),
+      isIncome: number(record.type) === 1,
+      day: date.toISOString().slice(0, 10),
+    });
+  }
+  return entries;
+}
+
+/** Top spending categories for an arbitrary window, ranked by amount. */
+export function selectCategorySpendingBetween(
+  document: BackupDocument,
+  start: Date,
+  end: Date,
+  now = new Date(),
+): SpendingCategory[] {
+  const totals = new Map<string, number>();
+  for (const transaction of includedTransactions(document)) {
+    if (number(transaction.type) === 1) continue;
+    const date = new Date(text(transaction.date, text(transaction.createdAt)));
+    if (!Number.isFinite(date.getTime())) continue;
+    if (date < start || date >= end || date > now) continue;
+    const category = text(
+      transaction.categoryName,
+      lookupName(document.categories, transaction.category),
+    );
+    totals.set(
+      category,
+      (totals.get(category) ?? 0) + reportingAmount(document, transaction),
+    );
+  }
+  const total = [...totals.values()].reduce((sum, value) => sum + value, 0);
+  return [...totals.entries()]
+    .sort(([, left], [, right]) => right - left)
+    .map(([label, amount], index) => ({
+      id: label.toLowerCase().replace(/\W+/g, "-"),
+      label,
+      amount,
+      percentage: total > 0 ? Math.round((amount / total) * 100) : 0,
+      color: colors[index % colors.length],
+    }));
+}
+
+/**
+ * Slice colors for the donut. Categories keep their own color when they have a
+ * distinct one; this palette fills in for the duplicates so no two neighbouring
+ * slices are indistinguishable.
+ */
+const donutColors = [
+  "#70d2eb",
+  "#b89cf5",
+  "#f2c66d",
+  "#ef8175",
+  "#7ee0b8",
+  "#f09ac8",
+  "#8fa8f5",
+  "#e0b184",
+];
+
+export type ParentCategorySpending = {
+  id: string;
+  label: string;
+  amount: number;
+  percentage: number;
+  color: string;
+  /** How many distinct child categories rolled up into this slice. */
+  childCount: number;
+};
+
+/**
+ * Expenses for a window rolled up to each category's top-most ancestor, so the
+ * donut answers "where does my money go" at the level the user files things
+ * under rather than splitting one parent across a dozen leaves.
+ */
+export function selectParentCategorySpendingBetween(
+  document: BackupDocument,
+  start: Date,
+  end: Date,
+  now = new Date(),
+): ParentCategorySpending[] {
+  const categories = createRecordLookup(document.categories);
+  const roots = new Map<string, JsonObject>();
+  // Imported data can contain parent cycles, so every walk is depth-guarded.
+  const rootOf = (record: JsonObject): JsonObject => {
+    const cached = roots.get(identity(record));
+    if (cached) return cached;
+    let current = record;
+    const seen = new Set([identity(record)]);
+    for (;;) {
+      const parent = categories.get(categoryParent(current) ?? undefined);
+      if (!parent || seen.has(identity(parent))) break;
+      seen.add(identity(parent));
+      current = parent;
+    }
+    for (const id of seen) roots.set(id, current);
+    return current;
+  };
+
+  type Bucket = { label: string; amount: number; color: string; children: Set<string> };
+  const buckets = new Map<string, Bucket>();
+  for (const transaction of includedTransactions(document)) {
+    if (number(transaction.type) === 1) continue;
+    const date = new Date(text(transaction.date, text(transaction.createdAt)));
+    if (!Number.isFinite(date.getTime())) continue;
+    if (date < start || date >= end || date > now) continue;
+
+    const record = categories.get(transaction.category);
+    const root = record ? rootOf(record) : null;
+    const key = root
+      ? identity(root)
+      : `unfiled:${text(transaction.categoryName, i18n.t("common.uncategorized"))}`;
+    const bucket = buckets.get(key) ?? {
+      label: root
+        ? text(root.name, i18n.t("common.uncategorized"))
+        : text(transaction.categoryName, i18n.t("common.uncategorized")),
+      amount: 0,
+      color: /^#[a-f\d]{6}$/i.test(text(root?.color)) ? text(root?.color) : "",
+      children: new Set<string>(),
+    };
+    bucket.amount += reportingAmount(document, transaction);
+    if (record && root && identity(record) !== identity(root))
+      bucket.children.add(identity(record));
+    buckets.set(key, bucket);
+  }
+
+  const total = [...buckets.values()].reduce(
+    (sum, bucket) => sum + bucket.amount,
+    0,
+  );
+  const used = new Set<string>();
+  return [...buckets.entries()]
+    .sort(([, left], [, right]) => right.amount - left.amount)
+    .map(([id, bucket], index) => {
+      const own = bucket.color.toLowerCase();
+      const color =
+        own && !used.has(own) ? own : donutColors[index % donutColors.length];
+      used.add(color.toLowerCase());
+      return {
+        id,
+        label: bucket.label,
+        amount: bucket.amount,
+        percentage: total > 0 ? (bucket.amount / total) * 100 : 0,
+        color,
+        childCount: bucket.children.size,
+      };
+    });
 }
 
 export function selectMonthlySummary(

@@ -321,6 +321,11 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               <View style={[styles.headerSpace, { height: 56 + insets.top }]} />
               <View style={styles.selectorSpace} />
               <View
+                // Toggling pointerEvents flips whether Fabric can flatten this
+                // view away. Unflattening it mid-save reparents every child at
+                // once and crashes the Android mounting layer with "addViewAt:
+                // ... the specified child already has a parent".
+                collapsable={false}
                 pointerEvents={isSaving ? "none" : "auto"}
                 className="gap-5 px-5"
               >
@@ -708,6 +713,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
           </BlurTargetView>
           <TopSafeAreaGradient headerHidden={headerHidden} />
           <Animated.View
+            collapsable={false}
             pointerEvents={headerHidden ? "none" : "auto"}
             accessibilityElementsHidden={headerHidden}
             importantForAccessibility={
@@ -741,6 +747,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
             </Text>
           </Animated.View>
           <Animated.View
+            collapsable={false}
             pointerEvents={isSaving ? "none" : "auto"}
             style={[
               styles.selectorDock,

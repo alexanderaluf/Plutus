@@ -4,7 +4,7 @@ import { View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
 import type { DailySpend } from "../types";
@@ -24,6 +24,7 @@ export function SpendingChartCard({
   dailySpending,
   currencyCode,
 }: SpendingChartCardProps) {
+  const { formatCurrency } = useCurrencyFormat();
   const { i18n, t } = useTranslation();
   const maximum = Math.max(...dailySpending.map((item) => item.amount), 1);
   const percentage = new Intl.NumberFormat(i18n.resolvedLanguage, {

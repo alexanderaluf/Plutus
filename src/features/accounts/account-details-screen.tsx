@@ -8,7 +8,8 @@ import {
   shiftAccountPeriodAnchor,
 } from "@/data/selectors/document-selectors";
 import { useAppLocalization } from "@/localization/localization-provider";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { useLocalDayClock } from "@/shared/lib/use-local-day-clock";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
@@ -39,7 +40,9 @@ import { AccountPeriodSelector } from "./components/account-period-selector";
 import type { AccountPeriod } from "./types";
 
 export function AccountDetailsScreen() {
-  const { t, i18n } = useTranslation();
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDate, formatDateRange } = useAppDate();
+  const { t } = useTranslation();
   const { isRTL } = useAppLocalization();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { document, updateDocument } = useLocalData();
@@ -110,7 +113,9 @@ export function AccountDetailsScreen() {
   }[period];
   const dateLabel = allTime
     ? t("accounts.details.allTransactionHistory")
-    : `${start.toLocaleDateString(i18n.resolvedLanguage)}${period === "Daily" ? "" : ` – ${new Date(end.getTime() - 1).toLocaleDateString(i18n.resolvedLanguage)}`}`;
+    : period === "Daily"
+      ? formatDate(start)
+      : formatDateRange(start, new Date(end.getTime() - 1));
   function openMenu() {
     if (menuRequested.current || deletingRef.current || menuClosing.current)
       return;
@@ -321,9 +326,7 @@ export function AccountDetailsScreen() {
                   ·{" "}
                   {item.timestamp == null
                     ? t("accounts.details.unknownDate")
-                    : new Date(item.timestamp).toLocaleDateString(
-                        i18n.resolvedLanguage,
-                      )}
+                    : formatDate(new Date(item.timestamp))}
                 </Text>
               </View>
               <Text

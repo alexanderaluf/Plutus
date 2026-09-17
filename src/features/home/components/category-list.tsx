@@ -4,7 +4,7 @@ import type {
 } from "@/data/selectors/category-selectors";
 import type { HomeCategoryRow } from "@/data/selectors/home-section-selectors";
 import { CategoryBadge } from "@/features/categories/components/category-ui";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -49,6 +49,7 @@ export function CategoryListRow({
   fallbackCurrency: string;
   onPress: (category: Category) => void;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const theme = useAppThemeColors();
   const { category, depth, last } = row;

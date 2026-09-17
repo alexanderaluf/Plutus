@@ -43,6 +43,7 @@ export function createDefaultBackup(): BackupDocument {
       dateFormat: "DD/MM/YYYY",
       monthStartDay: 1,
       weekStartDay: 0,
+      amountsHidden: false,
     },
     categories: [
       {

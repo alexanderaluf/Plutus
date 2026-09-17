@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
 import type { PaymentCardDetails } from "../types";
@@ -25,6 +25,7 @@ export function PaymentCard({
   isBalanceVisible,
   onToggleBalance,
 }: PaymentCardProps) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const visibilityIcon = isBalanceVisible ? "eye" : "eye-off";
   const numberGroups = ["••••", "••••", "••••", card.lastFour];

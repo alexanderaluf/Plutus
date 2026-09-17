@@ -75,6 +75,25 @@ function mountSheet(language, nativeRTL) {
       useAppLocalization: () => ({ isRTL: false, direction: "ltr", language: "en" }),
     },
     "@/shared/lib/currency": { formatCurrency: (amount, code) => `${amount.toFixed(2)} ${code}` },
+    "@/shared/lib/use-app-date": {
+      useAppDate: () => ({
+        dateFormat: "DD/MM/YYYY",
+        formatDate: (date) => new Date(date).toISOString().slice(0, 10),
+        formatDayMonth: (date) => new Date(date).toISOString().slice(5, 10),
+        formatDateRange: (start, end) =>
+          `${new Date(start).toISOString().slice(0, 10)} – ${new Date(end).toISOString().slice(0, 10)}`,
+        formatDateTime: (date) => new Date(date).toISOString(),
+      }),
+    },
+    "@/shared/lib/use-currency-format": {
+      useCurrencyFormat: () => ({
+        amountsHidden: false,
+        formatCurrency: (amount, code) => `${amount.toFixed(2)} ${code}`,
+        formatSignedCurrency: (amount, code) => `${amount.toFixed(2)} ${code}`,
+      }),
+      useAmountVisibility: () => ({ hidden: false, toggle: async () => {} }),
+      useAmountsHidden: () => false,
+    },
     "@/shared/theme/app-theme": {
       useAppThemeColors: () => ({ danger: "#ff0000", success: "#00ff00", accent: "#00ffff" }),
       colorWithAlpha: (color) => color,

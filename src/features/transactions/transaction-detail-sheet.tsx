@@ -24,7 +24,8 @@ import { deleteTransaction } from "@/data/model/transaction-record";
 import { selectRecurringTransactionSnapshot } from "@/data/selectors/recurring-selectors";
 import { useProfiles } from "@/features/profile/profile-provider";
 import type { Transaction } from "@/features/home/types";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
@@ -90,7 +91,9 @@ export function TransactionDetailSheet({
   transaction: Transaction;
   onDismiss: () => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDate, formatDateTime } = useAppDate();
+  const { t } = useTranslation();
   const router = useRouter();
   const { nativeDirection, writingDirection, row, start, end } =
     useSheetDirection();
@@ -117,10 +120,7 @@ export function TransactionDetailSheet({
   })();
   const occurredAt = new Date(transaction.occurredAtIso);
   const dateLabel = Number.isFinite(occurredAt.getTime())
-    ? occurredAt.toLocaleString(i18n.resolvedLanguage, {
-        dateStyle: "medium",
-        timeStyle: "short",
-      })
+    ? formatDateTime(occurredAt)
     : t("transactions.common.unknownDate");
   const typeLabel =
     transaction.type === 0
@@ -141,12 +141,9 @@ export function TransactionDetailSheet({
     transaction.exchangeRateFetchedAt ?? transaction.exchangeRateDate ?? "",
   );
   const rateDateLabel = Number.isFinite(rateTimestamp.getTime())
-    ? rateTimestamp.toLocaleString(i18n.resolvedLanguage, {
-        dateStyle: "medium",
-        ...(transaction.exchangeRateFetchedAt
-          ? { timeStyle: "short" as const }
-          : {}),
-      })
+    ? transaction.exchangeRateFetchedAt
+      ? formatDateTime(rateTimestamp)
+      : formatDate(rateTimestamp)
     : (transaction.exchangeRateDate ?? "");
   const displayedExchangeRate = transaction.exchangeRate?.toFixed(2) ?? "";
   const recurringSnapshot = selectRecurringTransactionSnapshot(

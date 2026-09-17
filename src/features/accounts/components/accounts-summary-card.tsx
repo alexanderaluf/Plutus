@@ -2,7 +2,7 @@ import { Card, Chip } from "heroui-native";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
@@ -21,6 +21,7 @@ export function AccountsSummaryCard({
   monthlyChangePercent,
   currencyCode,
 }: AccountsSummaryCardProps) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
 
   return (

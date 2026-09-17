@@ -97,6 +97,25 @@ function mountScreen(
     },
     "@/shared/theme/app-theme": { useAppThemeColors: () => ({}) },
     "@/shared/lib/currency": { formatCurrency: (amount) => String(amount) },
+    "@/shared/lib/use-app-date": {
+      useAppDate: () => ({
+        dateFormat: "DD/MM/YYYY",
+        formatDate: (date) => new Date(date).toISOString().slice(0, 10),
+        formatDayMonth: (date) => new Date(date).toISOString().slice(5, 10),
+        formatDateRange: (start, end) =>
+          `${new Date(start).toISOString().slice(0, 10)} – ${new Date(end).toISOString().slice(0, 10)}`,
+        formatDateTime: (date) => new Date(date).toISOString(),
+      }),
+    },
+    "@/shared/lib/use-currency-format": {
+      useCurrencyFormat: () => ({
+        amountsHidden: false,
+        formatCurrency: (amount) => String(amount),
+        formatSignedCurrency: (amount) => String(amount),
+      }),
+      useAmountVisibility: () => ({ hidden: false, toggle: async () => {} }),
+      useAmountsHidden: () => false,
+    },
     "@/shared/lib/use-local-day-clock": {
       useLocalDayClock: () => new Date(2026, 8, 17),
     },

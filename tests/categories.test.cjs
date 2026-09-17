@@ -452,8 +452,8 @@ test("v7-to-v13 migration preserves imported category data and survives SQLite r
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 18);
-    assert.equal(restored._local.schemaVersion, 18);
+    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 19);
+    assert.equal(restored._local.schemaVersion, 19);
     assert.equal(restored.categories.length, 1);
     assert.equal(restored.categories[0].parentId, null);
     assert.deepEqual(restored.categories[0].custom, { keep: true });
@@ -706,7 +706,7 @@ test("partially migrated databases preserve legacy and custom categories", async
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 18);
+    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 19);
     assert.equal(restored.categories.length, 7);
     assert.equal(restored._local.defaultCategoriesRevision, 0);
     assert.ok(

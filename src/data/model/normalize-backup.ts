@@ -225,6 +225,7 @@ export function normalizeBackupDocument(value: unknown): BackupDocument {
       local.weekStartDay <= 6
         ? local.weekStartDay
         : 0,
+    amountsHidden: local.amountsHidden === true,
   };
 
   return document;

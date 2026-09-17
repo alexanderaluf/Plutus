@@ -1,10 +1,10 @@
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
-import { useMemo, useState } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Animated, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
+import { useAmountVisibility } from "@/shared/lib/use-currency-format";
 import { selectHomeOverview } from "@/data/selectors/document-selectors";
 import { BudgetHeader } from "@/features/budgets/components/budget-ui";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
@@ -22,8 +22,8 @@ import {
 
 export function InsightsScreen() {
   const { t } = useTranslation();
-  const { hidden } = useLocalSearchParams<{ hidden?: string }>();
-  const [visible, setVisible] = useState(hidden !== "1");
+  const { hidden, toggle } = useAmountVisibility();
+  const visible = !hidden;
   const { document } = useLocalData();
   const { activeProfile } = useProfiles();
   const insets = useSafeAreaInsets();
@@ -65,7 +65,7 @@ export function InsightsScreen() {
         >
           <OverviewPrivacyButton
             visible={visible}
-            onPress={() => setVisible((value) => !value)}
+            onPress={() => void toggle()}
           />
         </BudgetHeader>
       </CollapsingHeader>

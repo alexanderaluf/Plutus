@@ -9,7 +9,7 @@ import {
     selectRecurringSummary,
 } from "@/data/selectors/document-selectors";
 import { useProfiles } from "@/features/profile/profile-provider";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -25,6 +25,7 @@ function SummaryAmounts({
   emptyCurrency: string;
   color: string;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   const totals = values.length
     ? values
     : [{ amount: 0, currencyCode: emptyCurrency }];

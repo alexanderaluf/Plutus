@@ -156,12 +156,7 @@ export const OverviewCarousel = memo(function OverviewCarousel({
           />
           <Pressable
             accessibilityRole="button"
-            onPress={() =>
-              router.push({
-                pathname: "/insights",
-                params: { hidden: isBalanceVisible ? "0" : "1" },
-              })
-            }
+            onPress={() => router.push("/insights")}
             className="min-h-11 flex-row items-center gap-1.5 ps-2"
           >
             <Text className="font-manrope-semibold text-xs text-accent">

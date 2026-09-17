@@ -1,3 +1,4 @@
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { useRouter, type Href } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
@@ -5,7 +6,7 @@ import type {
   HomeMoney,
   HomeOverview,
 } from "@/data/selectors/document-selectors";
-import { formatCurrency, formatSignedCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
@@ -27,6 +28,8 @@ export function useOverviewCards(
   now: Date,
   visible: boolean,
 ): OverviewCardModel[] {
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDayMonth } = useAppDate();
   const { t, i18n } = useTranslation();
   return [
     {
@@ -95,10 +98,7 @@ export function useOverviewCards(
       footer: overview.next
         ? overview.next.name +
           " · " +
-          overview.next.date.toLocaleDateString(i18n.resolvedLanguage, {
-            month: "short",
-            day: "numeric",
-          })
+          formatDayMonth(overview.next.date)
         : t("home.overview.nothingScheduled"),
       alert: overview.overdueCount
         ? t("home.overview.overdueShort", { count: overview.overdueCount })
@@ -127,6 +127,7 @@ function Money({
   large?: boolean;
   tone?: string;
 }) {
+  const { formatCurrency, formatSignedCurrency } = useCurrencyFormat();
   return (
     <View className="gap-1">
       <Text

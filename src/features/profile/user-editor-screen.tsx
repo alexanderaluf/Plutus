@@ -16,6 +16,12 @@ import {
 } from "react-native";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 
+import { useLocalData } from "@/data/local-data-provider";
+import {
+  DATE_FORMATS,
+  type AppDateFormat,
+} from "@/data/model/backup-document";
+import { formatAppDate } from "@/data/model/onboarding";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
@@ -25,6 +31,64 @@ import { ProfileScreenHeader } from "./components/profile-screen-header";
 import { currencies } from "./data/currencies-data";
 import { getProfileInitials } from "./lib/profile-utils";
 import { useProfiles } from "./profile-provider";
+
+const WEEKDAY_KEYS = [
+  "sunday",
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+] as const;
+const MONTH_DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+/** Any fixed date works; it only demonstrates the selected format. */
+const DATE_SAMPLE = new Date(2026, 8, 14);
+
+function ChoiceChip({
+  detail,
+  disabled,
+  label,
+  onPress,
+  selected,
+  wide,
+}: {
+  detail?: string;
+  disabled?: boolean;
+  label: string;
+  onPress: () => void;
+  selected: boolean;
+  wide?: boolean;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      className={`items-center justify-center rounded-2xl border px-4 py-3 ${
+        wide ? "w-full flex-row justify-between" : "min-w-[52px]"
+      } ${selected ? "border-accent bg-accent" : "border-border bg-surface"}`}
+    >
+      <Text
+        className={`font-manrope-semibold text-base ${
+          selected ? "text-accent-foreground" : "text-foreground"
+        }`}
+      >
+        {label}
+      </Text>
+      {detail ? (
+        <Text
+          className={`font-sans text-sm ${
+            selected ? "text-accent-foreground" : "text-muted"
+          }`}
+        >
+          {detail}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
 
 export function UserEditorScreen() {
   const { t, i18n } = useTranslation();
@@ -48,11 +112,19 @@ export function UserEditorScreen() {
           symbol: profile.currencySymbol,
         }
       : undefined);
+  const { document, updateDocument } = useLocalData();
+  const preferences = document._local;
   const [name, setName] = useState(profile?.name ?? "");
   const [imageUri, setImageUri] = useState(profile?.imageUri);
   const [currency, setCurrency] = useState(defaultCurrency);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // App-wide formatting preferences, mirroring the onboarding steps.
+  const [dateFormat, setDateFormat] = useState<AppDateFormat>(
+    preferences.dateFormat,
+  );
+  const [monthStartDay, setMonthStartDay] = useState(preferences.monthStartDay);
+  const [weekStartDay, setWeekStartDay] = useState(preferences.weekStartDay);
   const canSubmit = name.trim().length > 0 && currency != null;
 
   async function handleSubmit() {
@@ -80,6 +152,22 @@ export function UserEditorScreen() {
       } else {
         await createProfile(values);
       }
+      const isActiveProfile =
+        !isEditing || profile?.id === document._local.selectedProfileId;
+      await updateDocument((current) => ({
+        ...current,
+        _local: {
+          ...current._local,
+          dateFormat,
+          monthStartDay,
+          weekStartDay,
+          // Only a fallback for records without their own currency, so keep it
+          // aligned with whichever profile is actually active.
+          mainCurrency: isActiveProfile
+            ? currency.code.toUpperCase()
+            : current._local.mainCurrency,
+        },
+      }));
       router.back();
     } catch {
       Alert.alert(
@@ -210,6 +298,60 @@ export function UserEditorScreen() {
                     : "profile.editor.savedOnDeviceCreate",
                 )}
               </Text>
+            </View>
+
+            <View className="gap-3">
+              <Text className="font-manrope-semibold text-base text-accent">
+                {t("onboarding.date")}
+              </Text>
+              <View className="gap-2">
+                {DATE_FORMATS.map((format) => (
+                  <ChoiceChip
+                    key={format}
+                    detail={formatAppDate(DATE_SAMPLE, format)}
+                    disabled={isSaving}
+                    label={format}
+                    onPress={() => setDateFormat(format)}
+                    selected={format === dateFormat}
+                    wide
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View className="gap-3">
+              <Text className="font-manrope-semibold text-base text-accent">
+                {t("onboarding.month")}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {MONTH_DAYS.map((day) => (
+                  <ChoiceChip
+                    key={day}
+                    disabled={isSaving}
+                    label={String(day)}
+                    onPress={() => setMonthStartDay(day)}
+                    selected={day === monthStartDay}
+                  />
+                ))}
+              </View>
+            </View>
+
+            <View className="gap-3">
+              <Text className="font-manrope-semibold text-base text-accent">
+                {t("onboarding.week")}
+              </Text>
+              <View className="gap-2">
+                {WEEKDAY_KEYS.map((day, dayIndex) => (
+                  <ChoiceChip
+                    key={day}
+                    disabled={isSaving}
+                    label={t(`onboarding.${day}`)}
+                    onPress={() => setWeekStartDay(dayIndex)}
+                    selected={dayIndex === weekStartDay}
+                    wide
+                  />
+                ))}
+              </View>
             </View>
           </EdgeToEdgeScrollView>
         </EdgeToEdgeLayout>

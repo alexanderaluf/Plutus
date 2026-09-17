@@ -1,7 +1,12 @@
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { BlurTargetView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { useAmountVisibility } from "@/shared/lib/use-currency-format";
+import { useTimeOfDayGreeting } from "@/shared/lib/use-time-of-day-greeting";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -27,7 +32,6 @@ import {
   type HomeSection,
 } from "@/data/selectors/home-section-selectors";
 import { useProfiles } from "@/features/profile/profile-provider";
-import { colorForeground } from "@/shared/icons/colors";
 import { Text } from "@/shared/ui/app-text";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -80,6 +84,7 @@ export function HomeScreen() {
   const { height: viewportHeight } = useWindowDimensions();
   const router = useRouter();
   const { i18n, t } = useTranslation();
+  const { formatDate } = useAppDate();
   const { activeProfile } = useProfiles();
   const { document } = useLocalData();
   const [transactionPage, setTransactionPage] = useState({
@@ -93,11 +98,13 @@ export function HomeScreen() {
   const [expandedBudgetId, setExpandedBudgetId] = useState<string | null>(null);
   const [monthOffset, setMonthOffset] = useState(0);
   const listRef = useRef<FlatList<HomeRow> | null>(null);
-  const [isBalanceVisible, setIsBalanceVisible] = useState(true);
-  const onToggleBalance = useCallback(
-    () => setIsBalanceVisible((visible) => !visible),
-    [],
-  );
+  // Persisted so hidden amounts stay hidden across restarts, and shared so the
+  // toggle masks every amount in the app rather than just these cards.
+  const theme = useAppThemeColors();
+  const greeting = useTimeOfDayGreeting();
+  const { hidden: amountsHidden, toggle: toggleAmounts } = useAmountVisibility();
+  const isBalanceVisible = !amountsHidden;
+  const onToggleBalance = useCallback(() => void toggleAmounts(), [toggleAmounts]);
   const [overviewHeight, setOverviewHeight] = useState(300);
   const [section, setSection] = useState<HomeSection>("transactions");
   const [selectedTransactionId, setSelectedTransactionId] = useState<
@@ -114,12 +121,11 @@ export function HomeScreen() {
   const now = useCategoryClock();
   const headerDate = useMemo(
     () =>
-      now.toLocaleDateString(i18n.resolvedLanguage, {
+      // Weekday stays localized text; the date itself follows the user's format.
+      `${now.toLocaleDateString(i18n.resolvedLanguage, {
         weekday: "long",
-        month: "long",
-        day: "numeric",
-      }),
-    [now, i18n.resolvedLanguage],
+      })}, ${formatDate(now)}`,
+    [now, i18n.resolvedLanguage, formatDate],
   );
   const [loadRetry, setLoadRetry] = useState(0);
   const homeData = useHomeData(
@@ -527,6 +533,7 @@ export function HomeScreen() {
                       current === layout.y ? current : layout.y,
                     );
                   }}
+                  collapsable={false}
                   pointerEvents={isSelectorSticky ? "none" : "auto"}
                   accessibilityElementsHidden={isSelectorSticky}
                   importantForAccessibility={
@@ -592,7 +599,9 @@ export function HomeScreen() {
                 {headerDate}
               </Text>
               <Text className="mt-1 font-manrope-bold text-2xl text-foreground">
-                {t("home.greeting", { name: activeProfile.name.split(" ")[0] })}
+                {t(`home.greetings.${greeting}`, {
+                  name: activeProfile.name.split(" ")[0],
+                })}
               </Text>
             </View>
 
@@ -605,10 +614,10 @@ export function HomeScreen() {
             >
               <View
                 className="size-10 items-center justify-center rounded-full"
-                style={{ backgroundColor: activeProfile.color }}
+                style={{ backgroundColor: theme.accent }}
               >
                 <FilledIcon
-                  color={colorForeground(activeProfile.color)}
+                  color={theme.accentForeground}
                   name="account"
                   size={25}
                 />

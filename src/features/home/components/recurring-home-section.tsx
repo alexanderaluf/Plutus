@@ -1,3 +1,4 @@
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useTranslation } from "react-i18next";
@@ -5,7 +6,7 @@ import { Pressable, View } from "react-native";
 
 import type { RecurringEvent } from "@/data/selectors/recurring-selectors";
 import { RecurringBadge } from "@/features/recurring/components/recurring-ui";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -21,6 +22,7 @@ function Amounts({
   fallbackCurrency: string;
   color: string;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   const totals = values.length
     ? values
     : [{ amount: 0, currencyCode: fallbackCurrency }];
@@ -126,8 +128,10 @@ export function RecurringHomeHeader({
 }
 
 export function RecurringHomeRow({ event }: { event: RecurringEvent }) {
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDate } = useAppDate();
   const router = useRouter();
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
   return (
     <Pressable
       key={`${event.recurring.id}:${event.date.toISOString()}`}
@@ -154,9 +158,7 @@ export function RecurringHomeRow({ event }: { event: RecurringEvent }) {
         </Text>
         <Text numberOfLines={2} className="text-xs text-muted">
           {t("home.recurring.due", {
-            date: event.date.toLocaleDateString(i18n.resolvedLanguage, {
-              dateStyle: "medium",
-            }),
+            date: formatDate(event.date),
           })}
         </Text>
       </View>

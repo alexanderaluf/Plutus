@@ -1,3 +1,4 @@
+import { useAppDate } from "@/shared/lib/use-app-date";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useTranslation } from "react-i18next";
@@ -14,7 +15,7 @@ import {
   useBudgetLabels,
 } from "@/features/budgets/components/budget-ui";
 import { colorForeground } from "@/shared/icons/colors";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
@@ -29,6 +30,8 @@ export function BudgetOverviewCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
+  const { formatDayMonth } = useAppDate();
   const router = useRouter();
   const { t, i18n } = useTranslation();
   const labels = useBudgetLabels();
@@ -182,15 +185,8 @@ export function BudgetOverviewCard({
           </View>
           <View className="flex-row flex-wrap justify-between gap-2">
             <Text className="text-xs text-muted">
-              {b.range.start.toLocaleDateString(i18n.resolvedLanguage, {
-                month: "short",
-                day: "numeric",
-              })}{" "}
-              –{" "}
-              {new Date(b.range.end.getTime() - 1).toLocaleDateString(
-                i18n.resolvedLanguage,
-                { month: "short", day: "numeric" },
-              )}
+              {formatDayMonth(b.range.start)} –{" "}
+              {formatDayMonth(new Date(b.range.end.getTime() - 1))}
             </Text>
             <Text className="text-xs text-muted">
               {t("home.budgets.transactions", { count: b.transactionCount })}

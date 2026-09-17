@@ -2,7 +2,7 @@ import { Card } from "heroui-native";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
-import { formatSignedCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import {
   colorWithAlpha,
   useAppThemeColors,
@@ -15,11 +15,27 @@ import type { SearchResult } from "../types";
 type SearchResultsProps = {
   query: string;
   results: SearchResult[];
+  total: number;
 };
 
-export function SearchResults({ query, results }: SearchResultsProps) {
+export function SearchResults({ query, results, total }: SearchResultsProps) {
+  const { formatSignedCurrency } = useCurrencyFormat();
   const { i18n, t } = useTranslation();
   const theme = useAppThemeColors();
+
+  if (!query.trim()) {
+    return (
+      <Card className="items-center border border-border bg-surface px-6 py-10">
+        <FilledIcon name="magnify" size={30} tone="accent" />
+        <Text className="mt-4 font-manrope-bold text-base text-foreground">
+          {t("search.results.promptTitle")}
+        </Text>
+        <Text className="mt-1 text-center font-sans text-sm text-muted">
+          {t("search.results.promptDescription")}
+        </Text>
+      </Card>
+    );
+  }
 
   if (results.length === 0) {
     return (
@@ -43,10 +59,10 @@ export function SearchResults({ query, results }: SearchResultsProps) {
         </Card.Title>
         <Text className="font-manrope-semibold text-xs text-muted">
           {t("search.results.matches", {
-            count: results.length,
+            count: total,
             formattedCount: new Intl.NumberFormat(
               i18n.resolvedLanguage,
-            ).format(results.length),
+            ).format(total),
           })}
         </Text>
       </Card.Header>
@@ -90,6 +106,11 @@ export function SearchResults({ query, results }: SearchResultsProps) {
             </View>
           );
         })}
+        {total > results.length ? (
+          <Text className="py-3 text-center font-sans text-xs text-muted">
+            {t("search.results.truncated", { count: results.length })}
+          </Text>
+        ) : null}
       </Card.Body>
     </Card>
   );

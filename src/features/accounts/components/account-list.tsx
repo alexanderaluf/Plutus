@@ -2,7 +2,7 @@ import { Card, Chip } from "heroui-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
@@ -15,6 +15,7 @@ type AccountListProps = {
 };
 
 export function AccountList({ accounts, onAccountPress }: AccountListProps) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const kindLabels: Record<Account["kind"], string> = {
     bank: t("accounts.common.kinds.bank"),

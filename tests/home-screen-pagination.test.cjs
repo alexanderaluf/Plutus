@@ -209,6 +209,31 @@ function screenHarness(document, insets, sizes = {}) {
       },
     },
     "@/shared/icons/colors": { colorForeground: () => "#ffffff" },
+    "@/shared/theme/app-theme": {
+      useAppThemeColors: () => ({ accent: "#70d2eb", accentForeground: "#083442" }),
+    },
+    "@/shared/lib/use-time-of-day-greeting": {
+      useTimeOfDayGreeting: () => "morning",
+    },
+    "@/shared/lib/use-app-date": {
+      useAppDate: () => ({
+        dateFormat: "DD/MM/YYYY",
+        formatDate: (date) => new Date(date).toISOString().slice(0, 10),
+        formatDayMonth: (date) => new Date(date).toISOString().slice(5, 10),
+        formatDateRange: (start, end) =>
+          `${new Date(start).toISOString().slice(0, 10)} – ${new Date(end).toISOString().slice(0, 10)}`,
+        formatDateTime: (date) => new Date(date).toISOString(),
+      }),
+    },
+    "@/shared/lib/use-currency-format": {
+      useAmountVisibility: () => ({ hidden: false, toggle: async () => {} }),
+      useAmountsHidden: () => false,
+      useCurrencyFormat: () => ({
+        amountsHidden: false,
+        formatCurrency: (amount) => String(amount),
+        formatSignedCurrency: (amount) => String(amount),
+      }),
+    },
     "@/shared/ui/app-text": { Text: "Text" },
     "@/shared/ui/glass-segmented-control": {
       GlassSegmentedControl: "Selector",

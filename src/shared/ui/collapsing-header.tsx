@@ -72,6 +72,7 @@ export function CollapsingHeader({
     <>
       <TopSafeAreaGradient headerHidden={headerHidden} />
       <View
+        collapsable={false}
         pointerEvents={headerHidden ? "none" : "auto"}
         accessibilityElementsHidden={headerHidden}
         importantForAccessibility={

@@ -1,7 +1,8 @@
+import { useAppDate } from "@/shared/lib/use-app-date";
 import type { Budget } from "@/data/selectors/budget-selectors";
 import { useAppLocalization } from "@/localization/localization-provider";
 import { colorForeground } from "@/shared/icons/colors";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
@@ -304,6 +305,7 @@ export function BudgetSummary({
   budget: Budget;
   compact?: boolean;
 }) {
+  const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
   const labels = useBudgetLabels();
   const b = budget;
@@ -453,6 +455,8 @@ export function BudgetRing({
   );
 }
 export function BudgetChart({ budget: b }: { budget: Budget }) {
+  const { amountsHidden, formatCurrency } = useCurrencyFormat();
+  const { formatDayMonth } = useAppDate();
   const c = useAppThemeColors();
   const { t, i18n } = useTranslation();
   const labels = useBudgetLabels();
@@ -486,10 +490,14 @@ export function BudgetChart({ budget: b }: { budget: Budget }) {
             <ViewlessGrid
               key={f}
               y={y(max * f)}
-              label={new Intl.NumberFormat(undefined, {
-                notation: "compact",
-                maximumFractionDigits: 1,
-              }).format(max * f)}
+              label={
+                amountsHidden
+                  ? "••"
+                  : new Intl.NumberFormat(undefined, {
+                      notation: "compact",
+                      maximumFractionDigits: 1,
+                    }).format(max * f)
+              }
               color={c.muted}
               border={c.border}
             />
@@ -536,13 +544,12 @@ export function BudgetChart({ budget: b }: { budget: Budget }) {
               fontSize={10}
               textAnchor={f === 0 ? "start" : f === 1 ? "end" : "middle"}
             >
-              {new Date(
-                b.range.start.getTime() +
-                  (b.range.end.getTime() - b.range.start.getTime() - 1) * f,
-              ).toLocaleDateString(i18n.resolvedLanguage, {
-                month: "short",
-                day: "numeric",
-              })}
+              {formatDayMonth(
+                new Date(
+                  b.range.start.getTime() +
+                    (b.range.end.getTime() - b.range.start.getTime() - 1) * f,
+                ),
+              )}
             </SvgText>
           ))}
         </Svg>

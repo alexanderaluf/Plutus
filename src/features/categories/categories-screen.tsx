@@ -20,7 +20,7 @@ import {
   selectCategoryMonthlyTotals,
 } from "@/data/selectors/document-selectors";
 import { useProfiles } from "@/features/profile/profile-provider";
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
@@ -34,6 +34,7 @@ import {
 import { useCategoryClock } from "./use-category-clock";
 
 export function CategoriesScreen() {
+  const { formatCurrency } = useCurrencyFormat();
   const { t, i18n } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
