@@ -225,7 +225,7 @@ test("foreign-currency transactions preserve the entered amount and snapshot the
   assert.equal(projected.accountAmount, 75.56);
   assert.equal(projected.accountCurrencyCode, "ILS");
   assert.equal(projected.exchangeRate, 3.02244974);
-  assert.equal(selectMonthlySummary(normalized).spent, 75.56);
+  assert.equal(selectMonthlySummary(normalized, new Date(now)).spent, 25);
 
   const edited = saveTransaction(
     normalized,

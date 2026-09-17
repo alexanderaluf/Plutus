@@ -5,6 +5,10 @@ import { ACCOUNT_ICONS } from "@/features/accounts/account-options";
 import { selectBudgets } from "./budget-selectors";
 import { selectExchangeQuote } from "./exchange-rate-selectors";
 import {
+  profileCurrency,
+  transactionMoney,
+} from "../model/transaction-conversion";
+import {
   iterateRecurrings,
   iterateRecurringEvents,
 } from "./recurring-selectors";
@@ -83,11 +87,6 @@ function lookupName(records: JsonObject[], id: JsonValue | undefined) {
 
 function transactionAmount(record: JsonObject) {
   const amount = Math.abs(number(record.amount));
-  return number(record.type) === 1 ? amount : -amount;
-}
-
-function transactionAccountAmount(record: JsonObject) {
-  const amount = Math.abs(number(record.accountAmount, number(record.amount)));
   return number(record.type) === 1 ? amount : -amount;
 }
 
@@ -235,31 +234,44 @@ export function getCreditCardBillingCycle(
   };
 }
 
+function accountKind(record: JsonObject): Account["kind"] {
+  const normalized =
+    `${text(record.name)} ${text(record.bankName, i18n.t("common.localAccount"))}`.toLowerCase();
+  return record.accountType === "card"
+    ? "credit"
+    : record.accountType === "bank"
+      ? "bank"
+      : record.accountType === "cash"
+        ? "cash"
+        : record.accountType === "savings"
+          ? "savings"
+          : record.type === 1
+            ? "cash"
+            : record.type === 2
+              ? "savings"
+              : normalized.includes("credit")
+                ? "credit"
+                : normalized.includes("saving")
+                  ? "savings"
+                  : "checking";
+}
+
+function accountPaymentDay(record: JsonObject) {
+  return typeof record.paymentDay === "number" &&
+    Number.isInteger(record.paymentDay) &&
+    record.paymentDay >= 1 &&
+    record.paymentDay <= 31
+    ? record.paymentDay
+    : null;
+}
+
 export function selectAccounts(
   document: BackupDocument,
   now = new Date(),
 ): Account[] {
   return ownedAccountRecords(document).map((record, index) => {
     const institution = text(record.bankName, i18n.t("common.localAccount"));
-    const normalized = `${text(record.name)} ${institution}`.toLowerCase();
-    const kind =
-      record.accountType === "card"
-        ? "credit"
-        : record.accountType === "bank"
-          ? "bank"
-          : record.accountType === "cash"
-            ? "cash"
-            : record.accountType === "savings"
-              ? "savings"
-              : record.type === 1
-                ? "cash"
-                : record.type === 2
-                  ? "savings"
-                  : normalized.includes("credit")
-                    ? "credit"
-                    : normalized.includes("saving")
-                      ? "savings"
-                      : "checking";
+    const kind = accountKind(record);
     const storedIcon = text(record.icon);
     const storedIconPath = text(record.iconPath);
     const materialIconIsValid =
@@ -267,13 +279,7 @@ export function selectAccounts(
       /^[Mm]/.test(storedIconPath) &&
       storedIconPath.length <= 20_000;
 
-    const paymentDay =
-      typeof record.paymentDay === "number" &&
-      Number.isInteger(record.paymentDay) &&
-      record.paymentDay >= 1 &&
-      record.paymentDay <= 31
-        ? record.paymentDay
-        : null;
+    const paymentDay = accountPaymentDay(record);
     const isCredit = kind === "credit";
     const billingCycle =
       isCredit && paymentDay != null
@@ -285,8 +291,12 @@ export function selectAccounts(
       Number.isFinite(record.creditLimit)
         ? record.creditLimit
         : null;
-    const balanceNum = number(record.amount);
-    const currentSpent = isCredit ? Math.max(0, -balanceNum) : 0;
+    const activity = accountActivityTotals(document, record, billingCycle, now);
+    // The spending frame follows this billing cycle's purchases and refunds,
+    // independently of the persisted outstanding balance and payout transfers.
+    const currentSpent = isCredit
+      ? Math.max(0, activity.cycleExpense - activity.cycleIncome)
+      : 0;
     const availableCredit =
       isCredit && creditLimit != null ? creditLimit - currentSpent : null;
     const isOverdraft =
@@ -308,7 +318,7 @@ export function selectAccounts(
           (user) => user.uuid === record.user || user.id === record.user,
         )?.name,
       ),
-      ...accountActivityTotals(document, record, billingCycle),
+      ...activity,
       name: text(record.name, `Account ${index + 1}`),
       institution,
       kind,
@@ -376,11 +386,11 @@ function accountActivityTotals(
   document: BackupDocument,
   account: JsonObject,
   billingCycle: CreditCardBillingCycle | null = null,
+  now = new Date(),
 ) {
   const records = document.transactions.filter((item) =>
     belongsToAccount(item, account),
   );
-  const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime();
   const thisMonth = records.filter((item) => {
@@ -393,7 +403,9 @@ function accountActivityTotals(
   });
   const thisCycle = billingCycle
     ? records.filter((item) => {
-        const timestamp = new Date(text(item.date, text(item.createdAt))).getTime();
+        const timestamp = new Date(
+          text(item.date, text(item.createdAt)),
+        ).getTime();
         return (
           Number.isFinite(timestamp) &&
           timestamp >= billingCycle.cycleStart.getTime() &&
@@ -420,19 +432,49 @@ function accountActivityTotals(
   };
 }
 
+function findOwnedAccount(document: BackupDocument, accountId: string) {
+  return ownedAccountRecords(document).find(
+    (item) => String(item.uuid ?? item.id) === accountId,
+  );
+}
+
+export function selectAccountTransactionCount(
+  document: BackupDocument,
+  accountId: string,
+) {
+  const account = findOwnedAccount(document, accountId);
+  return account
+    ? document.transactions.reduce(
+        (count, item) => count + Number(belongsToAccount(item, account)),
+        0,
+      )
+    : 0;
+}
+
 export function selectAccountTransactions(
   document: BackupDocument,
   accountId: string,
+  period?: { period: AccountPeriod; anchor: Date },
 ): AccountTransaction[] {
-  const account = selectAccounts(document).find(
-    (item) => item.id === accountId,
-  );
-  const record = document.accounts.find(
-    (item) => String(item.uuid ?? item.id) === accountId,
-  );
-  if (!account || !record) return [];
+  const record = findOwnedAccount(document, accountId);
+  if (!record) return [];
+  const account = accountBalance(record, 0);
+  const paymentDay =
+    accountKind(record) === "credit" ? accountPaymentDay(record) : null;
+  const range = period
+    ? accountPeriodRange(period.period, period.anchor, paymentDay)
+    : null;
   return document.transactions
-    .filter((item) => belongsToAccount(item, record))
+    .filter((item) => {
+      if (!belongsToAccount(item, record)) return false;
+      if (!range) return true;
+      const timestamp = new Date(
+        text(item.date, text(item.createdAt)),
+      ).getTime();
+      return (
+        timestamp >= range.start.getTime() && timestamp < range.end.getTime()
+      );
+    })
     .map((item, index) => {
       const timestamp = new Date(
         text(item.date, text(item.createdAt)),
@@ -457,7 +499,23 @@ export function selectAccountTransactions(
     .sort((a, b) => (b.timestamp ?? -Infinity) - (a.timestamp ?? -Infinity));
 }
 
-export function accountPeriodRange(period: AccountPeriod, anchor: Date) {
+export function accountPeriodRange(
+  period: AccountPeriod,
+  anchor: Date,
+  paymentDay: number | null = null,
+) {
+  if (
+    period === "Monthly" &&
+    paymentDay != null &&
+    Number.isInteger(paymentDay) &&
+    paymentDay >= 1 &&
+    paymentDay <= 31
+  ) {
+    const cycle = getCreditCardBillingCycle(paymentDay, anchor);
+    const end = new Date(cycle.nextPaymentDate);
+    end.setHours(0, 0, 0, 0);
+    return { start: cycle.cycleStart, end };
+  }
   const start = new Date(
     anchor.getFullYear(),
     anchor.getMonth(),
@@ -472,6 +530,31 @@ export function accountPeriodRange(period: AccountPeriod, anchor: Date) {
   else if (period === "Monthly") end.setMonth(end.getMonth() + 1);
   else end.setDate(end.getDate() + (period === "Weekly" ? 7 : 1));
   return { start, end };
+}
+
+export function shiftAccountPeriodAnchor(
+  period: AccountPeriod,
+  anchor: Date,
+  direction: number,
+  paymentDay: number | null = null,
+) {
+  const { start } = accountPeriodRange(period, anchor, paymentDay);
+  const next = new Date(start);
+  if (period === "Monthly") {
+    // Starting at day 1 avoids skipping February when the payout day is 29–31.
+    next.setDate(1);
+    next.setMonth(next.getMonth() + direction);
+    if (
+      paymentDay != null &&
+      Number.isInteger(paymentDay) &&
+      paymentDay >= 1 &&
+      paymentDay <= 31
+    )
+      next.setDate(dueDateInMonth(next, paymentDay));
+  } else if (period === "Yearly")
+    next.setFullYear(next.getFullYear() + direction);
+  else next.setDate(next.getDate() + direction * (period === "Weekly" ? 7 : 1));
+  return next;
 }
 
 export function filterAccountTransactions(
@@ -613,13 +696,16 @@ export function* iterateHomeOverview(
     }
     return rates.get(code) ?? null;
   }
-  function sum(values: { amount: number; currencyCode: string }[]) {
+  function sum(
+    values: { amount: number; currencyCode: string; date?: string | null }[],
+  ) {
     let amount = 0;
     const unconverted = new Map<string, number>();
     const rateDates = new Set<string>();
     for (const value of values) {
       if (!Number.isFinite(value.amount) || value.amount === 0) continue;
       const code = value.currencyCode.toUpperCase();
+      if (value.date) rateDates.add(value.date);
       if (code === currency) amount += value.amount;
       else {
         const rate = quote(code);
@@ -642,8 +728,12 @@ export function* iterateHomeOverview(
     };
   }
   const accountRecords = createRecordLookup(document.accounts);
-  const incomeByCurrency = new Map<string, number>();
-  const expenseByCurrency = new Map<string, number>();
+  const income: {
+    amount: number;
+    currencyCode: string;
+    date?: string | null;
+  }[] = [];
+  const expense: typeof income = [];
   let transactionCount = 0;
   let position = 0;
   for (const record of transactions) {
@@ -669,13 +759,11 @@ export function* iterateHomeOverview(
       number(record.accountAmount, Math.abs(number(record.amount))),
     );
     const currencyCode = /^[A-Z]{3}$/.test(code) ? code : "USD";
-    const totals = record.type === 1 ? incomeByCurrency : expenseByCurrency;
-    totals.set(currencyCode, (totals.get(currencyCode) ?? 0) + amount);
+    const totals = record.type === 1 ? income : expense;
+    totals.push(transactionMoney(record, currency) ?? { amount, currencyCode });
   }
   const money = (totals: Map<string, number>) =>
     [...totals].map(([currencyCode, amount]) => ({ currencyCode, amount }));
-  const income = money(incomeByCurrency),
-    expense = money(expenseByCurrency);
   const recurrings = yield* filterProjection(
     yield* iterateRecurrings(document, now),
     (recurring) => {
@@ -794,16 +882,19 @@ export function compareTrackedBudgets(
 
 // Exclusion affects calculations; records remain visible in activity and search.
 function includedTransactions(document: BackupDocument) {
+  const belongs = createProfileMatcher(document);
   const excludedIds = new Set<JsonValue>(
     document.accounts
       .filter((account) => account.isExcluded === true)
       .flatMap((account) => [account.uuid, account.id])
       .filter((id) => id != null),
   );
-  return document.transactions.filter(
-    (transaction) =>
-      !excludedIds.has(transaction.account) && transaction.type !== 2,
-  );
+  return document.transactions
+    .filter(
+      (transaction) =>
+        !excludedIds.has(transaction.account) && transaction.type !== 2,
+    )
+    .filter(belongs);
 }
 
 export function selectSearchResults(document: BackupDocument): SearchResult[] {
@@ -836,8 +927,33 @@ export function selectSearchResults(document: BackupDocument): SearchResult[] {
   });
 }
 
-export function selectMonthlySummary(document: BackupDocument) {
-  const values = includedTransactions(document).map(transactionAccountAmount);
+function reportingAmount(document: BackupDocument, transaction: JsonObject) {
+  const currency = profileCurrency(
+    document,
+    document._local.selectedProfileId ?? "",
+  );
+  const money = transactionMoney(transaction, currency);
+  // Legacy records with no historical rate keep their existing calculation.
+  return (
+    money?.amount ??
+    Math.abs(number(transaction.accountAmount, number(transaction.amount)))
+  );
+}
+
+export function selectMonthlySummary(
+  document: BackupDocument,
+  now = new Date(),
+) {
+  const { start, end } = financialMonth(now, document._local.monthStartDay);
+  const values = includedTransactions(document)
+    .filter((record) => {
+      const date = new Date(text(record.date, text(record.createdAt)));
+      return date >= start && date < end && date <= now;
+    })
+    .map(
+      (record) =>
+        reportingAmount(document, record) * (record.type === 1 ? 1 : -1),
+    );
   const income = values.filter((value) => value > 0).reduce((a, b) => a + b, 0);
   const spent = Math.abs(
     values.filter((value) => value < 0).reduce((a, b) => a + b, 0),
@@ -863,18 +979,27 @@ export function selectBudgetCategories(
 
 export function selectSpendingCategories(
   document: BackupDocument,
+  now = new Date(),
 ): SpendingCategory[] {
+  const { start, end } = financialMonth(now, document._local.monthStartDay);
   const totals = new Map<string, number>();
   for (const transaction of includedTransactions(document)) {
     if (number(transaction.type) === 1) continue;
+    const date = new Date(text(transaction.date, text(transaction.createdAt)));
+    if (
+      date < start ||
+      date >= end ||
+      date > now ||
+      !Number.isFinite(date.getTime())
+    )
+      continue;
     const category = text(
       transaction.categoryName,
       lookupName(document.categories, transaction.category),
     );
     totals.set(
       category,
-      (totals.get(category) ?? 0) +
-        Math.abs(number(transaction.accountAmount, number(transaction.amount))),
+      (totals.get(category) ?? 0) + reportingAmount(document, transaction),
     );
   }
   const total = [...totals.values()].reduce((sum, value) => sum + value, 0);
@@ -890,22 +1015,24 @@ export function selectSpendingCategories(
     }));
 }
 
-export function selectDailySpending(document: BackupDocument): DailySpend[] {
+export function selectDailySpending(
+  document: BackupDocument,
+  now = new Date(),
+): DailySpend[] {
   const dayTotals = new Map<string, number>();
   for (const transaction of includedTransactions(document)) {
     if (number(transaction.type) === 1) continue;
-    const date = new Date(text(transaction.createdAt));
+    const date = new Date(text(transaction.date, text(transaction.createdAt)));
     if (Number.isNaN(date.getTime())) continue;
     const key = date.toISOString().slice(0, 10);
     dayTotals.set(
       key,
-      (dayTotals.get(key) ?? 0) +
-        Math.abs(number(transaction.accountAmount, number(transaction.amount))),
+      (dayTotals.get(key) ?? 0) + reportingAmount(document, transaction),
     );
   }
 
   return Array.from({ length: 7 }, (_, offset) => {
-    const date = new Date();
+    const date = new Date(now);
     date.setDate(date.getDate() - (6 - offset));
     const key = date.toISOString().slice(0, 10);
     return {

@@ -142,7 +142,7 @@ export function CreditAccountCard({
           className="font-manrope-medium text-[11px]"
           style={[styles.overline, { color: palette.inkMuted }]}
         >
-          {hasCreditLimit
+          {hasCreditLimit || account.billingCycle
             ? t("accounts.cards.spentThisCycle")
             : owed
               ? t("accounts.cards.currentDebt")
@@ -157,7 +157,7 @@ export function CreditAccountCard({
             numberOfLines={1}
             style={{ color: palette.ink }}
           >
-            {hasCreditLimit
+            {hasCreditLimit || account.billingCycle
               ? formatCurrency(account.currentSpent, account.currencyCode)
               : `${owed ? "−" : ""}${formatCurrency(
                   Math.abs(account.balance),

@@ -32,6 +32,7 @@ import { createDefaultBackup } from "./model/default-backup";
 import { getSetupStatus } from "./model/onboarding";
 import {
   selectDueCardPayments,
+  cardPaymentConversion,
   settleDueCardPayments,
 } from "./model/card-payment";
 import { getExchangeRates } from "./exchange-rates/exchange-rate-service";
@@ -251,7 +252,8 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
           .filter(
             ({ card, bank }) =>
               Number(card.amount) < 0 &&
-              card.currencyCode !== bank.currencyCode,
+              card.currencyCode !== bank.currencyCode &&
+              cardPaymentConversion(documentRef.current, card, bank, now).bankAmount === null,
           )
           .map(({ card }) => String(card.currencyCode)),
       );

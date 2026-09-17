@@ -118,7 +118,7 @@ deferred/failed commits, restart, double taps, confirmation, staged restore and
 rollback, demo references, base-category merge, all preference round trips, date
 and payday boundaries, and an independent identity guard.
 
-The migration tests run 80 reproducible randomized datasets across all 16
+The migration tests run 85 reproducible randomized datasets across all 17
 historical versions. They reconstruct SQLite tables with reordered/extra columns,
 preserve unknown tables and JSON, inject a failure at each migration write, retry,
 and reopen the database. Unknown table/column renames, damaged JSON, future
@@ -137,6 +137,16 @@ on an empty simulator or test device. Never clear a real user's installation to
 test onboarding. Restore an exported backup into a separate test installation and
 compare it with the original. Node tests cannot prove store-signing continuity,
 native filesystem behavior, or arbitrary future schema semantics.
+
+Schema 18 adds optional transaction `conversionSnapshot`, `conversionCapturedAt`,
+`profileCurrencyCode`, and `profileAmount` fields. The snapshot retains the public
+rate table, source, rate date and download timestamp used for that record. Account
+balances continue to use `accountAmount` in `accountCurrencyCode`; profile reports
+use the frozen conversion rather than the latest shared rate cache. Card payment
+records retain `cardPaymentAllocations` for purchase-level settlement and audit.
+Existing transactions are preserved without inventing missing historical rates.
+The version 17 document is checkpointed before normalization, and the independent
+storage identity guard remains required.
 
 Expo SDK references used for this implementation:
 [SQLite v57](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/) and

@@ -24,9 +24,9 @@ export function BankAccountCard({
 }) {
   const { t } = useTranslation();
   const theme = useAppThemeColors();
-  const net = account.income - account.expense;
-  const flow = account.income + account.expense;
-  const incomeShare = flow > 0 ? account.income / flow : 0.5;
+  const net = account.monthlyIncome - account.monthlyExpense;
+  const flow = account.monthlyIncome + account.monthlyExpense;
+  const incomeShare = flow > 0 ? account.monthlyIncome / flow : 0.5;
 
   const badges = [
     account.isDefault ? t("accounts.common.badges.default") : "",
@@ -264,7 +264,7 @@ export function BankAccountCard({
             currencyCode={account.currencyCode}
             icon="arrow-bottom-left"
             label={t("accounts.cards.income")}
-            value={account.income}
+            value={account.monthlyIncome}
           />
           <View style={styles.statDivider} />
           <Stat
@@ -272,7 +272,7 @@ export function BankAccountCard({
             currencyCode={account.currencyCode}
             icon="arrow-top-right"
             label={t("accounts.cards.expenses")}
-            value={account.expense}
+            value={account.monthlyExpense}
           />
           <View style={styles.statDivider} />
           <Stat

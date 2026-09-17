@@ -57,6 +57,10 @@ const {
   selectBankAccounts,
   selectAccountDraft,
   selectAccountTransactions,
+  selectAccountTransactionCount,
+  filterAccountTransactions,
+  accountPeriodRange,
+  shiftAccountPeriodAnchor,
   getCreditCardBillingCycle,
 } = require("../src/data/selectors/document-selectors.ts");
 const {
@@ -402,7 +406,7 @@ test("JSON backup round trip preserves all new account options and unknown field
   );
   assert.deepEqual(restored.accounts, next.accounts);
   assert.deepEqual(restored.unknown, next.unknown);
-  assert.equal(restored._local.schemaVersion, 17);
+  assert.equal(restored._local.schemaVersion, 18);
   assert.equal(restored._local.themeMode, "dark");
   assert.equal(restored._local.accentColor, "violet");
   assert.equal(
@@ -713,6 +717,15 @@ test("credit limit, available credit, overdraft, and frame restoration on payday
   card.lastPaymentPeriod = null;
 
   // Before payday (Sept 7):
+  current.transactions = [
+    {
+      uuid: "cycle-purchase",
+      account: card.uuid,
+      type: 0,
+      amount: 2532,
+      date: new Date(2026, 8, 5, 12).toISOString(),
+    },
+  ];
   const accountsBefore = selectAccounts(current, new Date(2026, 8, 7, 12));
   const cardBefore = accountsBefore.find((a) => a.id === "account-credit");
   assert.equal(cardBefore.creditLimit, 6000);
@@ -724,6 +737,7 @@ test("credit limit, available credit, overdraft, and frame restoration on payday
 
   // Overdraft condition: card has spent 6500 (exceeding 6000 limit)
   card.amount = -6500;
+  current.transactions[0].amount = 6500;
   const accountsOverdraft = selectAccounts(current, new Date(2026, 8, 7, 12));
   const cardOverdraft = accountsOverdraft.find(
     (a) => a.id === "account-credit",
@@ -736,6 +750,7 @@ test("credit limit, available credit, overdraft, and frame restoration on payday
 
   // Restore spending to 2532 for settlement test
   card.amount = -2532;
+  current.transactions[0].amount = 2532;
 
   // Payday arrives on Sept 10:
   const paidDoc = settleDueCardPayments(current, new Date(2026, 8, 10, 12));
@@ -757,6 +772,341 @@ test("credit limit, available credit, overdraft, and frame restoration on payday
   assert.equal(cardAfter.isOverdraft, false);
   assert.equal(cardAfter.overdraftAmount, 0);
   assert.equal(cardAfter.creditUtilization, 0);
+});
+
+test("credit frame uses only the active payout cycle, accounts for refunds and account currency, and preserves balances", () => {
+  const current = createDefaultBackup();
+  const card = current.accounts.find(
+    (record) => record.uuid === "account-credit",
+  );
+  card.paymentDay = 10;
+  card.creditLimit = 1000;
+  card.amount = -50000;
+  const transaction = (uuid, date, amount, extra = {}) => ({
+    uuid,
+    account: card.uuid,
+    type: 0,
+    amount,
+    date: date.toISOString(),
+    ...extra,
+  });
+  current.transactions = [
+    transaction("old-cycle", new Date(2026, 7, 9, 23, 59, 59, 999), 1000),
+    transaction("first-in-cycle", new Date(2026, 7, 10), 120),
+    transaction("last-in-cycle", new Date(2026, 8, 9, 23, 59, 59, 999), 240),
+    transaction("refund", new Date(2026, 8, 2), 30, { type: 1 }),
+    transaction("foreign-currency", new Date(2026, 8, 2), 100, {
+      accountAmount: 350,
+      currencyCode: "EUR",
+    }),
+    transaction("numeric-account-id", new Date(2026, 8, 3), 50, {
+      account: card.id,
+    }),
+    transaction("payout", new Date(2026, 7, 10, 12), 5000, { type: 2 }),
+    transaction("next-cycle", new Date(2026, 8, 10), 80),
+    transaction("other-account", new Date(2026, 8, 3), 200, {
+      account: "account-checking",
+    }),
+    {
+      uuid: "invalid-date",
+      account: card.uuid,
+      type: 0,
+      amount: 900,
+      date: "invalid",
+    },
+  ];
+  const before = structuredClone(current);
+  const view = selectAccounts(current, new Date(2026, 8, 7)).find(
+    (account) => account.id === card.uuid,
+  );
+  assert.equal(view.balance, -50000);
+  assert.equal(view.cycleExpense, 760);
+  assert.equal(view.cycleIncome, 30);
+  assert.equal(view.currentSpent, 730);
+  assert.equal(view.availableCredit, 270);
+  assert.equal(view.creditUtilization, 73);
+  assert.equal(view.monthlyExpense, 720);
+  const next = selectAccounts(current, new Date(2026, 8, 10)).find(
+    (account) => account.id === card.uuid,
+  );
+  assert.equal(
+    next.currentSpent,
+    80,
+    "the payout day belongs to the new cycle",
+  );
+  assert.equal(next.availableCredit, 920);
+  assert.deepEqual(
+    current,
+    before,
+    "display calculations must not alter debt, settlement or history",
+  );
+});
+
+test("credit cycles clamp month ends and roll over across years without counting payout transfers", () => {
+  const current = createDefaultBackup();
+  const card = current.accounts.find(
+    (record) => record.uuid === "account-credit",
+  );
+  card.paymentDay = 31;
+  card.creditLimit = 100;
+  const expense = (uuid, date, amount) => ({
+    uuid,
+    account: card.uuid,
+    type: 0,
+    amount,
+    date: date.toISOString(),
+  });
+  current.transactions = [
+    expense("old", new Date(2027, 0, 30, 23, 59, 59, 999), 900),
+    expense("jan31", new Date(2027, 0, 31), 10),
+    expense("feb27", new Date(2027, 1, 27, 23, 59, 59, 999), 20),
+    expense("feb28", new Date(2027, 1, 28), 30),
+    expense("dec31", new Date(2027, 11, 31), 40),
+    expense("jan30", new Date(2028, 0, 30), 50),
+    expense("jan31-next", new Date(2028, 0, 31), 60),
+  ];
+  const spent = (anchor) =>
+    selectAccounts(current, anchor).find((account) => account.id === card.uuid)
+      .currentSpent;
+  assert.equal(spent(new Date(2027, 1, 27)), 30);
+  assert.equal(spent(new Date(2027, 1, 28)), 30);
+  assert.equal(spent(new Date(2028, 0, 30)), 90);
+  assert.equal(spent(new Date(2028, 0, 31)), 60);
+});
+
+test("cards without a payout day use the selected current calendar month and refunds never create negative spending", () => {
+  const current = createDefaultBackup();
+  const card = current.accounts.find(
+    (record) => record.uuid === "account-credit",
+  );
+  card.paymentDay = null;
+  card.creditLimit = 100;
+  current.transactions = [
+    {
+      uuid: "previous-month",
+      account: card.uuid,
+      type: 0,
+      amount: 900,
+      date: new Date(2026, 11, 31).toISOString(),
+    },
+    {
+      uuid: "purchase",
+      account: card.uuid,
+      type: 0,
+      amount: 50,
+      date: new Date(2027, 0, 1).toISOString(),
+    },
+    {
+      uuid: "refund",
+      account: card.uuid,
+      type: 1,
+      amount: 70,
+      date: new Date(2027, 0, 2).toISOString(),
+    },
+  ];
+  const view = selectAccounts(current, new Date(2027, 0, 15)).find(
+    (account) => account.id === card.uuid,
+  );
+  assert.equal(view.billingCycle, null);
+  assert.equal(view.monthlyExpense, 50);
+  assert.equal(view.monthlyIncome, 70);
+  assert.equal(view.currentSpent, 0);
+  assert.equal(view.availableCredit, 100);
+});
+
+test("monthly account transactions use calendar months for other accounts and cards without a payout day", () => {
+  for (const accountType of ["card", "bank", "savings", "cash"]) {
+    const current = createDefaultBackup();
+    const record = current.accounts.find(
+      (account) => account.uuid === "account-checking",
+    );
+    record.accountType = accountType;
+    current.transactions = [
+      {
+        uuid: "old",
+        account: record.uuid,
+        type: 0,
+        amount: 1,
+        date: new Date(2026, 7, 31, 23, 59, 59, 999).toISOString(),
+      },
+      {
+        uuid: "first",
+        account: record.uuid,
+        type: 0,
+        amount: 2,
+        date: new Date(2026, 8, 1).toISOString(),
+      },
+      {
+        uuid: "last",
+        account: record.uuid,
+        type: 1,
+        amount: 3,
+        date: new Date(2026, 8, 30, 23, 59, 59, 999).toISOString(),
+      },
+      {
+        uuid: "next",
+        account: record.uuid,
+        type: 0,
+        amount: 4,
+        date: new Date(2026, 9, 1).toISOString(),
+      },
+    ];
+    const transactions = selectAccountTransactions(current, record.uuid);
+    assert.deepEqual(
+      filterAccountTransactions(
+        transactions,
+        "Monthly",
+        new Date(2026, 8, 17),
+      ).map((item) => item.id),
+      ["last", "first"],
+      accountType,
+    );
+    assert.deepEqual(
+      selectAccountTransactions(current, record.uuid, {
+        period: "Monthly",
+        anchor: new Date(2026, 8, 17),
+      }).map((item) => item.id),
+      ["last", "first"],
+      accountType,
+    );
+    assert.equal(
+      selectAccountTransactionCount(current, record.uuid),
+      4,
+      "deletion counts the full history",
+    );
+    assert.equal(transactions.length, 4, "all history remains available");
+  }
+});
+
+test("Monthly card records include the payout day through the day before the next payout", () => {
+  const current = createDefaultBackup();
+  const card = current.accounts.find(
+    (record) => record.uuid === "account-credit",
+  );
+  card.paymentDay = 5;
+  const dates = [
+    ["before", new Date(2026, 8, 4, 23, 59, 59, 999)],
+    ["start", new Date(2026, 8, 5)],
+    ["month-end", new Date(2026, 8, 30, 23, 59, 59, 999)],
+    ["next-month", new Date(2026, 9, 1)],
+    ["last", new Date(2026, 9, 4, 23, 59, 59, 999)],
+    ["next-payout", new Date(2026, 9, 5)],
+  ];
+  current.transactions = dates.map(([uuid, date]) => ({
+    uuid,
+    account: card.uuid,
+    type: 0,
+    amount: 10,
+    date: date.toISOString(),
+  }));
+  const ids = (anchor, period = "Monthly") =>
+    selectAccountTransactions(current, card.uuid, { period, anchor }).map(
+      (record) => record.id,
+    );
+  assert.deepEqual(ids(new Date(2026, 8, 17)), [
+    "last",
+    "next-month",
+    "month-end",
+    "start",
+  ]);
+  assert.deepEqual(
+    ids(new Date(2026, 8, 4)),
+    ["before"],
+    "before payday, show the cycle still in progress",
+  );
+  assert.deepEqual(ids(new Date(2026, 8, 5)), [
+    "last",
+    "next-month",
+    "month-end",
+    "start",
+  ]);
+  assert.deepEqual(ids(new Date(2026, 9, 5)), ["next-payout"]);
+  assert.deepEqual(ids(new Date(2026, 8, 5), "Daily"), ["start"]);
+  assert.equal(selectAccountTransactions(current, card.uuid).length, 6);
+  const range = accountPeriodRange("Monthly", new Date(2026, 8, 17), 5);
+  assert.equal(range.start.getTime(), new Date(2026, 8, 5).getTime());
+  assert.equal(range.end.getTime(), new Date(2026, 9, 5).getTime());
+});
+
+test("card monthly navigation clamps each payout date and never skips shorter months", () => {
+  let anchor = new Date(2027, 0, 31);
+  anchor = shiftAccountPeriodAnchor("Monthly", anchor, 1, 31);
+  assert.equal(anchor.getTime(), new Date(2027, 1, 28).getTime());
+  const february = accountPeriodRange("Monthly", anchor, 31);
+  assert.equal(february.start.getTime(), new Date(2027, 1, 28).getTime());
+  assert.equal(february.end.getTime(), new Date(2027, 2, 31).getTime());
+  anchor = shiftAccountPeriodAnchor("Monthly", anchor, 1, 31);
+  assert.equal(anchor.getTime(), new Date(2027, 2, 31).getTime());
+  assert.equal(
+    shiftAccountPeriodAnchor("Monthly", anchor, -1, 31).getTime(),
+    new Date(2027, 1, 28).getTime(),
+  );
+  assert.equal(
+    shiftAccountPeriodAnchor(
+      "Monthly",
+      new Date(2027, 11, 31),
+      1,
+      31,
+    ).getTime(),
+    new Date(2028, 0, 31).getTime(),
+  );
+  assert.equal(
+    shiftAccountPeriodAnchor("Monthly", new Date(2028, 0, 31), 1, 31).getTime(),
+    new Date(2028, 1, 29).getTime(),
+  );
+  assert.equal(
+    shiftAccountPeriodAnchor("Monthly", new Date(2026, 8, 17), -1, 5).getTime(),
+    new Date(2026, 7, 5).getTime(),
+  );
+  assert.equal(
+    shiftAccountPeriodAnchor("Monthly", new Date(2026, 8, 17), 1).getTime(),
+    new Date(2026, 9, 1).getTime(),
+  );
+});
+
+test("monthly card filtering honors clamped February boundaries", () => {
+  const current = createDefaultBackup();
+  const card = current.accounts.find(
+    (record) => record.uuid === "account-credit",
+  );
+  card.paymentDay = 31;
+  current.transactions = [
+    {
+      uuid: "prior",
+      account: card.uuid,
+      type: 0,
+      amount: 1,
+      date: new Date(2027, 1, 27, 23, 59, 59, 999).toISOString(),
+    },
+    {
+      uuid: "first",
+      account: card.uuid,
+      type: 0,
+      amount: 2,
+      date: new Date(2027, 1, 28).toISOString(),
+    },
+    {
+      uuid: "last",
+      account: card.uuid,
+      type: 0,
+      amount: 3,
+      date: new Date(2027, 2, 30, 23, 59, 59, 999).toISOString(),
+    },
+    {
+      uuid: "next",
+      account: card.uuid,
+      type: 0,
+      amount: 4,
+      date: new Date(2027, 2, 31).toISOString(),
+    },
+  ];
+  assert.deepEqual(
+    selectAccountTransactions(current, card.uuid, {
+      period: "Monthly",
+      anchor: new Date(2027, 1, 28),
+    }).map((record) => record.id),
+    ["last", "first"],
+  );
 });
 
 const rateNow = new Date("2026-09-10T12:00:00.000Z");
@@ -1136,7 +1486,7 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     );
     await migrateLocalDatabase(database);
     const migrated = await readDocument(database);
-    assert.equal(migrated._local.schemaVersion, 17);
+    assert.equal(migrated._local.schemaVersion, 18);
     assert.equal(migrated._local.themeMode, "system");
     assert.equal(migrated._local.accentColor, "cyan");
     assert.equal(migrated.accounts[0].accountType, "bank");
@@ -1147,7 +1497,7 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     assert.deepEqual(migrated.importedUnknown, { keep: true });
     assert.equal(
       (await database.getFirstAsync("PRAGMA user_version")).user_version,
-      17,
+      18,
     );
     const next = storeExchangeRates(add(migrated), rateTable());
     await writeDocument(database, next);

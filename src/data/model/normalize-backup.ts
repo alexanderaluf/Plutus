@@ -19,7 +19,7 @@ import {
   type ThemeMode,
 } from "./backup-document";
 import { normalizeCategoryRecord } from "./category-record";
-import { RATE_SOURCE } from "./exchange-rate";
+import { RATE_SOURCE, readRateSnapshot } from "./exchange-rate";
 import { isJsonObject } from "./json";
 
 function normalizeAttachments(value: unknown): AttachmentManifest[] {
@@ -72,6 +72,24 @@ function normalizeTransactionCurrency(
       : transactionCurrency;
   return {
     ...record,
+    conversionSnapshot:
+      isJsonObject(record.conversionSnapshot) &&
+      readRateSnapshot(record.conversionSnapshot)
+        ? {
+            ...record.conversionSnapshot,
+            ...readRateSnapshot(record.conversionSnapshot)!,
+          }
+        : null,
+    profileCurrencyCode:
+      typeof record.profileCurrencyCode === "string" &&
+      /^[A-Z]{3}$/i.test(record.profileCurrencyCode)
+        ? record.profileCurrencyCode.toUpperCase()
+        : null,
+    profileAmount:
+      typeof record.profileAmount === "number" &&
+      Number.isFinite(record.profileAmount)
+        ? record.profileAmount
+        : null,
     currencyCode: transactionCurrency,
     accountAmount:
       typeof record.accountAmount === "number" &&

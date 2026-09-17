@@ -13,6 +13,7 @@ import {
   createProfileMatcher,
 } from "../model/category-record";
 import type { JsonObject } from "../model/json";
+import { transactionMoney } from "../model/transaction-conversion";
 import { selectCategories } from "./category-selectors";
 import { createRecordLookup } from "./transaction-selectors";
 import { filterProjection, finishProjection } from "./cooperative";
@@ -165,6 +166,7 @@ export function* iterateBudgets(
     return [
       {
         id: identity(t) || `display-${index}`,
+        record: t,
         name: String(t.name ?? "Untitled transaction"),
         amount: Math.abs(accountAmount),
         type: Number(t.type),
@@ -229,10 +231,22 @@ export function* iterateBudgets(
         (draft.budgetType === "Overall" || scope.has(t.categoryId)) &&
         (!draft.accounts.length || accountScope.has(t.accountId)),
     );
-    const matches = yield* filterProjection(
+    const matchingCurrencies = yield* filterProjection(
       candidates,
-      (t) => t.currencyCode === draft.currencyCode,
+      (t) =>
+        t.currencyCode === draft.currencyCode ||
+        transactionMoney(t.record, draft.currencyCode) !== null,
     );
+    const matches = matchingCurrencies.map((transaction) => {
+      const money = transactionMoney(transaction.record, draft.currencyCode);
+      return money
+        ? {
+            ...transaction,
+            amount: money.amount,
+            currencyCode: money.currencyCode,
+          }
+        : transaction;
+    });
     const range = budgetPeriodRange(draft, now);
     const base = Math.max(0, Number(draft.amount) || 0);
     let rollover = 0;
@@ -375,6 +389,7 @@ export function* iterateBudgets(
         candidates,
         (t) =>
           t.currencyCode !== draft.currencyCode &&
+          transactionMoney(t.record, draft.currencyCode) === null &&
           t.timestamp >= range.start.getTime() &&
           t.timestamp < range.end.getTime(),
       )).length,

@@ -11,7 +11,14 @@ import {
 import {
   convertCurrency,
   currencyCode as normalizeCurrencyCode,
+  type ExchangeRateSnapshot,
 } from "./exchange-rate";
+import {
+  profileCurrency,
+  transactionMoney,
+  transactionSnapshot,
+} from "./transaction-conversion";
+import { selectExchangeRates } from "../selectors/exchange-rate-selectors";
 import type { JsonObject, JsonValue } from "./json";
 
 export const TRANSACTION_TYPES = [0, 1, 2] as const;
@@ -27,6 +34,7 @@ export type TransactionDraft = {
   exchangeRateDate: string | null;
   exchangeRateFetchedAt: string | null;
   exchangeRateSource: string | null;
+  conversionSnapshot?: ExchangeRateSnapshot | null;
   description: string;
   occurredAt: string;
   accountId: string;
@@ -69,10 +77,7 @@ export function createTransactionDraft(
   };
 }
 
-function findRecord(
-  records: JsonObject[],
-  value: JsonValue | undefined,
-) {
+function findRecord(records: JsonObject[], value: JsonValue | undefined) {
   return records.find((record) => references(record, value));
 }
 
@@ -95,9 +100,7 @@ function transactionEffect(
 ) {
   const storedAccountAmount = record.accountAmount;
   const amount = Math.abs(
-    Number(
-      storedAccountAmount == null ? record.amount : storedAccountAmount,
-    ),
+    Number(storedAccountAmount == null ? record.amount : storedAccountAmount),
   );
   if (!Number.isFinite(amount))
     throw new Error(i18n.t("validation.transaction.invalidAmount"));
@@ -142,9 +145,7 @@ function updateReferences(
   transactionId: string,
   shouldContain: boolean,
 ) {
-  const filtered = values.filter(
-    (value) => String(value) !== transactionId,
-  );
+  const filtered = values.filter((value) => String(value) !== transactionId);
   return shouldContain ? [...filtered, transactionId] : filtered;
 }
 
@@ -224,11 +225,31 @@ function resolveDraft(
       }),
     );
   const optionalRelations = [
-    [i18n.t("validation.transaction.relations.budget"), document.budgets, draft.budgetId],
-    [i18n.t("validation.transaction.relations.label"), document.labels, draft.labelId],
-    [i18n.t("validation.transaction.relations.loan"), document.loans, draft.loanId],
-    [i18n.t("validation.transaction.relations.place"), document.places, draft.placeId],
-    [i18n.t("validation.transaction.relations.person"), document.peoples, draft.personId],
+    [
+      i18n.t("validation.transaction.relations.budget"),
+      document.budgets,
+      draft.budgetId,
+    ],
+    [
+      i18n.t("validation.transaction.relations.label"),
+      document.labels,
+      draft.labelId,
+    ],
+    [
+      i18n.t("validation.transaction.relations.loan"),
+      document.loans,
+      draft.loanId,
+    ],
+    [
+      i18n.t("validation.transaction.relations.place"),
+      document.places,
+      draft.placeId,
+    ],
+    [
+      i18n.t("validation.transaction.relations.person"),
+      document.peoples,
+      draft.personId,
+    ],
   ] as const;
   for (const [label, records, value] of optionalRelations) {
     if (!value) continue;
@@ -268,6 +289,7 @@ export function transactionDraftFromRecord(
     currencyCode: String(
       record.currencyCode ?? accountCurrencyCode,
     ).toUpperCase(),
+    conversionSnapshot: transactionSnapshot(record),
     accountCurrencyCode,
     exchangeRate:
       typeof record.exchangeRate === "number" &&
@@ -328,6 +350,20 @@ export function saveTransaction(
   if (existing && !belongsToProfile(document, existing, profileId))
     throw new Error(i18n.t("validation.transaction.wrongProfile"));
   const values = resolveDraft(document, draft, profileId);
+  const mainCurrency = profileCurrency(document, profileId);
+  const previousSnapshot =
+    existing && existing.currencyCode === values.currencyCode
+      ? transactionSnapshot(existing)
+      : null;
+  const draftSnapshot =
+    draft.conversionSnapshot &&
+    draft.conversionSnapshot.rates[values.currencyCode]
+      ? transactionSnapshot({ conversionSnapshot: draft.conversionSnapshot })
+      : null;
+  const snapshot =
+    draftSnapshot ??
+    previousSnapshot ??
+    selectExchangeRates(document, values.currencyCode);
   const record: JsonObject = {
     ...existing,
     uuid: existing?.uuid ?? id,
@@ -338,6 +374,16 @@ export function saveTransaction(
     type: draft.type,
     currencyCode: values.currencyCode,
     accountCurrencyCode: values.accountCurrencyCode,
+    conversionSnapshot: snapshot
+      ? { ...snapshot, rates: { ...snapshot.rates } }
+      : null,
+    conversionCapturedAt:
+      previousSnapshot &&
+      snapshot?.date === previousSnapshot.date &&
+      snapshot?.fetchedAt === previousSnapshot.fetchedAt
+        ? (existing?.conversionCapturedAt ?? now)
+        : now,
+    profileCurrencyCode: mainCurrency,
     exchangeRate:
       values.currencyCode === values.accountCurrencyCode
         ? null
@@ -378,6 +424,10 @@ export function saveTransaction(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
+  const profileMoney = transactionMoney(record, mainCurrency);
+  if (!profileMoney && values.currencyCode !== mainCurrency)
+    throw new Error(i18n.t("validation.transaction.exchangeRate"));
+  record.profileAmount = profileMoney?.amount ?? values.amount;
   const effects = mergeEffects(
     existing ? transactionEffect(document, existing, -1) : new Map(),
     transactionEffect(document, record, 1),
@@ -387,7 +437,10 @@ export function saveTransaction(
     const accountId = identity(account);
     const delta = effects.get(accountId) ?? 0;
     const balance = Number(account.amount);
-    if (delta && (!Number.isFinite(balance) || !Number.isFinite(balance + delta)))
+    if (
+      delta &&
+      (!Number.isFinite(balance) || !Number.isFinite(balance + delta))
+    )
       throw new Error(i18n.t("validation.transaction.invalidAccountBalance"));
     return {
       ...account,
@@ -461,7 +514,10 @@ export function deleteTransaction(
   const accounts = document.accounts.map((account) => {
     const delta = effects.get(identity(account)) ?? 0;
     const balance = Number(account.amount);
-    if (delta && (!Number.isFinite(balance) || !Number.isFinite(balance + delta)))
+    if (
+      delta &&
+      (!Number.isFinite(balance) || !Number.isFinite(balance + delta))
+    )
       throw new Error(
         i18n.t("validation.transaction.invalidAccountBalanceShort"),
       );
@@ -472,11 +528,7 @@ export function deleteTransaction(
         : {}),
       ...(Array.isArray(account.transactions)
         ? {
-            transactions: updateReferences(
-              account.transactions,
-              id,
-              false,
-            ),
+            transactions: updateReferences(account.transactions, id, false),
           }
         : {}),
     };

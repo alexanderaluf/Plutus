@@ -1,5 +1,6 @@
 import { useLocalData } from "@/data/local-data-provider";
 import { selectAccounts } from "@/data/selectors/document-selectors";
+import { useLocalDayClock } from "@/shared/lib/use-local-day-clock";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Animated as NativeAnimated, Pressable, View } from "react-native";
@@ -33,7 +34,8 @@ export function AccountsScreen() {
   const { document, paymentError, reconcileCardPayments } = useLocalData();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const accounts = selectAccounts(document);
+  const now = useLocalDayClock();
+  const accounts = selectAccounts(document, now);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
     <View style={{ flex: 1 }}>

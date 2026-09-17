@@ -7,7 +7,7 @@ import {
 } from "../model/normalize-backup";
 import { getSetupStatus } from "../model/onboarding";
 
-export const DATABASE_VERSION = 17;
+export const DATABASE_VERSION = 18;
 export const STORAGE_RECOVERY_MESSAGE =
   "Your saved data could not be opened safely. Nothing has been reset. Keep this installation and export a recovery copy before seeking help.";
 
@@ -150,6 +150,6 @@ export async function migrateLocalDatabase(
       hasProfile ? 1 : 0,
     );
     // Advance only after every migration and validation succeeds; rollback includes DDL.
-    await transaction.execAsync("PRAGMA user_version = 17;");
+    await transaction.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
   });
 }

@@ -402,7 +402,7 @@ test("v13 migration preserves imported budget settings and is idempotent", async
     const migrated = JSON.parse(
       sql.prepare("SELECT document_json FROM app_document").get().document_json,
     );
-    assert.equal(migrated._local.schemaVersion, 17);
+    assert.equal(migrated._local.schemaVersion, 18);
     assert.equal(migrated._local.cloudProvider, null);
     assert.equal(migrated.budgets[0].period, "Monthly");
     assert.deepEqual(migrated.budgets[0].categories, [20]);

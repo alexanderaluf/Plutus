@@ -3,7 +3,6 @@ import {
   BottomSafeAreaGradient,
 } from "@/shared/ui/safe-area-gradients";
 import { formatAppDate } from "@/data/model/onboarding";
-import { selectAppPreferences } from "@/data/selectors/document-selectors";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { BlurTargetView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
@@ -35,6 +34,7 @@ import { useLocalData } from "@/data/local-data-provider";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { belongsToProfile, identity } from "@/data/model/category-record";
 import { convertCurrency } from "@/data/model/exchange-rate";
+import { transactionSnapshot } from "@/data/model/transaction-conversion";
 import type { JsonObject } from "@/data/model/json";
 import {
   createTransactionDraft,
@@ -46,6 +46,7 @@ import {
 } from "@/data/model/transaction-record";
 import {
   selectAccounts,
+  selectAppPreferences,
   selectBudgets,
   selectCategories,
   selectCategoryRootId,
@@ -150,6 +151,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       return params.copyId
         ? {
             ...sourceDraft,
+            conversionSnapshot: null,
             receiptPath: null,
             receiptAttachmentId: null,
           }
@@ -484,6 +486,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       exchangeRateDate: null,
       exchangeRateFetchedAt: null,
       exchangeRateSource: null,
+      conversionSnapshot: null,
     }));
     if (selectedCode === accountCode) {
       setCurrencyRateLoading(false);
@@ -504,6 +507,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
               exchangeRateDate: snapshot.date,
               exchangeRateFetchedAt: snapshot.fetchedAt,
               exchangeRateSource: snapshot.source,
+              conversionSnapshot: snapshot,
             }
           : current,
       );
@@ -521,6 +525,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 exchangeRateDate: saved.date,
                 exchangeRateFetchedAt: saved.fetchedAt,
                 exchangeRateSource: saved.source,
+                conversionSnapshot: saved,
               }
             : current,
         );
@@ -680,13 +685,64 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         ? await persistAttachment(pendingReceipt.uri, pendingReceipt.mimeType)
         : null;
       pendingAttachmentPath = attachment?.relativePath ?? null;
-      const preparedDraft: TransactionDraft = attachment
+      let preparedDraft: TransactionDraft = attachment
         ? {
             ...draft,
             receiptPath: attachment.relativePath,
             receiptAttachmentId: attachment.id,
           }
         : draft;
+      const base = (
+        draft.type === 2 ? accountCurrencyCode : transactionCurrencyCode
+      ).toUpperCase();
+      const linkedBankId = selectedAccount?.linkedBankAccountId;
+      const linkedBank = linkedBankId
+        ? document.accounts.find(
+            (account) =>
+              account.uuid === linkedBankId ||
+              String(account.id) === linkedBankId,
+          )
+        : undefined;
+      const targetCodes = [
+        activeProfile.currencyCode.toUpperCase(),
+        accountCurrencyCode,
+        String(linkedBank?.currencyCode ?? base).toUpperCase(),
+      ];
+      const captured = transactionSnapshot({
+        conversionSnapshot: preparedDraft.conversionSnapshot ?? null,
+      });
+      if (
+        targetCodes.some((code) => code !== base) &&
+        (!captured ||
+          !captured.rates[base] ||
+          targetCodes.some((code) => !captured.rates[code]))
+      ) {
+        let snapshot;
+        try {
+          snapshot = await ensureExchangeRates(base);
+        } catch {
+          snapshot = selectExchangeRates(document, base);
+          if (!snapshot)
+            throw new Error(t("transactions.form.currencyRateUnavailable"));
+          setCurrencyRateNotice(
+            t("transactions.form.currencyRateCached", { date: snapshot.date }),
+          );
+        }
+        if (targetCodes.some((code) => !snapshot.rates[code]))
+          throw new Error(t("transactions.form.currencyRateUnavailable"));
+        preparedDraft = {
+          ...preparedDraft,
+          conversionSnapshot: snapshot,
+          ...(!editId && base !== accountCurrencyCode
+            ? {
+                exchangeRate: snapshot.rates[accountCurrencyCode],
+                exchangeRateDate: snapshot.date,
+                exchangeRateFetchedAt: snapshot.fetchedAt,
+                exchangeRateSource: snapshot.source,
+              }
+            : {}),
+        };
+      }
       const id = transactionId.current;
       const now = new Date().toISOString();
       await updateDocument((current) => {
@@ -726,6 +782,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         setDraft((current) => ({
           ...current,
           name: "",
+          conversionSnapshot: null,
           amount: "",
           description: "",
           occurredAt: new Date().toISOString(),
@@ -1054,6 +1111,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                       exchangeRateDate: null,
                       exchangeRateFetchedAt: null,
                       exchangeRateSource: null,
+                      conversionSnapshot: null,
                       destinationAccountId:
                         current.destinationAccountId === accountId
                           ? ""

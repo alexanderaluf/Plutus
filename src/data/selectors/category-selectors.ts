@@ -13,6 +13,7 @@ import {
 import type { JsonObject, JsonValue } from "../model/json";
 import { createRecordLookup } from "./transaction-selectors";
 import { finishProjection } from "./cooperative";
+import { transactionMoney } from "../model/transaction-conversion";
 
 export type Category = CategoryDraft & { id: string };
 export type CategoryTotal = { count: number; amounts: Record<string, number> };
@@ -124,10 +125,13 @@ function transactionValues(
   const date = new Date(
     string(record.date, string(record.createdAt)),
   ).getTime();
+  const captured = transactionMoney(record, context.fallback);
   return {
     categoryId: identity(category),
-    currencyCode: /^[A-Z]{3}$/.test(code) ? code : context.fallback,
-    amount: Math.abs(accountAmount),
+    currencyCode:
+      captured?.currencyCode ??
+      (/^[A-Z]{3}$/.test(code) ? code : context.fallback),
+    amount: captured?.amount ?? Math.abs(accountAmount),
     timestamp: Number.isFinite(date) ? date : null,
     type:
       record.type === 1

@@ -277,7 +277,7 @@ test("pre-v5 upgrade restores the legacy bank/card relationship without replacin
 });
 
 test("deterministic randomized upgrades from every historical version preserve every record and unknown key", async () => {
-  for (let version = 1; version <= 16; version++)
+  for (let version = 1; version < DATABASE_VERSION; version++)
     for (let trial = 1; trial <= 5; trial++) {
       const rand = random(version * 100 + trial);
       const d = completeSetup(
@@ -310,6 +310,10 @@ test("deterministic randomized upgrades from every historical version preserve e
       const db = adapter();
       try {
         seed(db, d, version);
+        if (version >= 17)
+          db.sql.exec(
+            "CREATE TABLE app_storage_identity (id INTEGER PRIMARY KEY, had_profile INTEGER NOT NULL); INSERT INTO app_storage_identity VALUES (1, 1);",
+          );
         // Completely rebuild the physical table with reordered columns, an extra
         // column and an unrelated future table. The stable envelope remains readable.
         db.sql.exec(
@@ -372,7 +376,7 @@ test("failure at each SQL mutation rolls back document, version, schema and chec
     "UPDATE app_document",
     "CREATE TABLE IF NOT EXISTS app_storage_identity",
     "INSERT OR IGNORE INTO app_storage_identity",
-    "PRAGMA user_version = 17",
+    `PRAGMA user_version = ${DATABASE_VERSION}`,
   ]) {
     const db = adapter();
     try {
@@ -620,7 +624,7 @@ test("native startup checkpoint contract: reopen a full pre-upgrade SQLite copy;
     const checkpointPath = path.join(
       directory,
       "storage-recovery",
-      "before-v17.sqlite",
+      `before-v${DATABASE_VERSION}.sqlite`,
     );
     const checkpointBytes = fs.readFileSync(checkpointPath);
     const checkpoint = new DatabaseSync(checkpointPath, { readOnly: true });

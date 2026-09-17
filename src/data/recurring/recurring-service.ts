@@ -110,6 +110,7 @@ export function recordRecurringPayment(
     amount: String(convertCurrency(originalAmount, mainRate, currencies.main)),
     currencyCode: currencies.main,
     accountCurrencyCode: currencies.account,
+    conversionSnapshot: snapshot ?? null,
     exchangeRate: accountRate / mainRate,
     exchangeRateDate: snapshot?.date ?? null,
     exchangeRateFetchedAt: snapshot?.fetchedAt ?? null,
