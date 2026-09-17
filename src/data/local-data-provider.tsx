@@ -4,6 +4,7 @@ import {
   type PropsWithChildren,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -14,7 +15,7 @@ import { i18n } from "@/localization/i18n";
 
 import {
   mutateDocument,
-  readDocument,
+  createDocumentReader,
   writeDocument,
 } from "./database/document-repository";
 import {
@@ -78,6 +79,7 @@ const LocalDataContext = createContext<LocalDataContextValue | null>(null);
 
 export function LocalDataProvider({ children }: PropsWithChildren) {
   const database = useSQLiteContext();
+  const readPersisted = useMemo(() => createDocumentReader(database), [database]);
   const [background, accent] = useThemeColor(["background", "accent"]);
   const [document, setDocument] = useState(createDefaultBackup);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -143,7 +145,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
     return {
       read: async () => {
         await writeQueue.current.catch(() => undefined);
-        return readDocument(database);
+        return readPersisted();
       },
       update: updateDocument,
     };
@@ -230,7 +232,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
     writeQueue.current = writeQueue.current
       .catch(() => undefined)
       .then(async () => {
-        const persisted = await readDocument(database);
+        const persisted = await readPersisted();
         documentRef.current = persisted;
         setDocument(persisted);
         hydrationRef.current = true;

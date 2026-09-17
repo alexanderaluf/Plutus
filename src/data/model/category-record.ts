@@ -57,6 +57,19 @@ export function belongsToProfile(
     : String(record.user) === profileId;
 }
 
+/** Compile owner aliases once for a large read-only projection. */
+export function createProfileMatcher(document: BackupDocument) {
+  const profileId = categoryProfileId(document);
+  const owner = document.users.find((user) => references(user, profileId));
+  const aliases = new Set(
+    (owner ? [owner.uuid, owner.id] : [profileId])
+      .filter((id) => id != null)
+      .map(String),
+  );
+  return (record: JsonObject) =>
+    !profileId || record.user == null || aliases.has(String(record.user));
+}
+
 export function normalizeCategoryRecord(record: JsonObject): JsonObject {
   return {
     description: "",

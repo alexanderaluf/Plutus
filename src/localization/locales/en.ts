@@ -1149,6 +1149,8 @@ export const en = {
     },
   },
   home: {
+    loadError: "Home data could not be loaded. Your saved data is unchanged.",
+    retryLoad: "Try again",
     greeting: "Good morning, {{name}}",
     openProfile: "Open profile",
     overview: {

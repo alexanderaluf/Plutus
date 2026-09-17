@@ -1173,6 +1173,9 @@ export const ru = {
   },
   home: {
     ...en.home,
+    loadError:
+      "Не удалось загрузить данные главной страницы. Сохранённые данные не изменены.",
+    retryLoad: "Повторить",
     greeting: "Доброе утро, {{name}}",
     openProfile: "Открыть профиль",
     overview: {

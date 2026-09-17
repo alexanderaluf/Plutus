@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useTranslation } from "react-i18next";
@@ -194,7 +193,7 @@ export function BudgetOverviewCard({
               )}
             </Text>
             <Text className="text-xs text-muted">
-              {t("home.budgets.transactions", { count: b.transactions.length })}
+              {t("home.budgets.transactions", { count: b.transactionCount })}
             </Text>
           </View>
           {b.rollover > 0 && (
@@ -224,64 +223,27 @@ export function BudgetOverviewCard({
     </Animated.View>
   );
 }
-export function BudgetCard({
-  budgets,
-  showAll = false,
-}: {
-  budgets: Budget[];
-  showAll?: boolean;
-}) {
+export function BudgetListHeader({ count }: { count: number }) {
   const router = useRouter();
   const { t } = useTranslation();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   return (
-    <View className="gap-3">
-      <View className="flex-row items-center justify-between">
-        <View className="min-w-0 flex-1 flex-row items-center gap-2">
-          <Text className="font-manrope-bold text-lg text-foreground">
-            {t("home.budgets.title")}
-          </Text>
-          <Text className="text-xs text-muted">{budgets.length}</Text>
-        </View>
-        <Button
-          size="sm"
-          variant="outline"
-          onPress={() => router.push("/budgets")}
-        >
-          <FilledIcon name="plus" size={16} tone="accent" />
-          <Button.Label className="font-manrope-semibold text-accent">
-            {t("home.budgets.manage")}
-          </Button.Label>
-        </Button>
+    <View className="mb-3 flex-row items-center justify-between">
+      <View className="min-w-0 flex-1 flex-row items-center gap-2">
+        <Text className="font-manrope-bold text-lg text-foreground">
+          {t("home.budgets.title")}
+        </Text>
+        <Text className="text-xs text-muted">{count}</Text>
       </View>
-      {(showAll ? budgets : budgets.slice(0, 3)).map((b) => (
-        <BudgetOverviewCard
-          key={b.id}
-          budget={b}
-          expanded={expandedId === b.id}
-          onToggle={() => setExpandedId(expandedId === b.id ? null : b.id)}
-        />
-      ))}
-      {!showAll && budgets.length > 3 && (
-        <Pressable
-          onPress={() => router.push("/budgets")}
-          accessibilityRole="button"
-          className="min-h-11 items-center justify-center rounded-2xl bg-surface"
-        >
-          <Text className="font-manrope-semibold text-xs text-accent">
-            {t("home.budgets.moreTracked", { count: budgets.length - 3 })}
-          </Text>
-        </Pressable>
-      )}
-      {!budgets.length && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/budgets")}
-          className="rounded-3xl bg-surface p-4"
-        >
-          <Text className="text-sm text-muted">{t("home.budgets.empty")}</Text>
-        </Pressable>
-      )}
+      <Button
+        size="sm"
+        variant="outline"
+        onPress={() => router.push("/budgets")}
+      >
+        <FilledIcon name="plus" size={16} tone="accent" />
+        <Button.Label className="font-manrope-semibold text-accent">
+          {t("home.budgets.manage")}
+        </Button.Label>
+      </Button>
     </View>
   );
 }

@@ -1,9 +1,13 @@
 import { financialMonth } from "../model/financial-month";
 import { createRecordLookup } from "./transaction-selectors";
+import { filterProjection, finishProjection } from "./cooperative";
 import { ACCOUNT_ICONS } from "@/features/accounts/account-options";
 import { selectBudgets } from "./budget-selectors";
 import { selectExchangeQuote } from "./exchange-rate-selectors";
-import { selectRecurrings, selectRecurringEvents } from "./recurring-selectors";
+import {
+  iterateRecurrings,
+  iterateRecurringEvents,
+} from "./recurring-selectors";
 import type {
   Account,
   AccountPeriod,
@@ -16,9 +20,9 @@ import type { FilledIconName } from "@/shared/ui/filled-icon";
 import { i18n } from "@/localization/i18n";
 import type { AccountDraft } from "../model/account-record";
 import {
-  belongsToProfile,
   identity,
   references,
+  createProfileMatcher,
 } from "../model/category-record";
 import {
   getSavingsAccountSummary,
@@ -104,117 +108,128 @@ function transactionDate(record: JsonObject, document: BackupDocument) {
     : formatAppDate(date, document._local.dateFormat);
 }
 
-export function selectAccounts(document: BackupDocument): Account[] {
+function ownedAccountRecords(document: BackupDocument) {
   const profileId = document._local.selectedProfileId;
   const owner = document.users.find(
     (user) => String(user.uuid ?? user.id) === profileId,
   );
-  return document.accounts
-    .filter(
-      (record) =>
-        !profileId ||
-        record.user == null ||
-        record.user === profileId ||
-        (owner?.id != null && record.user === owner.id),
-    )
-    .map((record, index) => {
-      const institution = text(record.bankName, i18n.t("common.localAccount"));
-      const normalized = `${text(record.name)} ${institution}`.toLowerCase();
-      const kind =
-        record.accountType === "card"
-          ? "credit"
-          : record.accountType === "bank"
-            ? "bank"
-            : record.accountType === "cash"
-              ? "cash"
-              : record.accountType === "savings"
-                ? "savings"
-                : record.type === 1
-                  ? "cash"
-                  : record.type === 2
-                    ? "savings"
-                    : normalized.includes("credit")
-                      ? "credit"
-                      : normalized.includes("saving")
-                        ? "savings"
-                        : "checking";
-      const storedIcon = text(record.icon);
-      const storedIconPath = text(record.iconPath);
-      const materialIconIsValid =
-        storedIcon.startsWith("material:") &&
-        /^[Mm]/.test(storedIconPath) &&
-        storedIconPath.length <= 20_000;
+  return document.accounts.filter(
+    (record) =>
+      !profileId ||
+      record.user == null ||
+      record.user === profileId ||
+      (owner?.id != null && record.user === owner.id),
+  );
+}
 
-      return {
-        id: recordId(record, index),
-        accountNumber: text(record.accountNumber),
-        ownerName: text(
-          document.users.find(
-            (user) => user.uuid === record.user || user.id === record.user,
-          )?.name,
-        ),
-        ...accountActivityTotals(document, record),
-        name: text(record.name, `Account ${index + 1}`),
-        institution,
-        kind,
-        balance: number(record.amount),
-        savingsSummary:
-          kind === "savings"
-            ? getSavingsAccountSummary(
-                number(record.amount),
-                record.savingsDetails,
-              )
-            : null,
-        lastFour: text(record.cardLastFour, text(record.accountNumber)).slice(
-          -4,
-        ),
-        icon: materialIconIsValid
-          ? storedIcon
-          : (ACCOUNT_ICONS.find(
-              (icon) =>
-                !icon.name.startsWith("material:") && icon.name === record.icon,
-            )?.name ??
-            (kind === "cash"
-              ? "cash"
-              : kind === "credit"
-                ? "credit-card"
-                : kind === "savings"
-                  ? "piggy-bank"
-                  : "bank")),
-        iconPath: materialIconIsValid ? storedIconPath : null,
-        color: /^#[a-f\d]{6}$/i.test(text(record.color))
-          ? text(record.color)
-          : colors[index % colors.length],
-        iconBackground: /^#[a-f\d]{6}$/i.test(text(record.color))
-          ? `${text(record.color)}26`
-          : ["#17343c", "#2f2942", "#3b3020", "#402523"][index % 4],
-        currencyCode: /^[A-Z]{3}$/.test(text(record.currencyCode).toUpperCase())
-          ? text(record.currencyCode).toUpperCase()
-          : "USD",
-        isDefault: record.isDefault === true,
-        isExcluded: record.isExcluded === true,
-        cardCompany: text(record.cardCompany),
-        bankName: text(record.bankName),
-        linkedBankAccountId:
-          typeof record.linkedBankAccountId === "string"
-            ? record.linkedBankAccountId
-            : null,
-        linkedBankAccountName: text(
-          document.accounts.find(
-            (candidate) =>
-              String(candidate.uuid ?? candidate.id) ===
-              record.linkedBankAccountId,
-          )?.name,
-        ),
-        paymentDay:
-          typeof record.paymentDay === "number" &&
-          Number.isInteger(record.paymentDay) &&
-          record.paymentDay >= 1 &&
-          record.paymentDay <= 31
-            ? record.paymentDay
-            : null,
-      };
-    });
+function accountBalance(record: JsonObject, index: number) {
+  return {
+    id: recordId(record, index),
+    balance: number(record.amount),
+    currencyCode: /^[A-Z]{3}$/.test(text(record.currencyCode).toUpperCase())
+      ? text(record.currencyCode).toUpperCase()
+      : "USD",
+    isExcluded: record.isExcluded === true,
+  };
+}
+
+/** Home needs balances, not four all-history scans for each account. */
+export function selectAccountBalances(document: BackupDocument) {
+  return ownedAccountRecords(document).map(accountBalance);
+}
+
+export function selectAccounts(document: BackupDocument): Account[] {
+  return ownedAccountRecords(document).map((record, index) => {
+    const institution = text(record.bankName, i18n.t("common.localAccount"));
+    const normalized = `${text(record.name)} ${institution}`.toLowerCase();
+    const kind =
+      record.accountType === "card"
+        ? "credit"
+        : record.accountType === "bank"
+          ? "bank"
+          : record.accountType === "cash"
+            ? "cash"
+            : record.accountType === "savings"
+              ? "savings"
+              : record.type === 1
+                ? "cash"
+                : record.type === 2
+                  ? "savings"
+                  : normalized.includes("credit")
+                    ? "credit"
+                    : normalized.includes("saving")
+                      ? "savings"
+                      : "checking";
+    const storedIcon = text(record.icon);
+    const storedIconPath = text(record.iconPath);
+    const materialIconIsValid =
+      storedIcon.startsWith("material:") &&
+      /^[Mm]/.test(storedIconPath) &&
+      storedIconPath.length <= 20_000;
+
+    return {
+      ...accountBalance(record, index),
+      accountNumber: text(record.accountNumber),
+      ownerName: text(
+        document.users.find(
+          (user) => user.uuid === record.user || user.id === record.user,
+        )?.name,
+      ),
+      ...accountActivityTotals(document, record),
+      name: text(record.name, `Account ${index + 1}`),
+      institution,
+      kind,
+      savingsSummary:
+        kind === "savings"
+          ? getSavingsAccountSummary(
+              number(record.amount),
+              record.savingsDetails,
+            )
+          : null,
+      lastFour: text(record.cardLastFour, text(record.accountNumber)).slice(-4),
+      icon: materialIconIsValid
+        ? storedIcon
+        : (ACCOUNT_ICONS.find(
+            (icon) =>
+              !icon.name.startsWith("material:") && icon.name === record.icon,
+          )?.name ??
+          (kind === "cash"
+            ? "cash"
+            : kind === "credit"
+              ? "credit-card"
+              : kind === "savings"
+                ? "piggy-bank"
+                : "bank")),
+      iconPath: materialIconIsValid ? storedIconPath : null,
+      color: /^#[a-f\d]{6}$/i.test(text(record.color))
+        ? text(record.color)
+        : colors[index % colors.length],
+      iconBackground: /^#[a-f\d]{6}$/i.test(text(record.color))
+        ? `${text(record.color)}26`
+        : ["#17343c", "#2f2942", "#3b3020", "#402523"][index % 4],
+      isDefault: record.isDefault === true,
+      cardCompany: text(record.cardCompany),
+      bankName: text(record.bankName),
+      linkedBankAccountId:
+        typeof record.linkedBankAccountId === "string"
+          ? record.linkedBankAccountId
+          : null,
+      linkedBankAccountName: text(
+        document.accounts.find(
+          (candidate) =>
+            String(candidate.uuid ?? candidate.id) ===
+            record.linkedBankAccountId,
+        )?.name,
+      ),
+      paymentDay:
+        typeof record.paymentDay === "number" &&
+        Number.isInteger(record.paymentDay) &&
+        record.paymentDay >= 1 &&
+        record.paymentDay <= 31
+          ? record.paymentDay
+          : null,
+    };
+  });
 }
 
 function belongsToAccount(transaction: JsonObject, account: JsonObject) {
@@ -402,6 +417,16 @@ export function selectHomeOverview(
   currencyCode: string,
   now = new Date(),
 ) {
+  return finishProjection(iterateHomeOverview(document, currencyCode, now));
+}
+
+export function* iterateHomeOverview(
+  document: BackupDocument,
+  currencyCode: string,
+  now: Date,
+  transactions: Iterable<JsonObject> = document.transactions,
+) {
+  const belongs = createProfileMatcher(document);
   const currency = currencyCode.toUpperCase();
   const { start: monthStart } = financialMonth(
     now,
@@ -413,7 +438,7 @@ export function selectHomeOverview(
     now.getMonth(),
     now.getDate() + 30,
   );
-  const accounts = selectAccounts(document).filter(
+  const accounts = selectAccountBalances(document).filter(
     (account) => !account.isExcluded,
   );
   const includedAccountIds = new Set(accounts.map((account) => account.id));
@@ -461,54 +486,66 @@ export function selectHomeOverview(
     };
   }
   const accountRecords = createRecordLookup(document.accounts);
-  const monthly = document.transactions.filter((record) => {
+  const incomeByCurrency = new Map<string, number>();
+  const expenseByCurrency = new Map<string, number>();
+  let transactionCount = 0;
+  let position = 0;
+  for (const record of transactions) {
+    if (position++ % 64 === 0) yield;
     const date = new Date(text(record.date, text(record.createdAt)));
     const account = accountRecords.get(
       record.account ?? record.fromAccount ?? record.sourceAccount,
     );
-    return (
-      belongsToProfile(document, record) &&
+    if (!(
+      belongs(record) &&
       record.type !== 2 &&
       date >= monthStart &&
       date <= now &&
       (!account || includedAccountIds.has(identity(account)))
+    ))
+      continue;
+    transactionCount++;
+    const code = text(
+      record.accountCurrencyCode,
+      text(account?.currencyCode, text(record.currencyCode, "USD")),
+    ).toUpperCase();
+    const amount = Math.abs(
+      number(record.accountAmount, Math.abs(number(record.amount))),
     );
-  });
-  // Aggregate raw money without formatting/rendering every transaction row.
-  const recordedMoney = (type: number) =>
-    monthly
-      .filter((record) => (record.type === 1 ? 1 : 0) === type)
-      .map((record) => {
-        const account = accountRecords.get(
-          record.account ?? record.fromAccount ?? record.sourceAccount,
-        );
-        const code = text(
-          record.accountCurrencyCode,
-          text(account?.currencyCode, text(record.currencyCode, "USD")),
-        ).toUpperCase();
-        return {
-          amount: Math.abs(
-            number(record.accountAmount, Math.abs(number(record.amount))),
-          ),
-          currencyCode: /^[A-Z]{3}$/.test(code) ? code : "USD",
-        };
-      });
-  const income = recordedMoney(1),
-    expense = recordedMoney(0);
-  const recurrings = selectRecurrings(document, now).filter((recurring) => {
-    const account = document.accounts.find((a) =>
-      references(a, recurring.record.account),
-    );
-    return (
-      !account ||
-      (belongsToProfile(document, account) && account.isExcluded !== true)
-    );
-  });
-  const upcoming = selectRecurringEvents(recurrings, today, upcomingEnd).filter(
+    const currencyCode = /^[A-Z]{3}$/.test(code) ? code : "USD";
+    const totals = record.type === 1 ? incomeByCurrency : expenseByCurrency;
+    totals.set(currencyCode, (totals.get(currencyCode) ?? 0) + amount);
+  }
+  const money = (totals: Map<string, number>) =>
+    [...totals].map(([currencyCode, amount]) => ({ currencyCode, amount }));
+  const income = money(incomeByCurrency),
+    expense = money(expenseByCurrency);
+  const recurrings = yield* filterProjection(
+    yield* iterateRecurrings(document, now),
+    (recurring) => {
+      const account = accountRecords.get(recurring.record.account);
+      return !account || (belongs(account) && account.isExcluded !== true);
+    },
+  );
+  const upcoming = yield* filterProjection(
+    yield* iterateRecurringEvents(recurrings, today, upcomingEnd),
     (event) => event.status === "pending",
   );
-  const upcomingExpense = upcoming.filter((event) => event.type === 0);
-  const upcomingIncome = upcoming.filter((event) => event.type === 1);
+  const upcomingExpenseTotals = new Map<string, number>();
+  const upcomingIncomeTotals = new Map<string, number>();
+  for (let index = 0; index < upcoming.length; index++) {
+    if (index % 64 === 0) yield;
+    const event = upcoming[index];
+    const totals =
+      event.type === 1 ? upcomingIncomeTotals : upcomingExpenseTotals;
+    if (Number.isFinite(event.amount))
+      totals.set(
+        event.currencyCode,
+        (totals.get(event.currencyCode) ?? 0) + event.amount,
+      );
+  }
+  const upcomingExpense = money(upcomingExpenseTotals),
+    upcomingIncome = money(upcomingIncomeTotals);
   const next = upcoming[0];
   return {
     currencyCode: currency,
@@ -554,7 +591,7 @@ export function selectHomeOverview(
             )),
       })),
     ),
-    transactionCount: monthly.length,
+    transactionCount,
     upcomingExpense: sum(upcomingExpense),
     upcomingIncome: sum(upcomingIncome),
     upcomingNet: sum([
@@ -577,20 +614,26 @@ export function selectTrackedBudgets(
   document: BackupDocument,
   now = new Date(),
 ) {
+  return selectBudgets(document, now, { homeOnly: true })
+    .filter((budget) => budget.showOnHome)
+    .sort(compareTrackedBudgets);
+}
+
+export function compareTrackedBudgets(
+  a: ReturnType<typeof selectBudgets>[number],
+  b: ReturnType<typeof selectBudgets>[number],
+) {
   const priority = (budget: ReturnType<typeof selectBudgets>[number]) => {
     if (!budget.active) return 0;
     if (budget.transactionType !== 0) return 1;
     if (budget.remaining < 0) return 4;
     return budget.dailyAllowance < budget.dailyPlan ? 3 : 2;
   };
-  return selectBudgets(document, now)
-    .filter((budget) => budget.showOnHome)
-    .sort(
-      (a, b) =>
-        priority(b) - priority(a) ||
-        b.percent - a.percent ||
-        a.id.localeCompare(b.id),
-    );
+  return (
+    priority(b) - priority(a) ||
+    b.percent - a.percent ||
+    a.id.localeCompare(b.id)
+  );
 }
 
 // Exclusion affects calculations; records remain visible in activity and search.

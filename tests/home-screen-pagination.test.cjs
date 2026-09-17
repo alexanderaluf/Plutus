@@ -23,7 +23,7 @@ const { createDefaultBackup } = require("../src/data/model/default-backup.ts");
 
 // Exercise actual screen callbacks using the native-component/hook harness
 // pattern of the repository's layout tests. Native windowing is not simulated.
-function screenHarness(document, insets) {
+function screenHarness(document, insets, sizes = {}) {
   const compiled = ts.transpileModule(
     fs.readFileSync(
       require.resolve("../src/features/home/home-screen.tsx"),
@@ -38,9 +38,17 @@ function screenHarness(document, insets) {
     },
   ).outputText;
   let cursor = 0;
+  let deferUpdates = false;
   const slots = [],
     effects = [];
-  const counts = { indexed: 0, projected: 0, overview: 0, budgets: 0 };
+  const counts = {
+    indexed: 0,
+    projected: 0,
+    overview: 0,
+    budgets: 0,
+    categories: 0,
+    recurring: 0,
+  };
   const equal = (a, b) =>
     a &&
     b &&
@@ -74,6 +82,11 @@ function screenHarness(document, insets) {
       useMemo: memo,
       useCallback: (callback, deps) => memo(() => callback, deps),
       useRef: (initial) => memo(() => ({ current: initial }), []),
+      useDeferredValue: (value) => {
+        const index = cursor++;
+        if (!slots[index] || !deferUpdates) slots[index] = { value };
+        return slots[index].value;
+      },
       useState: (initial) => {
         const index = cursor++;
         if (!slots[index])
@@ -104,8 +117,30 @@ function screenHarness(document, insets) {
       Animated: { FlatList: "FlatList" },
       FlatList: "FlatList",
       Pressable: "Pressable",
+      ActivityIndicator: "Loading",
+      useWindowDimensions: () => ({ width: 390, height: 844 }),
       View: "View",
       StyleSheet: { create: (value) => value },
+    },
+    "react-native-reanimated": {
+      default: { View: "AnimatedContent" },
+      Easing: { bezier: () => () => 0 },
+      ReduceMotion: { System: "system" },
+      useSharedValue: (initial) =>
+        memo(
+          () => ({
+            value: initial,
+            get() {
+              return this.value;
+            },
+            set(value) {
+              this.value = value;
+            },
+          }),
+          [],
+        ),
+      useAnimatedStyle: () => memo(() => ({}), []),
+      withTiming: (value) => value,
     },
     "expo-blur": { BlurTargetView: "BlurTargetView" },
     "react-native-safe-area-context": { useSafeAreaInsets: () => insets },
@@ -147,17 +182,31 @@ function screenHarness(document, insets) {
         counts.overview++;
         return {};
       },
-      selectCategories: () => [],
+      selectCategories() {
+        counts.categories++;
+        return Array.from({ length: sizes.categories ?? 0 }, (_, i) => ({
+          id: `category-${i}`,
+          parentId: i > 0 && i % 2 ? `category-${i - 1}` : null,
+        }));
+      },
       selectCategoryMonthlyTotals: () => new Map(),
       selectTrackedBudgets() {
         counts.budgets++;
-        return [];
+        return Array.from({ length: sizes.budgets ?? 0 }, (_, i) => ({
+          id: `budget-${i}`,
+        }));
       },
-      selectHomeRecurringPayments: () => ({
-        paid: [],
-        pending: [],
-        remaining: [],
-      }),
+      selectHomeRecurringPayments() {
+        counts.recurring++;
+        return {
+          paid: [],
+          remaining: [],
+          pending: Array.from({ length: sizes.recurring ?? 0 }, (_, i) => ({
+            recurring: { id: `recurring-${i}` },
+            date: new Date(2026, 8, 16, 0, 0, i),
+          })),
+        };
+      },
     },
     "@/shared/icons/colors": { colorForeground: () => "#ffffff" },
     "@/shared/ui/app-text": { Text: "Text" },
@@ -178,16 +227,90 @@ function screenHarness(document, insets) {
       TransactionDetailSheet: "Details",
     },
     "./components/transaction-list": { IndexedTransactionRow: "Row" },
+    "./components/visible-fade-row": { VisibleFadeRow: "VisibleFadeRow" },
+    "./visible-row-fade": require("../src/features/home/visible-row-fade.ts"),
     "./components/transaction-month-selector": {
       TransactionMonthSelector: "MonthSelector",
     },
-    "./components/budget-card": { BudgetCard: "Budgets" },
-    "./components/category-list": { CategoryList: "Categories" },
+    "./components/budget-card": {
+      BudgetListHeader: "Budgets",
+      BudgetOverviewCard: "BudgetRow",
+    },
+    "./components/category-list": {
+      CategoryListHeader: "Categories",
+      CategoryListRow: "CategoryRow",
+    },
     "./components/overview-carousel": { OverviewCarousel: "Overview" },
     "./components/recurring-home-section": {
-      RecurringHomeSection: "Recurring",
+      RecurringHomeHeader: "Recurring",
+      RecurringHomeRow: "RecurringRow",
     },
     "@/data/model/financial-month": require("../src/data/model/financial-month.ts"),
+  };
+  const loaderModule = { exports: {} };
+  const loaderSource = ts.transpileModule(
+    fs.readFileSync(
+      require.resolve("../src/data/selectors/home-section-selectors.ts"),
+      "utf8",
+    ),
+    {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+      },
+    },
+  ).outputText;
+  new Function("require", "module", "exports", loaderSource)(
+    (name) =>
+      name === "./document-selectors"
+        ? mocks["@/data/selectors/document-selectors"]
+        : name === "./transaction-selectors"
+          ? selectors
+          : require(
+              name.startsWith(".")
+                ? path.join(root, "data/selectors", name)
+                : name,
+            ),
+    loaderModule,
+    loaderModule.exports,
+  );
+  mocks["@/data/selectors/home-section-selectors"] = loaderModule.exports;
+  // Screen tests control readiness independently of the scheduler. The real
+  // cooperative loader and hook are exercised in home-data-loader.test.cjs.
+  mocks["./use-home-data"] = {
+    useHomeData(d, currency, clock, selectedSection) {
+      const index = memo(
+        () =>
+          mocks[
+            "@/data/selectors/transaction-selectors"
+          ].createTransactionIndex(d),
+        [d],
+      );
+      const overview = memo(
+        () =>
+          mocks["@/data/selectors/document-selectors"].selectHomeOverview(
+            d,
+            currency,
+            clock,
+          ),
+        [d, currency, clock],
+      );
+      const loader = memo(
+        () => loaderModule.exports.createHomeSectionLoader(d, clock, index),
+        [d, clock, index],
+      );
+      const request = memo(
+        () => ({ section: selectedSection, loader }),
+        [selectedSection, loader],
+      );
+      const ready = mocks.react.useDeferredValue(request);
+      const sectionData = memo(
+        () =>
+          ready.section === "transactions" ? null : ready.loader(ready.section),
+        [ready],
+      );
+      return { index, overview, sectionData, pending: ready !== request };
+    },
   };
   const module = { exports: {} };
   new Function("require", "module", "exports", compiled)(
@@ -198,6 +321,15 @@ function screenHarness(document, insets) {
   return {
     counts,
     scrollY,
+    defer() {
+      deferUpdates = true;
+    },
+    resume() {
+      deferUpdates = false;
+    },
+    replaceDocument(next) {
+      document = next;
+    },
     render() {
       cursor = 0;
       const tree = module.exports.HomeScreen();
@@ -206,6 +338,219 @@ function screenHarness(document, insets) {
     },
   };
 }
+
+test("all home sections reveal only visible rows and keep animation history while paging", () => {
+  const harness = screenHarness(
+    fixture(),
+    { top: 59, bottom: 34 },
+    {
+      categories: 90,
+      budgets: 90,
+      recurring: 90,
+    },
+  );
+  let tree = harness.render();
+  let previousController;
+  for (const section of [
+    "transactions",
+    "categories",
+    "budgets",
+    "recurring",
+    "transactions",
+  ]) {
+    let list = find(tree, "FlatList");
+    find(list.props.ListHeaderComponent, "Selector").props.onChange(section);
+    tree = harness.render();
+    list = find(tree, "FlatList");
+    const first = list.props.data[0];
+    const second = list.props.data[1];
+    const animationRow = list.props.renderItem({ item: first, index: 0 });
+    assert.equal(animationRow.type, "VisibleFadeRow");
+    assert.equal(animationRow.props.rowKey, list.props.keyExtractor(first));
+    const controller = animationRow.props.controller;
+    assert.notEqual(
+      controller,
+      previousController,
+      "each section visit has fresh reveal history",
+    );
+    const calls = [];
+    const unmount = controller.register(animationRow.props.rowKey, {
+      reveal: (delay) => calls.push(["reveal", delay]),
+      finish: () => calls.push(["finish"]),
+      hide: () => calls.push(["hide"]),
+    });
+    list.props.onViewableItemsChanged({
+      viewableItems: [
+        {
+          item: first,
+          key: list.props.keyExtractor(first),
+          index: 0,
+          isViewable: true,
+        },
+      ],
+    });
+    assert.deepEqual(calls, [["hide"], ["reveal", 0]]);
+    assert.equal(controller.hasSeen(list.props.keyExtractor(second)), false);
+    const callback = list.props.onViewableItemsChanged;
+    list.props.onEndReached();
+    tree = harness.render();
+    list = find(tree, "FlatList");
+    assert.equal(
+      list.props.onViewableItemsChanged,
+      callback,
+      "pagination must not reset the visibility callback",
+    );
+    assert.equal(
+      list.props.renderItem({ item: first, index: 0 }).props.controller,
+      controller,
+    );
+    list.props.onViewableItemsChanged({ viewableItems: [] });
+    list.props.onViewableItemsChanged({
+      viewableItems: [
+        {
+          item: first,
+          key: list.props.keyExtractor(first),
+          index: 0,
+          isViewable: true,
+        },
+      ],
+    });
+    assert.equal(calls.filter(([kind]) => kind === "reveal").length, 1);
+    previousController = controller;
+    unmount();
+  }
+});
+
+test("home sections acknowledge selection before derived work, page rows, reuse results and invalidate changed data", () => {
+  const document = fixture();
+  const sizes = { categories: 95, budgets: 78, recurring: 103 };
+  const harness = screenHarness(document, { top: 24, bottom: 24 }, sizes);
+  let tree = harness.render();
+  const initialKey = find(tree, "FlatList").key;
+  for (const [section, rowType] of [
+    ["categories", "CategoryRow"],
+    ["budgets", "BudgetRow"],
+    ["recurring", "RecurringRow"],
+  ]) {
+    harness.defer();
+    find(
+      find(tree, "FlatList").props.ListHeaderComponent,
+      "Selector",
+    ).props.onChange(section);
+    tree = harness.render();
+    let list = find(tree, "FlatList");
+    assert.equal(
+      find(list.props.ListHeaderComponent, "Selector").props.value,
+      section,
+    );
+    assert.equal(
+      harness.counts[section],
+      0,
+      "the urgent selection must not calculate the section",
+    );
+    assert.ok(find(list.props.ListEmptyComponent, "Loading"));
+    assert.equal(
+      list.props.data.length,
+      0,
+      "old section rows must not appear under the new selection",
+    );
+    harness.resume();
+    tree = harness.render();
+    list = find(tree, "FlatList");
+    assert.equal(list.key, initialKey);
+    assert.equal(list.props.data.length, 30);
+    assert.ok(
+      find(
+        list.props.renderItem({ item: list.props.data[0], index: 0 }),
+        rowType,
+      ),
+    );
+    assert.equal(
+      find(list.props.ListHeaderComponent, rowType),
+      null,
+      "section items must be virtualized, never mounted inside the header",
+    );
+    while (list.props.data.length < sizes[section]) {
+      const previous = list.props.data.length;
+      list.props.onEndReached();
+      tree = harness.render();
+      list = find(tree, "FlatList");
+      assert.equal(
+        list.props.data.length,
+        Math.min(previous + 30, sizes[section]),
+      );
+    }
+    assert.equal(
+      new Set(list.props.data.map(list.props.keyExtractor)).size,
+      sizes[section],
+    );
+    assert.equal(
+      harness.counts[section],
+      1,
+      "paging must not rebuild derived results",
+    );
+  }
+  for (const section of ["categories", "budgets", "recurring"]) {
+    find(
+      find(tree, "FlatList").props.ListHeaderComponent,
+      "Selector",
+    ).props.onChange(section);
+    tree = harness.render();
+    assert.equal(find(tree, "FlatList").props.data.length, 30);
+    assert.equal(
+      harness.counts[section],
+      1,
+      "return visits must reuse results for the same document/date",
+    );
+  }
+  harness.defer();
+  harness.replaceDocument({
+    ...document,
+    recurrings: [...document.recurrings],
+  });
+  tree = harness.render();
+  assert.equal(find(tree, "FlatList").props.data.length, 0);
+  harness.resume();
+  tree = harness.render();
+  assert.equal(find(tree, "FlatList").props.data.length, 30);
+  assert.equal(
+    harness.counts.recurring,
+    2,
+    "a new canonical document must invalidate derived results",
+  );
+});
+
+test("rapid section changes prepare only the latest requested data", () => {
+  const harness = screenHarness(
+    fixture(),
+    { top: 59, bottom: 34 },
+    { budgets: 100, recurring: 100 },
+  );
+  let tree = harness.render();
+  harness.defer();
+  find(
+    find(tree, "FlatList").props.ListHeaderComponent,
+    "Selector",
+  ).props.onChange("budgets");
+  tree = harness.render();
+  find(
+    find(tree, "FlatList").props.ListHeaderComponent,
+    "Selector",
+  ).props.onChange("recurring");
+  tree = harness.render();
+  assert.equal(
+    find(find(tree, "FlatList").props.ListHeaderComponent, "Selector").props
+      .value,
+    "recurring",
+  );
+  harness.resume();
+  tree = harness.render();
+  assert.equal(harness.counts.budgets, 0);
+  assert.equal(harness.counts.recurring, 1);
+  assert.ok(
+    find(tree, "FlatList").props.data.every((row) => row.kind === "recurring"),
+  );
+});
 function find(tree, type) {
   if (!tree) return null;
   if (Array.isArray(tree))
@@ -269,12 +614,15 @@ for (const [device, top, bottom] of [
       1,
       "pages must not recalculate the overview",
     );
-    const row = list.props.renderItem({ item: list.props.data[0], index: 0 });
+    const row = find(
+      list.props.renderItem({ item: list.props.data[0], index: 0 }),
+      "Row",
+    );
     row.props.onPress(row.props.project(row.props.entry));
     tree = harness.render();
     assert.equal(find(tree, "Details").props.transaction.id, "8-99");
     const layout = list.props.ListHeaderComponent.props.children.find(
-      (child) => child?.props?.onLayout,
+      (child) => child?.props?.onLayout && child?.props?.pointerEvents,
     );
     layout.props.onLayout({ nativeEvent: { layout: { y: 400 } } });
     harness.render();
@@ -315,5 +663,52 @@ for (const [device, top, bottom] of [
       null,
     );
     assert.equal(harness.counts.budgets, 1);
+  });
+
+  test(`${device}: switching scrolled sections preserves the header and starts content below the pinned selector`, () => {
+    const harness = screenHarness(fixture(), { top, bottom });
+    let tree = harness.render();
+    const initialList = find(tree, "FlatList");
+    const scrollCommands = [];
+    initialList.props.ref.current = {
+      scrollToOffset: (command) => scrollCommands.push(command),
+    };
+    const layout = initialList.props.ListHeaderComponent.props.children.find(
+      (child) => child?.props?.onLayout && child?.props?.pointerEvents,
+    );
+    layout.props.onLayout({ nativeEvent: { layout: { y: 400 } } });
+    harness.render();
+
+    for (const [section, content] of [
+      ["categories", "Categories"],
+      ["budgets", "Budgets"],
+      ["recurring", "Recurring"],
+      ["transactions", "Text"],
+    ]) {
+      harness.scrollY.setValue(650);
+      tree = harness.render();
+      const dock = tree.props.children[0].props.children.at(-1);
+      find(dock, "Selector").props.onChange(section);
+      tree = harness.render();
+      const list = find(tree, "FlatList");
+      assert.equal(
+        list.key,
+        initialList.key,
+        "the measured header must stay mounted",
+      );
+      assert.equal(harness.scrollY.value, 400 - top - 8);
+      assert.deepEqual(scrollCommands.at(-1), {
+        offset: 400 - top - 8,
+        animated: false,
+      });
+      assert.ok(find(list.props.ListHeaderComponent, content));
+      assert.equal(
+        find(list.props.ListHeaderComponent, "Selector").props.value,
+        section,
+      );
+      assert.equal(list.props.data.length, section === "transactions" ? 30 : 0);
+    }
+    assert.equal(harness.counts.overview, 1);
+    assert.equal(harness.counts.indexed, 1);
   });
 }

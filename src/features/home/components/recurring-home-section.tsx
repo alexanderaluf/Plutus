@@ -44,23 +44,23 @@ function Amounts({
   );
 }
 
-export function RecurringHomeSection({
+export function RecurringHomeHeader({
   paid,
-  pending,
+  count,
   remaining,
   fallbackCurrency,
 }: {
   paid: MoneyTotal[];
-  pending: RecurringEvent[];
+  count: number;
   remaining: MoneyTotal[];
   fallbackCurrency: string;
 }) {
   const router = useRouter();
-  const { i18n, t } = useTranslation();
+  const { t } = useTranslation();
   const theme = useAppThemeColors();
 
   return (
-    <View className="gap-3">
+    <View className="mb-3 gap-3">
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 flex-1 flex-row items-center gap-2">
           <Text
@@ -69,7 +69,7 @@ export function RecurringHomeSection({
           >
             {t("home.recurring.title")}
           </Text>
-          <Text className="text-xs text-muted">{pending.length}</Text>
+          <Text className="text-xs text-muted">{count}</Text>
         </View>
         <Button
           size="sm"
@@ -121,63 +121,54 @@ export function RecurringHomeSection({
       <Text className="pt-1 font-manrope-bold text-base text-foreground">
         {t("home.recurring.remainingTitle")}
       </Text>
-
-      {pending.map((event) => (
-        <Pressable
-          key={`${event.recurring.id}:${event.date.toISOString()}`}
-          accessibilityLabel={t("home.recurring.open", {
-            name: event.recurring.name,
-          })}
-          accessibilityRole="button"
-          onPress={() =>
-            router.push({
-              pathname: "/recurring/[id]",
-              params: { id: event.recurring.id },
-            })
-          }
-          className="flex-row items-center gap-3 rounded-3xl border border-border bg-surface p-3"
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        >
-          <RecurringBadge item={event.recurring} />
-          <View className="min-w-0 flex-1 gap-1">
-            <Text
-              numberOfLines={2}
-              className="font-manrope-bold text-base text-foreground"
-            >
-              {event.recurring.name}
-            </Text>
-            <Text numberOfLines={2} className="text-xs text-muted">
-              {t("home.recurring.due", {
-                date: event.date.toLocaleDateString(i18n.resolvedLanguage, {
-                  dateStyle: "medium",
-                }),
-              })}
-            </Text>
-          </View>
-          <Text
-            adjustsFontSizeToFit
-            minimumFontScale={0.75}
-            numberOfLines={1}
-            className="max-w-[34%] font-manrope-bold text-sm text-danger"
-            style={{ writingDirection: "ltr" }}
-          >
-            {formatCurrency(event.amount, event.currencyCode)}{" "}
-            {event.currencyCode}
-          </Text>
-        </Pressable>
-      ))}
-
-      {!pending.length ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/recurring")}
-          className="rounded-3xl bg-surface p-4"
-        >
-          <Text className="text-sm text-muted">
-            {t("home.recurring.empty")}
-          </Text>
-        </Pressable>
-      ) : null}
     </View>
+  );
+}
+
+export function RecurringHomeRow({ event }: { event: RecurringEvent }) {
+  const router = useRouter();
+  const { i18n, t } = useTranslation();
+  return (
+    <Pressable
+      key={`${event.recurring.id}:${event.date.toISOString()}`}
+      accessibilityLabel={t("home.recurring.open", {
+        name: event.recurring.name,
+      })}
+      accessibilityRole="button"
+      onPress={() =>
+        router.push({
+          pathname: "/recurring/[id]",
+          params: { id: event.recurring.id },
+        })
+      }
+      className="flex-row items-center gap-3 rounded-3xl border border-border bg-surface p-3"
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+    >
+      <RecurringBadge item={event.recurring} />
+      <View className="min-w-0 flex-1 gap-1">
+        <Text
+          numberOfLines={2}
+          className="font-manrope-bold text-base text-foreground"
+        >
+          {event.recurring.name}
+        </Text>
+        <Text numberOfLines={2} className="text-xs text-muted">
+          {t("home.recurring.due", {
+            date: event.date.toLocaleDateString(i18n.resolvedLanguage, {
+              dateStyle: "medium",
+            }),
+          })}
+        </Text>
+      </View>
+      <Text
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        numberOfLines={1}
+        className="max-w-[34%] font-manrope-bold text-sm text-danger"
+        style={{ writingDirection: "ltr" }}
+      >
+        {formatCurrency(event.amount, event.currencyCode)} {event.currencyCode}
+      </Text>
+    </Pressable>
   );
 }

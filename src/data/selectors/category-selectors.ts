@@ -6,10 +6,13 @@ import {
   categoryProfileId,
   identity,
   references,
+  createProfileMatcher,
   type CategoryDraft,
   type CategoryType,
 } from "../model/category-record";
 import type { JsonObject, JsonValue } from "../model/json";
+import { createRecordLookup } from "./transaction-selectors";
+import { finishProjection } from "./cooperative";
 
 export type Category = CategoryDraft & { id: string };
 export type CategoryTotal = { count: number; amounts: Record<string, number> };
@@ -20,10 +23,9 @@ export function selectCategories(document: BackupDocument): Category[] {
   const records = document.categories.filter(
     (record) => belongsToProfile(document, record) && identity(record),
   );
+  const byId = createRecordLookup(records);
   return records.map((record) => {
-    const parent = records.find((candidate) =>
-      references(candidate, categoryParent(record)),
-    );
+    const parent = byId.get(categoryParent(record));
     return {
       id: identity(record),
       name: string(record.name, "Untitled category"),
@@ -47,9 +49,7 @@ export function selectCategories(document: BackupDocument): Category[] {
   });
 }
 
-export function selectTopLevelCategories(
-  document: BackupDocument,
-): Category[] {
+export function selectTopLevelCategories(document: BackupDocument): Category[] {
   return selectCategories(document).filter(
     (category) => category.parentId === null,
   );
@@ -94,6 +94,7 @@ function transactionContext(document: BackupDocument) {
     accounts,
     categories,
     fallback: /^[A-Z]{3}$/.test(fallback) ? fallback : "USD",
+    belongs: createProfileMatcher(document),
   };
 }
 
@@ -104,15 +105,15 @@ function transactionValues(
 ) {
   const account = context.accounts.get(String(record.account));
   if (
-    !belongsToProfile(document, record) ||
-    (record.user == null && account && !belongsToProfile(document, account))
+    !context.belongs(record) ||
+    (record.user == null && account && !context.belongs(account))
   )
     return null;
   const accountAmount = record.accountAmount ?? record.amount;
   if (typeof accountAmount !== "number" || !Number.isFinite(accountAmount))
     return null;
   const category = context.categories.get(String(record.category));
-  if (!category || !belongsToProfile(document, category)) return null;
+  if (!category || !context.belongs(category)) return null;
   const code = string(
     record.accountCurrencyCode,
     string(
@@ -141,8 +142,20 @@ function transactionValues(
 export function selectCategoryMonthlyTotals(
   document: BackupDocument,
   anchor = new Date(),
+  categories = selectCategories(document),
+  transactions: readonly JsonObject[] = document.transactions,
 ): Map<string, CategoryTotal> {
-  const categories = selectCategories(document);
+  return finishProjection(
+    iterateCategoryMonthlyTotals(document, anchor, categories, transactions),
+  );
+}
+
+export function* iterateCategoryMonthlyTotals(
+  document: BackupDocument,
+  anchor: Date,
+  categories: Category[],
+  transactions: readonly JsonObject[],
+) {
   const byId = new Map(categories.map((category) => [category.id, category]));
   const totals = new Map(
     categories.map((category) => [
@@ -157,7 +170,9 @@ export function selectCategoryMonthlyTotals(
     anchor.getMonth() + 1,
     1,
   ).getTime();
-  for (const record of document.transactions) {
+  let position = 0;
+  for (const record of transactions) {
+    if (position++ % 64 === 0) yield;
     const values = transactionValues(document, record, context);
     if (
       !values ||
@@ -169,6 +184,7 @@ export function selectCategoryMonthlyTotals(
     let category = byId.get(values.categoryId);
     const visited = new Set<string>();
     while (category && !visited.has(category.id)) {
+      if (visited.size > 0 && visited.size % 64 === 0) yield;
       visited.add(category.id);
       if (category.type === values.type) {
         const total = totals.get(category.id)!;

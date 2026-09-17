@@ -1125,6 +1125,8 @@ export const he = {
     },
   },
   home: {
+    loadError: "לא ניתן לטעון את נתוני הבית. הנתונים השמורים לא השתנו.",
+    retryLoad: "נסו שוב",
     greeting: "בוקר טוב, {{name}}",
     openProfile: "פתיחת פרופיל",
     overview: {

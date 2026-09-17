@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRef, useState, type PropsWithChildren } from "react";
+import { memo, useRef, useState, type PropsWithChildren } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, View } from "react-native";
 import Animated, {
@@ -110,7 +110,7 @@ function CardDot({
     </Pressable>
   );
 }
-export function OverviewCarousel({
+export const OverviewCarousel = memo(function OverviewCarousel({
   overview,
   now,
   isBalanceVisible,
@@ -277,4 +277,4 @@ export function OverviewCarousel({
       </View>
     </View>
   );
-}
+});

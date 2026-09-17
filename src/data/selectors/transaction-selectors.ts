@@ -3,12 +3,9 @@ import type { Transaction } from "@/features/home/types";
 import type { FilledIconName } from "@/shared/ui/filled-icon";
 import type { BackupDocument } from "../model/backup-document";
 import type { JsonObject, JsonValue } from "../model/json";
-import {
-  categoryProfileId,
-  identity,
-  references,
-} from "../model/category-record";
+import { identity, createProfileMatcher } from "../model/category-record";
 import { formatAppDate } from "../model/onboarding";
+import { finishProjection, sortProjection } from "./cooperative";
 
 const colors = ["#70d2eb", "#b89cf5", "#f2c66d", "#ef8175"];
 function text(value: JsonValue | undefined, fallback = "") {
@@ -73,18 +70,16 @@ export type TransactionIndexEntry = {
 export function createTransactionIndex(
   document: BackupDocument,
 ): TransactionIndexEntry[] {
-  const profileId = categoryProfileId(document);
-  const owner = document.users.find((user) => references(user, profileId));
+  return finishProjection(iterateTransactionIndex(document));
+}
+
+export function* iterateTransactionIndex(document: BackupDocument) {
+  const belongs = createProfileMatcher(document);
   const entries: TransactionIndexEntry[] = [];
-  for (const record of document.transactions) {
-    if (
-      profileId &&
-      record.user != null &&
-      !(owner
-        ? references(owner, record.user)
-        : String(record.user) === profileId)
-    )
-      continue;
+  for (let position = 0; position < document.transactions.length; position++) {
+    if (position % 64 === 0) yield;
+    const record = document.transactions[position];
+    if (!belongs(record)) continue;
     const index = entries.length;
     const timestamp = new Date(
       text(record.date, text(record.createdAt)),
@@ -96,7 +91,9 @@ export function createTransactionIndex(
       timestamp: Number.isFinite(timestamp) ? timestamp : -Infinity,
     });
   }
-  return entries.sort((a, b) => b.timestamp - a.timestamp);
+  return yield* sortProjection(entries, (a, b) =>
+    a.timestamp === b.timestamp ? 0 : a.timestamp > b.timestamp ? -1 : 1,
+  );
 }
 
 /** Binary boundaries avoid rescanning older history when the month changes. */
@@ -128,6 +125,17 @@ export function selectTransactionPeriod(
 ) {
   const { first, last } = transactionPeriodBounds(index, start, end);
   return index.slice(first, Math.min(last, first + limit));
+}
+
+/** Stream raw records from binary date bounds without a full-month copy. */
+export function* transactionRecordsInPeriod(
+  index: TransactionIndexEntry[],
+  start: Date,
+  end: Date,
+) {
+  const bounds = transactionPeriodBounds(index, start, end);
+  for (let position = bounds.first; position < bounds.last; position++)
+    yield index[position].record;
 }
 
 /** Build relation maps once; each mounted row projects only its own record. */

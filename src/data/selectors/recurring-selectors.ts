@@ -4,6 +4,7 @@ import {
   categoryProfileId,
   identity,
   references,
+  createProfileMatcher,
 } from "../model/category-record";
 import { isJsonObject, type JsonObject } from "../model/json";
 import {
@@ -14,92 +15,102 @@ import {
   recurringDefaults,
   type RecurringDraft,
 } from "../model/recurring-record";
+import { createRecordLookup } from "./transaction-selectors";
+import {
+  filterProjection,
+  finishProjection,
+  sortProjection,
+} from "./cooperative";
 
 export function selectRecurrings(document: BackupDocument, now = new Date()) {
-  return document.recurrings
-    .filter(
-      (r) =>
-        belongsToProfile(document, r) &&
-        (r.user != null ||
-          !r.account ||
-          document.accounts.some(
-            (a) => references(a, r.account) && belongsToProfile(document, a),
-          )),
-    )
-    .map((r) => {
-      const next = nextOccurrence(r);
-      const defaults = recurringDefaults(now);
-      const draft = Object.fromEntries(
-        Object.keys(defaults).map((key) => {
-          const fallback = defaults[key as keyof RecurringDraft],
-            value = r[key];
-          return [
-            key,
-            fallback === null
-              ? typeof value === "string"
-                ? value
-                : null
-              : typeof value === typeof fallback
-                ? value
-                : fallback,
-          ];
-        }),
-      ) as RecurringDraft;
-      draft.amount = String(r.amount ?? "");
-      const owner = document.users.find((u) =>
-        references(u, r.user ?? categoryProfileId(document)),
-      );
-      const code = String(
-        r.currencyCode ?? owner?.currency ?? "USD",
-      ).toUpperCase();
-      draft.currencyCode = /^[A-Z]{3}$/.test(code) ? code : "USD";
-      draft.type = r.type === 1 ? 1 : 0;
-      draft.period = isRecurringPeriod(r.period) ? r.period : "Monthly";
-      draft.startAt = Number.isFinite(Date.parse(String(r.startAt)))
-        ? String(r.startAt)
-        : defaults.startAt;
-      draft.endAt =
-        draft.endAt && Number.isFinite(Date.parse(draft.endAt))
-          ? draft.endAt
-          : null;
-      draft.color = /^#[0-9a-f]{6}$/i.test(draft.color)
-        ? draft.color
-        : defaults.color;
-      draft.automatic = r.automatic === true;
-      draft.reminderDays =
-        typeof r.reminderDays === "number" &&
-        [0, 1, 2, 7].includes(r.reminderDays)
-          ? r.reminderDays
-          : null;
-      const history = (
-        Array.isArray(r.occurrences) ? r.occurrences : []
-      ).filter(isJsonObject);
-      return {
-        ...draft,
-        id: identity(r),
-        amount: Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0,
-        draft,
-        next,
-        archived:
-          r.archived === true || (!!isRecurringPeriod(r.period) && !next),
-        due: r.archived !== true && !!next && next <= now,
-        valid: !!next && isRecurringPeriod(r.period),
-        record: r,
-        history,
-        accountName: String(
-          document.accounts.find((a) => references(a, r.account))?.name ??
-            "No account",
-        ),
-        categoryName: String(
-          document.categories.find((c) => references(c, r.category))?.name ??
-            "Uncategorized",
-        ),
-      };
-    })
-    .sort(
-      (a, b) =>
-        (a.next?.getTime() ?? Infinity) - (b.next?.getTime() ?? Infinity),
-    );
+  return finishProjection(iterateRecurrings(document, now));
+}
+
+export function* iterateRecurrings(document: BackupDocument, now: Date) {
+  const belongs = createProfileMatcher(document);
+  const accounts = createRecordLookup(document.accounts);
+  const categories = createRecordLookup(document.categories);
+  const users = createRecordLookup(document.users);
+  const records = yield* filterProjection(
+    document.recurrings,
+    (r) =>
+      belongs(r) &&
+      (r.user != null ||
+        !r.account ||
+        document.accounts.some((a) => references(a, r.account) && belongs(a))),
+  );
+  function* projectRecurring(r: JsonObject) {
+    yield;
+    const next = nextOccurrence(r);
+    const defaults = recurringDefaults(now);
+    const draft = Object.fromEntries(
+      Object.keys(defaults).map((key) => {
+        const fallback = defaults[key as keyof RecurringDraft],
+          value = r[key];
+        return [
+          key,
+          fallback === null
+            ? typeof value === "string"
+              ? value
+              : null
+            : typeof value === typeof fallback
+              ? value
+              : fallback,
+        ];
+      }),
+    ) as RecurringDraft;
+    draft.amount = String(r.amount ?? "");
+    const owner = users.get(r.user ?? categoryProfileId(document));
+    const code = String(
+      r.currencyCode ?? owner?.currency ?? "USD",
+    ).toUpperCase();
+    draft.currencyCode = /^[A-Z]{3}$/.test(code) ? code : "USD";
+    draft.type = r.type === 1 ? 1 : 0;
+    draft.period = isRecurringPeriod(r.period) ? r.period : "Monthly";
+    draft.startAt = Number.isFinite(Date.parse(String(r.startAt)))
+      ? String(r.startAt)
+      : defaults.startAt;
+    draft.endAt =
+      draft.endAt && Number.isFinite(Date.parse(draft.endAt))
+        ? draft.endAt
+        : null;
+    draft.color = /^#[0-9a-f]{6}$/i.test(draft.color)
+      ? draft.color
+      : defaults.color;
+    draft.automatic = r.automatic === true;
+    draft.reminderDays =
+      typeof r.reminderDays === "number" &&
+      [0, 1, 2, 7].includes(r.reminderDays)
+        ? r.reminderDays
+        : null;
+    const occurrences = Array.isArray(r.occurrences) ? r.occurrences : [];
+    const history: JsonObject[] = [];
+    for (let index = 0; index < occurrences.length; index++) {
+      if (index % 64 === 0) yield;
+      if (isJsonObject(occurrences[index]))
+        history.push(occurrences[index] as JsonObject);
+    }
+    return {
+      ...draft,
+      id: identity(r),
+      amount: Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0,
+      draft,
+      next,
+      archived: r.archived === true || (!!isRecurringPeriod(r.period) && !next),
+      due: r.archived !== true && !!next && next <= now,
+      valid: !!next && isRecurringPeriod(r.period),
+      record: r,
+      history,
+      accountName: String(accounts.get(r.account)?.name ?? "No account"),
+      categoryName: String(categories.get(r.category)?.name ?? "Uncategorized"),
+    };
+  }
+  const result = [];
+  for (const record of records) result.push(yield* projectRecurring(record));
+  return yield* sortProjection(
+    result,
+    (a, b) => (a.next?.getTime() ?? Infinity) - (b.next?.getTime() ?? Infinity),
+  );
 }
 export type Recurring = ReturnType<typeof selectRecurrings>[number];
 export type RecurringEvent = {
@@ -134,9 +145,20 @@ export function selectRecurringEvents(
   start: Date,
   end: Date,
 ): RecurringEvent[] {
+  return finishProjection(iterateRecurringEvents(items, start, end));
+}
+
+export function* iterateRecurringEvents(
+  items: Recurring[],
+  start: Date,
+  end: Date,
+): Generator<void, RecurringEvent[], unknown> {
   const result: RecurringEvent[] = [];
+  let operations = 0;
   for (const recurring of items) {
+    yield;
     for (const h of recurring.history) {
+      if (operations++ % 64 === 0) yield;
       const date = new Date(String(h.scheduledAt));
       if (date >= start && date < end)
         result.push({
@@ -156,6 +178,7 @@ export function selectRecurringEvents(
       firstIndexInRange(recurring.record, start),
     );
     for (;;) {
+      if (operations++ % 64 === 0) yield;
       const date = occurrenceDate(recurring.record, index++);
       if (!date || date >= end) break;
       if (date >= start)
@@ -170,16 +193,28 @@ export function selectRecurringEvents(
         });
     }
   }
-  return result.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return yield* sortProjection(
+    result,
+    (a, b) => a.date.getTime() - b.date.getTime(),
+  );
 }
 export function recurringTotals(
   values: { amount: number; currencyCode: string }[],
 ) {
+  return finishProjection(iterateRecurringTotals(values));
+}
+
+function* iterateRecurringTotals(
+  values: { amount: number; currencyCode: string }[],
+) {
   const totals: Record<string, number> = {};
-  for (const value of values)
+  let operations = 0;
+  for (const value of values) {
+    if (operations++ % 64 === 0) yield;
     if (Number.isFinite(value.amount))
       totals[value.currencyCode] =
         (totals[value.currencyCode] ?? 0) + value.amount;
+  }
   return Object.entries(totals)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currencyCode, amount]) => ({ currencyCode, amount }));
@@ -233,22 +268,36 @@ export function selectHomeRecurringPayments(
   document: BackupDocument,
   now = new Date(),
 ) {
+  return finishProjection(iterateHomeRecurringPayments(document, now));
+}
+
+export function* iterateHomeRecurringPayments(
+  document: BackupDocument,
+  now: Date,
+) {
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const expenses = selectRecurringEvents(
-    selectRecurrings(document, now),
-    start,
-    end,
-  ).filter((event) => event.type === 0);
-  const pending = expenses.filter((event) => event.status === "pending");
-  const paid = expenses.filter(
+  const expenses = yield* filterProjection(
+    yield* iterateRecurringEvents(
+      yield* iterateRecurrings(document, now),
+      start,
+      end,
+    ),
+    (event) => event.type === 0,
+  );
+  const pending = yield* filterProjection(
+    expenses,
+    (event) => event.status === "pending",
+  );
+  const paid = yield* filterProjection(
+    expenses,
     (event) => event.status === "processed" && event.date <= now,
   );
 
   return {
-    paid: recurringTotals(paid),
+    paid: yield* iterateRecurringTotals(paid),
     pending,
-    remaining: recurringTotals(pending),
+    remaining: yield* iterateRecurringTotals(pending),
   };
 }
 export function selectRecurringRelations(

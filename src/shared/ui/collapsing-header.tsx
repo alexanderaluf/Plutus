@@ -1,6 +1,6 @@
 import { TopSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import type { PropsWithChildren } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -8,13 +8,16 @@ export const COLLAPSING_HEADER_HEIGHT = 56;
 const HEADER_FADE_DISTANCE = 40;
 
 export function useCollapsingHeader() {
-  const scrollY = useRef(new Animated.Value(0)).current;
+  const [scrollY] = useState(() => new Animated.Value(0));
   const [headerHidden, setHeaderHidden] = useState(false);
 
   useEffect(() => {
+    let previousHidden: boolean | undefined;
     const listener = scrollY.addListener(({ value }) => {
       const hidden = value >= HEADER_FADE_DISTANCE;
-      setHeaderHidden((current) => (current === hidden ? current : hidden));
+      if (hidden === previousHidden) return;
+      previousHidden = hidden;
+      setHeaderHidden(hidden);
     });
     return () => scrollY.removeListener(listener);
   }, [scrollY]);

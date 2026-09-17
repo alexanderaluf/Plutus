@@ -12,6 +12,31 @@ type DocumentRow = {
   document_json: string;
 };
 
+/** Read-through projection cache for the foreground provider. SQLite is checked
+ * on every read; unchanged JSON can reuse its already validated document.
+ * Locked mutations deliberately continue using the uncached readDocument.
+ */
+export function createDocumentReader(database: SQLiteDatabase) {
+  let cached: { json: string; document: BackupDocument } | undefined;
+  return async () => {
+    const row = await database.getFirstAsync<DocumentRow>(
+      "SELECT document_json FROM app_document WHERE id = 1",
+    );
+    const identity = await database.getFirstAsync<{ had_profile: number }>(
+      "SELECT had_profile FROM app_storage_identity WHERE id = 1",
+    );
+    if (!row || !identity) throw new Error(STORAGE_RECOVERY_MESSAGE);
+    const document =
+      cached?.json === row.document_json
+        ? cached.document
+        : parseStoredDocument(row.document_json);
+    if (identity.had_profile && document.users.length === 0)
+      throw new Error(STORAGE_RECOVERY_MESSAGE);
+    cached = { json: row.document_json, document };
+    return document;
+  };
+}
+
 /** Read and mutate under the same SQL lock, including headless task writes. */
 export async function mutateDocument(
   database: SQLiteDatabase,
