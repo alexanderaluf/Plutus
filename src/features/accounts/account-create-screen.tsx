@@ -1,4 +1,5 @@
 import { useCollapsingHeader } from "@/shared/ui/collapsing-header";
+import { useEdgeToEdgeContentInsets } from "@/shared/ui/edge-to-edge-layout";
 import {
     BottomSafeAreaGradient,
     TopSafeAreaGradient,
@@ -146,6 +147,33 @@ function OptionRow({
       </View>
       <FilledIcon name="chevron-right" size={24} />
     </Pressable>
+  );
+}
+
+function PickerListScrollView({
+  contentContainerClassName,
+  children,
+}: {
+  contentContainerClassName?: string;
+  children: ReactNode;
+}) {
+  // PickerModal's header floats absolutely over the content, so the list
+  // must pad by the header's height or its top row renders underneath it.
+  // The bottom fade and, on Android, the translucent nav bar do the same
+  // at the bottom, so the last row needs matching bottom padding to be
+  // reachable and tappable above them.
+  const contentInsets = useEdgeToEdgeContentInsets();
+  return (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerClassName={contentContainerClassName}
+      contentContainerStyle={{
+        paddingTop: contentInsets.top + 12,
+        paddingBottom: contentInsets.bottom + 48,
+      }}
+    >
+      {children}
+    </ScrollView>
   );
 }
 
@@ -884,7 +912,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
           title={t("accounts.form.cardCompany")}
           onClose={() => setPicker(null)}
         >
-          <ScrollView contentContainerClassName="px-5 pb-5">
+          <PickerListScrollView contentContainerClassName="px-5">
             {CARD_COMPANIES.map((company) => (
               <Pressable
                 key={company}
@@ -906,7 +934,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                 )}
               </Pressable>
             ))}
-          </ScrollView>
+          </PickerListScrollView>
         </AccountPicker>
       )}
       {picker === "day" && (
@@ -914,7 +942,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
           title={t("accounts.form.monthlyPaymentDay")}
           onClose={() => setPicker(null)}
         >
-          <ScrollView contentContainerClassName="gap-5 px-5 py-5">
+          <PickerListScrollView contentContainerClassName="gap-5 px-5">
             <Text className="font-sans text-base text-muted">
               {t("accounts.form.choosePaymentDay")}
             </Text>
@@ -944,7 +972,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
             <Text className="font-sans text-sm text-muted">
               {t("accounts.form.shorterMonths")}
             </Text>
-          </ScrollView>
+          </PickerListScrollView>
         </AccountPicker>
       )}
       {picker === "bank" && (
@@ -952,7 +980,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
           title={t("accounts.form.bankAccount")}
           onClose={() => setPicker(null)}
         >
-          <ScrollView contentContainerClassName="px-5 pb-5">
+          <PickerListScrollView contentContainerClassName="px-5">
             {bankAccounts.length ? (
               bankAccounts.map((account) => (
                 <Pressable
@@ -1006,7 +1034,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                 </Text>
               </View>
             )}
-          </ScrollView>
+          </PickerListScrollView>
         </AccountPicker>
       )}
     </View>
