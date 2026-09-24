@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Easing,
   FadeInDown,
+  LinearTransition,
   ReduceMotion,
 } from "react-native-reanimated";
 import {
@@ -26,10 +27,12 @@ export function TabPage({
   contentBottomInset = 106,
   header,
   headerHeight = 56,
+  animateLayout = false,
 }: PropsWithChildren<{
   contentBottomInset?: number;
   header?: ReactNode;
   headerHeight?: number;
+  animateLayout?: boolean;
 }>) {
   const sections = Children.toArray(children);
   const insets = useSafeAreaInsets();
@@ -53,6 +56,13 @@ export function TabPage({
         {header ? <CollapsingHeaderSpacer height={headerHeight} /> : null}
         {sections.map((section, index) => (
           <Animated.View
+            layout={
+              animateLayout
+                ? LinearTransition.duration(240)
+                    .easing(Easing.bezier(0.77, 0, 0.175, 1))
+                    .reduceMotion(ReduceMotion.System)
+                : undefined
+            }
             key={
               isValidElement(section) && section.key != null
                 ? section.key

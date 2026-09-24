@@ -31,7 +31,97 @@ const {
 } = require("../src/data/selectors/report-selectors.ts");
 
 const NOW = new Date(2026, 8, 20, 12, 0, 0);
+const {
+  selectConsumptionReport,
+  selectConsumptionDetails,
+} = require("../src/data/selectors/consumption-report-selectors.ts");
 const PROFILE = "alex-personal";
+const {
+  expensePieLayout,
+} = require("../src/features/reports/components/expense-pie-layout.ts");
+
+test("pie keeps the saved parent colors even for child expenses and repeated colors", () => {
+  const document = documentWith(
+    [
+      { ...entry("child-expense", 50, 0, NOW), category: "child" },
+      { ...entry("parent-expense", 10, 0, NOW), category: "parent" },
+      { ...entry("other-parent", 40, 0, NOW), category: "second" },
+    ],
+    {
+      categories: [
+        { ...category("parent", "Parent"), color: "#AABBCC" },
+        { ...category("child", "Child", "parent"), color: "#112233" },
+        { ...category("second", "Second"), color: "#AABBCC" },
+      ],
+    },
+  );
+  const flow = selectConsumptionReport(document, "USD", NOW).flows[0];
+  assert.equal(
+    flow.slices.find((slice) => slice.id === "parent").color,
+    "#AABBCC",
+  );
+  assert.equal(
+    flow.slices.find((slice) => slice.id === "second").color,
+    "#AABBCC",
+  );
+  assert.equal(flow.slices.find((slice) => slice.id === "parent").amount, 60);
+});
+
+test("dominant expenses still produce evenly balanced labels without altering shares", () => {
+  for (const shares of [
+    [48.4, 7.1, 6.9, 5.6, 4.9, 27.1],
+    [99.5, 0.1, 0.1, 0.1, 0.1, 0.1],
+    [100],
+    [50, 50],
+  ]) {
+    const slices = shares.map((share, index) => ({ id: String(index), share }));
+    const layout = expensePieLayout(slices, 350, 1);
+    const right = layout.labels.filter((label) => label.right).length;
+    assert.ok(Math.abs(right - (slices.length - right)) <= 1);
+    for (const arc of layout.arcs) {
+      assert.ok(
+        Math.abs(
+          ((arc.end - arc.start) / (2 * Math.PI)) * 100 - arc.slice.share,
+        ) < 1e-8,
+      );
+      assert.ok(!/NaN|Infinity/.test(arc.path));
+      if (slices.length > 1) assert.ok(arc.path.includes("Q "));
+    }
+  }
+});
+
+test("balanced pie labels stay within mobile bounds at large font sizes", () => {
+  for (const width of [216, 280, 326, 366, 480])
+    for (const fontScale of [1, 1.3, 2.5])
+      for (let count = 1; count <= 6; count++) {
+        const weights = Array.from({ length: count }, (_, index) =>
+          index === 0 ? 995 : 1,
+        );
+        const total = weights.reduce((sum, weight) => sum + weight, 0);
+        const layout = expensePieLayout(
+          weights.map((weight, index) => ({
+            id: String(index),
+            share: (weight / total) * 100,
+          })),
+          width,
+          fontScale,
+        );
+        for (const label of layout.labels) {
+          assert.ok(label.x >= 0 && label.y >= 0);
+          assert.ok(label.x + label.width <= width + 1e-8);
+          assert.ok(label.y + label.height <= layout.height + 1e-8);
+          for (const other of layout.labels)
+            if (other !== label) {
+              assert.ok(
+                label.x + label.width <= other.x + 1e-8 ||
+                  other.x + other.width <= label.x + 1e-8 ||
+                  label.y + label.height <= other.y ||
+                  other.y + other.height <= label.y,
+              );
+            }
+        }
+      }
+});
 
 function documentWith(transactions, extras = {}) {
   const base = createLegacyDevelopmentBackup();
@@ -86,6 +176,200 @@ function entry(id, amount, type, date, category = "Groceries") {
     updatedAt: date.toISOString(),
   };
 }
+
+test("consumption uses the selected salary cycle with exact inclusive/exclusive boundaries", () => {
+  const now = new Date(2026, 9, 20, 12);
+  const document = documentWith(
+    [
+      entry("before", 900, 0, new Date(2026, 8, 14, 23, 59, 59)),
+      entry("first", 100, 0, new Date(2026, 8, 15)),
+      entry("last", 200, 0, new Date(2026, 9, 14, 23, 59, 59)),
+      entry("after", 800, 0, new Date(2026, 9, 15)),
+      entry("salary", 1000, 1, new Date(2026, 8, 15)),
+    ],
+    { _local: { monthStartDay: 15 } },
+  );
+  const report = selectConsumptionReport(document, "USD", now, -1);
+  assert.equal(report.period.start.getTime(), new Date(2026, 8, 15).getTime());
+  assert.equal(report.period.end.getTime(), new Date(2026, 9, 15).getTime());
+  assert.equal(report.flows[0].expense, 300);
+  assert.equal(report.flows[0].income, 1000);
+  assert.equal(report.flows[0].net, 700);
+  assert.equal(report.flows[0].dailyAverage, 10);
+});
+
+test("consumption clamps short months and crosses years without gaps", () => {
+  const document = documentWith([], { _local: { monthStartDay: 31 } });
+  for (const [now, start, end] of [
+    [new Date(2026, 2, 15), new Date(2026, 1, 28), new Date(2026, 2, 31)],
+    [new Date(2028, 2, 15), new Date(2028, 1, 29), new Date(2028, 2, 31)],
+    [new Date(2027, 0, 10), new Date(2026, 11, 31), new Date(2027, 0, 31)],
+  ]) {
+    const report = selectConsumptionReport(document, "USD", now);
+    assert.equal(report.period.start.getTime(), start.getTime());
+    assert.equal(report.period.end.getTime(), end.getTime());
+    assert.equal(
+      new Set(report.flows[0].days.map((day) => day.key)).size,
+      report.flows[0].days.length,
+    );
+  }
+});
+
+test("consumption excludes transfers, hidden accounts, other owners and future records", () => {
+  const document = documentWith(
+    [
+      entry("expense", 50, 0, NOW),
+      entry("transfer", 900, 2, NOW),
+      { ...entry("hidden", 700, 0, NOW), account: 42 },
+      { ...entry("foreign", 800, 0, NOW), user: "someone-else" },
+      entry("future", 600, 0, new Date(NOW.getTime() + 1000)),
+      { ...entry("invalid", 400, 0, NOW), date: "invalid" },
+    ],
+    {
+      accounts: [
+        {
+          uuid: "account-main",
+          user: PROFILE,
+          amount: 300,
+          currencyCode: "USD",
+        },
+        { uuid: "hidden", id: 42, isExcluded: true, amount: 999 },
+      ],
+    },
+  );
+  const before = JSON.stringify(document);
+  const report = selectConsumptionReport(document, "USD", NOW);
+  assert.equal(report.flows[0].expense, 50);
+  assert.equal(report.flows[0].expenseCount, 1);
+  assert.equal(report.holdings[0].accounts.length, 1);
+  assert.equal(JSON.stringify(document), before);
+});
+
+test("consumption preserves missing conversions in their own currency and uses saved account amounts", () => {
+  const document = documentWith([
+    entry("dollars", 10, 0, NOW),
+    {
+      ...entry("euros", 20, 0, NOW),
+      currencyCode: "EUR",
+      accountCurrencyCode: "EUR",
+    },
+    {
+      ...entry("converted", 30, 0, NOW),
+      currencyCode: "EUR",
+      accountCurrencyCode: "USD",
+      accountAmount: 36,
+    },
+  ]);
+  const report = selectConsumptionReport(document, "USD", NOW);
+  assert.equal(
+    report.flows.find((flow) => flow.currencyCode === "USD").expense,
+    46,
+  );
+  assert.equal(
+    report.flows.find((flow) => flow.currencyCode === "EUR").expense,
+    20,
+  );
+});
+
+test("pie drilldown reconciles every parent, child and remainder transaction", () => {
+  const names = ["A", "B", "C", "D", "E", "F", "G", "H"];
+  const document = documentWith(
+    names.map((name, i) => ({
+      ...entry(name, 100 * (i + 1), 0, NOW),
+      category: `child-${name}`,
+    })),
+    {
+      categories: names.flatMap((name) => [
+        category(name, name),
+        category(`child-${name}`, `Child ${name}`, name),
+      ]),
+    },
+  );
+  const flow = selectConsumptionReport(document, "USD", NOW).flows[0];
+  assert.equal(flow.slices.length, 6);
+  assert.equal(
+    flow.slices.reduce((sum, slice) => sum + slice.amount, 0),
+    flow.expense,
+  );
+  assert.ok(
+    Math.abs(flow.slices.reduce((sum, slice) => sum + slice.share, 0) - 100) <
+      1e-9,
+  );
+  const detailEntries = flow.slices.flatMap((slice) => {
+    const details = selectConsumptionDetails(flow, slice);
+    assert.equal(
+      details.entries.reduce((sum, record) => sum + record.amount, 0),
+      slice.amount,
+    );
+    assert.equal(
+      details.categories.reduce((sum, record) => sum + record.amount, 0),
+      slice.amount,
+    );
+    return details.entries;
+  });
+  assert.equal(
+    new Set(detailEntries.map((item) => item.id)).size,
+    names.length,
+  );
+  assert.equal(
+    flow.days.reduce((sum, day) => sum + day.amount, 0),
+    flow.expense,
+  );
+});
+
+test("duplicate category names and broken parent cycles retain stable identities", () => {
+  const document = documentWith(
+    [
+      { ...entry("one", 10, 0, NOW), category: "left" },
+      { ...entry("two", 20, 0, NOW), category: "right" },
+      { ...entry("three", 30, 0, NOW), category: "separate" },
+    ],
+    {
+      categories: [
+        category("left", "Same", "right"),
+        category("right", "Same", "left"),
+        category("separate", "Same"),
+      ],
+    },
+  );
+  const flow = selectConsumptionReport(document, "USD", NOW).flows[0];
+  assert.equal(flow.categories.length, 2);
+  assert.equal(flow.expense, 60);
+  assert.deepEqual(
+    flow.categories.map((item) => item.amount),
+    [30, 30],
+  );
+});
+
+test("current holdings keep currencies separate while historical consumption changes", () => {
+  const document = documentWith([], {
+    accounts: [
+      { uuid: "usd", user: PROFILE, amount: 100, currencyCode: "USD" },
+      {
+        uuid: "card",
+        user: PROFILE,
+        amount: -20,
+        currencyCode: "USD",
+        accountType: "card",
+      },
+      { uuid: "eur", user: PROFILE, amount: 200, currencyCode: "EUR" },
+    ],
+  });
+  const report = selectConsumptionReport(document, "USD", NOW, -8);
+  assert.deepEqual(
+    report.holdings.map(({ currencyCode, net, debt }) => ({
+      currencyCode,
+      net,
+      debt,
+    })),
+    [
+      { currencyCode: "USD", net: 80, debt: 20 },
+      { currencyCode: "EUR", net: 200, debt: 0 },
+    ],
+  );
+  assert.equal(report.flows[0].spentIncomePercent, null);
+  assert.deepEqual(report.flows[0].slices, []);
+});
 
 test("report totals cover six financial months and compare against the previous one", () => {
   const thisMonth = new Date(2026, 8, 5);
@@ -270,7 +554,10 @@ test("a long tail of parents collapses into one slice without losing any spendin
   assert.equal(parentCategories[6].childCount, 2);
   const ring = parentCategories.reduce((sum, item) => sum + item.amount, 0);
   assert.equal(ring, current.expense);
-  assert.equal(Math.round(parentCategories.reduce((s, i) => s + i.share, 0)), 100);
+  assert.equal(
+    Math.round(parentCategories.reduce((s, i) => s + i.share, 0)),
+    100,
+  );
 });
 
 test("an imported parent cycle is resolved instead of looping forever", () => {
