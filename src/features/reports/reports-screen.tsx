@@ -8,8 +8,8 @@ import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { TransactionMonthSelector } from "@/features/home/components/transaction-month-selector";
 import { Text } from "@/shared/ui/app-text";
-import { FilledIcon } from "@/shared/ui/filled-icon";
 import { TabPage } from "@/shared/ui/tab-page";
+import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 
 import { ExpensePieCard } from "./components/expense-pie-card";
 import { CashFlowCard } from "./components/cash-flow-card";
@@ -53,18 +53,8 @@ function ProfileReports() {
   return (
     <TabPage
       animateLayout
-      headerHeight={62}
-      header={
-        <View className="flex-row items-center justify-between pt-3">
-          <Text
-            accessibilityRole="header"
-            className="font-manrope-bold text-3xl text-foreground"
-          >
-            {t("reports.title")}
-          </Text>
-          <FilledIcon name="chart-donut-variant" size={25} tone="accent" />
-        </View>
-      }
+      headerHeight={TAB_HEADER_HEIGHT}
+      header={<TabHeader />}
     >
       <View className="gap-3">
         <TransactionMonthSelector

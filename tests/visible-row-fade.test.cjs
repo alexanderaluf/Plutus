@@ -114,3 +114,87 @@ test("pagination and duplicate visibility notifications preserve history; a new 
   );
   assert.equal(createVisibleRowFade().hasSeen("row-0"), false);
 });
+
+function optionsHarness(options) {
+  let time = 0;
+  const fade = createVisibleRowFade(() => time, options);
+  const calls = [];
+  const mount = (index) =>
+    fade.register(`row-${index}`, {
+      reveal: (delay) => calls.push([index, "reveal", delay]),
+      hide: () => calls.push([index, "hide"]),
+      finish: () => calls.push([index, "finish"]),
+    });
+  return { fade, calls, mount, tick: (next) => (time = next) };
+}
+
+test("entryOnly animates the first visible batch and shows later rows at once", () => {
+  const h = optionsHarness({ entryOnly: true });
+  for (let i = 0; i < 4; i++) h.mount(i);
+  h.calls.length = 0;
+  // Page entry: rows 0-1 are on screen, 2-3 are pre-mounted below the fold.
+  h.fade.update([row(0), row(1)]);
+  assert.deepEqual(h.calls, [
+    [0, "reveal", 0],
+    [1, "reveal", 40],
+    [2, "finish"],
+    [3, "finish"],
+  ]);
+  h.tick(1000);
+  h.calls.length = 0;
+  // Scrolling down: already-shown rows and newly mounted ones never fade.
+  h.fade.update([row(2), row(3)]);
+  h.mount(4);
+  h.fade.update([row(3), row(4)]);
+  assert.equal(h.calls.length > 0, true);
+  assert.equal(
+    h.calls.some(([, kind]) => kind !== "finish"),
+    false,
+  );
+});
+
+test("entryOnly rows re-mounted after scrolling back up appear at once", () => {
+  const h = optionsHarness({ entryOnly: true });
+  const unmount = h.mount(0);
+  h.fade.update([row(0)]);
+  h.tick(1000);
+  h.fade.update([]);
+  unmount();
+  h.calls.length = 0;
+  h.mount(0);
+  h.fade.update([row(0)]);
+  assert.equal(
+    h.calls.some(([, kind]) => kind !== "finish"),
+    false,
+  );
+});
+
+test("default history still survives unmounting (Home behavior)", () => {
+  const h = optionsHarness();
+  const unmount = h.mount(0);
+  h.fade.update([row(0)]);
+  h.tick(1000);
+  h.fade.update([]);
+  unmount();
+  h.calls.length = 0;
+  h.mount(0);
+  assert.deepEqual(h.calls, [[0, "finish"]]);
+});
+
+test("revealAfter delays the first rows until the header has entered", () => {
+  const h = optionsHarness({ revealAfter: 300 });
+  h.mount(0);
+  h.mount(1);
+  h.calls.length = 0;
+  h.fade.update([row(0), row(1)]);
+  assert.deepEqual(h.calls, [
+    [0, "reveal", 300],
+    [1, "reveal", 340],
+  ]);
+  // Later scrolling is not delayed.
+  h.tick(5000);
+  h.mount(2);
+  h.calls.length = 0;
+  h.fade.update([row(0), row(1), row(2)]);
+  assert.deepEqual(h.calls, [[2, "reveal", 0]]);
+});

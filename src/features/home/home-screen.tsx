@@ -1,12 +1,9 @@
-import { useAppDate } from "@/shared/lib/use-app-date";
 import { BlurTargetView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAmountVisibility } from "@/shared/lib/use-currency-format";
-import { useTimeOfDayGreeting } from "@/shared/lib/use-time-of-day-greeting";
-import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -34,7 +31,7 @@ import {
 import { useProfiles } from "@/features/profile/profile-provider";
 import { Text } from "@/shared/ui/app-text";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
-import { FilledIcon } from "@/shared/ui/filled-icon";
+import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 import {
   CollapsingHeader,
   CollapsingHeaderSpacer,
@@ -67,7 +64,7 @@ import { createVisibleRowFade } from "./visible-row-fade";
 import { VisibleFadeRow } from "./components/visible-fade-row";
 import { useHomeData } from "./use-home-data";
 
-const HEADER_HEIGHT = 64;
+const HEADER_HEIGHT = TAB_HEADER_HEIGHT;
 const SELECTOR_PINNED_TOP = 8;
 const TRANSACTION_PAGE_SIZE = 30;
 const EMPTY_ROWS: HomeRow[] = [];
@@ -84,7 +81,6 @@ export function HomeScreen() {
   const { height: viewportHeight } = useWindowDimensions();
   const router = useRouter();
   const { i18n, t } = useTranslation();
-  const { formatDate } = useAppDate();
   const { activeProfile } = useProfiles();
   const { document } = useLocalData();
   const [transactionPage, setTransactionPage] = useState({
@@ -100,11 +96,13 @@ export function HomeScreen() {
   const listRef = useRef<FlatList<HomeRow> | null>(null);
   // Persisted so hidden amounts stay hidden across restarts, and shared so the
   // toggle masks every amount in the app rather than just these cards.
-  const theme = useAppThemeColors();
-  const greeting = useTimeOfDayGreeting();
-  const { hidden: amountsHidden, toggle: toggleAmounts } = useAmountVisibility();
+  const { hidden: amountsHidden, toggle: toggleAmounts } =
+    useAmountVisibility();
   const isBalanceVisible = !amountsHidden;
-  const onToggleBalance = useCallback(() => void toggleAmounts(), [toggleAmounts]);
+  const onToggleBalance = useCallback(
+    () => void toggleAmounts(),
+    [toggleAmounts],
+  );
   const [overviewHeight, setOverviewHeight] = useState(300);
   const [section, setSection] = useState<HomeSection>("transactions");
   const [selectedTransactionId, setSelectedTransactionId] = useState<
@@ -119,14 +117,6 @@ export function HomeScreen() {
     opacity: sectionOpacity.get(),
   }));
   const now = useCategoryClock();
-  const headerDate = useMemo(
-    () =>
-      // Weekday stays localized text; the date itself follows the user's format.
-      `${now.toLocaleDateString(i18n.resolvedLanguage, {
-        weekday: "long",
-      })}, ${formatDate(now)}`,
-    [now, i18n.resolvedLanguage, formatDate],
-  );
   const [loadRetry, setLoadRetry] = useState(0);
   const homeData = useHomeData(
     document,
@@ -593,37 +583,7 @@ export function HomeScreen() {
           headerHidden={headerHidden}
           scrollY={scrollY}
         >
-          <View className="flex-row items-center justify-between pt-3">
-            <View className="flex-1 pe-3">
-              <Text className="font-manrope-medium text-xs uppercase tracking-widest text-muted">
-                {headerDate}
-              </Text>
-              <Text className="mt-1 font-manrope-bold text-2xl text-foreground">
-                {t(`home.greetings.${greeting}`, {
-                  name: activeProfile.name.split(" ")[0],
-                })}
-              </Text>
-            </View>
-
-            <Pressable
-              accessibilityLabel={t("home.openProfile")}
-              accessibilityRole="button"
-              hitSlop={6}
-              onPress={() => router.push("/profile")}
-              style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
-            >
-              <View
-                className="size-10 items-center justify-center rounded-full"
-                style={{ backgroundColor: theme.accent }}
-              >
-                <FilledIcon
-                  color={theme.accentForeground}
-                  name="account"
-                  size={25}
-                />
-              </View>
-            </Pressable>
-          </View>
+          <TabHeader />
         </CollapsingHeader>
         {isSelectorSticky ? (
           <View

@@ -1,14 +1,12 @@
 import { BlurView } from "expo-blur";
-import { useEffect, useState, type RefObject } from "react";
+import type { RefObject } from "react";
 import { Platform, Pressable, StyleSheet, View } from "react-native";
-import Animated, {
-  ReduceMotion,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from "react-native-reanimated";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
+import {
+  SlidingIndicator,
+  useIndicatorFrames,
+} from "@/shared/ui/sliding-indicator";
 
 type SegmentValue = string | number;
 type SegmentOption<Value extends SegmentValue> = {
@@ -41,36 +39,8 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
   textSize = 14,
   value,
 }: GlassSegmentedControlProps<Value>) {
-  const [frames, setFrames] = useState<
-    Record<string, { width: number; x: number }>
-  >({});
   const colors = useAppThemeColors();
-  const indicatorX = useSharedValue(0);
-  const indicatorWidth = useSharedValue(0);
-  const [trackWidth, setTrackWidth] = useState(0);
-  const isReady = Boolean(frames[String(value)] && trackWidth);
-
-  useEffect(() => {
-    const frame = frames[String(value)];
-    if (!frame || trackWidth === 0) return;
-    indicatorX.value = withSpring(frame.x, {
-      damping: 20,
-      mass: 0.7,
-      stiffness: 210,
-      reduceMotion: ReduceMotion.System,
-    });
-    indicatorWidth.value = withSpring(frame.width, {
-      damping: 22,
-      mass: 0.7,
-      stiffness: 230,
-      reduceMotion: ReduceMotion.System,
-    });
-  }, [frames, indicatorWidth, indicatorX, trackWidth, value]);
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    width: indicatorWidth.value,
-    transform: [{ translateX: indicatorX.value }],
-  }));
+  const { frames, onItemLayout } = useIndicatorFrames<string>();
 
   return (
     <View
@@ -97,20 +67,11 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
           tint={colors.isDark ? "dark" : "light"}
         />
       ) : null}
-      <View
-        onLayout={({ nativeEvent: { layout } }) => setTrackWidth(layout.width)}
-        style={styles.track}
-      >
-        {isReady ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.indicator,
-              { backgroundColor: colors.accent },
-              indicatorStyle,
-            ]}
-          />
-        ) : null}
+      <View style={styles.track}>
+        <SlidingIndicator
+          frame={frames[String(value)]}
+          style={[styles.indicator, { backgroundColor: colors.accent }]}
+        />
         {options.map((option) => {
           const isSelected = option.value === value;
           return (
@@ -118,22 +79,7 @@ export function GlassSegmentedControl<Value extends SegmentValue>({
               key={String(option.value)}
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
-              onLayout={({ nativeEvent: { layout } }) => {
-                const key = String(option.value);
-                setFrames((current) => {
-                  const previous = current[key];
-                  if (
-                    previous?.width === layout.width &&
-                    previous.x === layout.x
-                  ) {
-                    return current;
-                  }
-                  return {
-                    ...current,
-                    [key]: { width: layout.width, x: layout.x },
-                  };
-                });
-              }}
+              onLayout={(event) => onItemLayout(String(option.value), event)}
               onPress={() => onChange(option.value)}
               style={({ pressed }) => [
                 styles.tab,
@@ -180,10 +126,6 @@ const styles = StyleSheet.create({
   },
   indicator: {
     borderRadius: 999,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    top: 0,
   },
   tab: {
     alignItems: "center",

@@ -239,6 +239,10 @@ function screenHarness(document, insets, sizes = {}) {
       GlassSegmentedControl: "Selector",
     },
     "@/shared/ui/filled-icon": { FilledIcon: "Icon" },
+    "@/shared/navigation/tab-header": {
+      TAB_HEADER_HEIGHT: 64,
+      TabHeader: "TabHeader",
+    },
     "@/shared/ui/collapsing-header": {
       CollapsingHeader: "Header",
       CollapsingHeaderSpacer: "Spacer",

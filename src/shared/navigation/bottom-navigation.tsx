@@ -2,18 +2,12 @@ import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Pressable,
-  StyleSheet,
-  View,
-  type LayoutChangeEvent,
-} from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import {
+  SlidingIndicator,
+  useIndicatorFrames,
+} from "@/shared/ui/sliding-indicator";
 
 import { navigationItems } from "./navigation-config";
 import type { TabId } from "./types";
@@ -31,8 +29,6 @@ type BottomNavigationProps = {
   onChange: (item: TabId) => void;
   onActionPress: (item: TabId) => void;
 };
-
-type TabFrame = { width: number; x: number };
 
 const actionIcons = {
   home: "plus-thick",
@@ -50,17 +46,11 @@ export function BottomNavigation({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const colors = useAppThemeColors();
-  const indicatorX = useSharedValue(0);
-  const indicatorWidth = useSharedValue(0);
-  const [trackWidth, setTrackWidth] = useState(0);
+  const { frames: tabFrames, onItemLayout } = useIndicatorFrames<TabId>();
   const actionOpacity = useSharedValue(1);
   const actionTranslateY = useSharedValue(0);
-  const [isIndicatorReady, setIsIndicatorReady] = useState(false);
   const [displayedActionItem, setDisplayedActionItem] =
     useState<TabId>(activeItem);
-  const [tabFrames, setTabFrames] = useState<Partial<Record<TabId, TabFrame>>>(
-    {},
-  );
   const targetActionItem = useRef(activeItem);
   const actionIcon = actionIcons[displayedActionItem];
   const tabLabels: Record<TabId, string> = {
@@ -75,23 +65,6 @@ export function BottomNavigation({
     reports: t("navigation.actions.filterReports"),
     search: t("navigation.actions.openSearch"),
   };
-
-  useEffect(() => {
-    const activeFrame = tabFrames[activeItem];
-    if (!activeFrame || trackWidth === 0) return;
-
-    setIsIndicatorReady(true);
-    indicatorX.value = withSpring(activeFrame.x, {
-      damping: 20,
-      mass: 0.7,
-      stiffness: 210,
-    });
-    indicatorWidth.value = withSpring(activeFrame.width, {
-      damping: 22,
-      mass: 0.7,
-      stiffness: 230,
-    });
-  }, [activeItem, indicatorWidth, indicatorX, tabFrames, trackWidth]);
 
   useEffect(() => {
     if (activeItem === displayedActionItem) return;
@@ -126,20 +99,6 @@ export function BottomNavigation({
     });
   }
 
-  function handleTabLayout(item: TabId, event: LayoutChangeEvent) {
-    const { width, x } = event.nativeEvent.layout;
-    setTabFrames((current) => {
-      const previous = current[item];
-      if (previous?.width === width && previous.x === x) return current;
-      return { ...current, [item]: { width, x } };
-    });
-  }
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    width: indicatorWidth.value,
-    transform: [{ translateX: indicatorX.value }],
-  }));
-
   const actionIconStyle = useAnimatedStyle(() => ({
     opacity: actionOpacity.value,
     transform: [{ translateY: actionTranslateY.value }],
@@ -169,23 +128,14 @@ export function BottomNavigation({
             tint={colors.isDark ? "dark" : "light"}
           />
 
-          <View
-            accessibilityRole="tablist"
-            onLayout={({ nativeEvent: { layout } }) =>
-              setTrackWidth(layout.width)
-            }
-            style={styles.tabsTrack}
-          >
-            {isIndicatorReady ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.activeIndicator,
-                  { backgroundColor: colorWithAlpha(colors.foreground, 0.14) },
-                  indicatorStyle,
-                ]}
-              />
-            ) : null}
+          <View accessibilityRole="tablist" style={styles.tabsTrack}>
+            <SlidingIndicator
+              frame={tabFrames[activeItem]}
+              style={[
+                styles.activeIndicator,
+                { backgroundColor: colorWithAlpha(colors.foreground, 0.14) },
+              ]}
+            />
 
             {navigationItems.map((item) => {
               const isActive = item.id === activeItem;
@@ -197,7 +147,7 @@ export function BottomNavigation({
                   accessibilityRole="tab"
                   accessibilityState={{ selected: isActive }}
                   hitSlop={4}
-                  onLayout={(event) => handleTabLayout(item.id, event)}
+                  onLayout={(event) => onItemLayout(item.id, event)}
                   onPress={() => onChange(item.id)}
                   style={({ pressed }) => [
                     styles.tab,
@@ -293,11 +243,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   activeIndicator: {
-    bottom: 0,
     borderRadius: 26,
-    left: 0,
-    position: "absolute",
-    top: 0,
   },
   label: {
     fontSize: 10.5,

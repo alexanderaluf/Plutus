@@ -21,8 +21,6 @@ import type {
 import { dueDateInMonth } from "../model/card-payment";
 import type { BudgetCategory } from "@/features/home/types";
 import type { DailySpend, SpendingCategory } from "@/features/reports/types";
-import type { SearchResult } from "@/features/search/types";
-import type { FilledIconName } from "@/shared/ui/filled-icon";
 import { i18n } from "@/localization/i18n";
 import type { AccountDraft } from "../model/account-record";
 import {
@@ -37,7 +35,6 @@ import {
 } from "../model/savings-account";
 
 import type { BackupDocument } from "../model/backup-document";
-import { formatAppDate } from "../model/onboarding";
 import type { JsonObject, JsonValue } from "../model/json";
 
 export { selectTransactions } from "./transaction-selectors";
@@ -84,30 +81,6 @@ function lookupName(records: JsonObject[], id: JsonValue | undefined) {
   return record
     ? text(record.name, i18n.t("common.uncategorized"))
     : String(id);
-}
-
-function transactionAmount(record: JsonObject) {
-  const amount = Math.abs(number(record.amount));
-  return number(record.type) === 1 ? amount : -amount;
-}
-
-function categoryIcon(category: string): FilledIconName {
-  const value = category.toLowerCase();
-  if (value.includes("food") || value.includes("dining")) return "food";
-  if (value.includes("grocer") || value.includes("shopping")) return "shopping";
-  if (value.includes("coffee")) return "coffee";
-  if (value.includes("transport") || value.includes("car")) return "car";
-  if (value.includes("salary") || value.includes("income")) return "wallet";
-  if (value.includes("housing") || value.includes("rent")) return "home";
-  return "cash";
-}
-
-function transactionDate(record: JsonObject, document: BackupDocument) {
-  const value = text(record.date, text(record.createdAt));
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? i18n.t("common.unknownDate")
-    : formatAppDate(date, document._local.dateFormat);
 }
 
 function ownedAccountRecords(document: BackupDocument) {
@@ -915,116 +888,6 @@ function includedTransactions(document: BackupDocument) {
         !excludedIds.has(transaction.account) && transaction.type !== 2,
     )
     .filter(belongs);
-}
-
-/**
- * Searching projects only the records it returns. The previous approach built a
- * view model for every transaction (with a linear account/category lookup each)
- * before the screen could paint, which froze navigation on large profiles.
- */
-export function selectSearchMatches(
-  document: BackupDocument,
-  query: string,
-  limit = 60,
-): { results: SearchResult[]; total: number } {
-  const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return { results: [], total: 0 };
-
-  // Built once per search instead of once per transaction.
-  const names = (records: JsonObject[]) => {
-    const byId = new Map<string, string>();
-    for (const record of records) {
-      const name = text(record.name);
-      for (const key of [record.uuid, record.id])
-        if (key != null) byId.set(String(key), name);
-    }
-    return byId;
-  };
-  const categoryNames = names(document.categories);
-  const accountNames = names(document.accounts);
-  const accountsById = new Map<string, JsonObject>();
-  for (const record of document.accounts)
-    for (const key of [record.uuid, record.id])
-      if (key != null) accountsById.set(String(key), record);
-
-  const results: SearchResult[] = [];
-  let total = 0;
-
-  for (let index = 0; index < document.transactions.length; index++) {
-    const record = document.transactions[index];
-    const category = text(
-      record.categoryName,
-      record.category == null
-        ? i18n.t("common.uncategorized")
-        : (categoryNames.get(String(record.category)) ??
-          String(record.category)),
-    );
-    const account = text(
-      record.accountName,
-      record.account == null
-        ? i18n.t("common.uncategorized")
-        : (accountNames.get(String(record.account)) ?? String(record.account)),
-    );
-    const title = text(record.name, i18n.t("common.untitledTransaction"));
-    const matches = [title, category, account].some((value) =>
-      value.toLocaleLowerCase().includes(needle),
-    );
-    if (!matches) continue;
-
-    total++;
-    if (results.length >= limit) continue;
-
-    const accountRecord =
-      record.account == null
-        ? undefined
-        : accountsById.get(String(record.account));
-    const currencyCode = text(
-      record.currencyCode,
-      text(accountRecord?.currencyCode, "USD"),
-    ).toUpperCase();
-    results.push({
-      id: recordId(record, index),
-      title,
-      category,
-      account,
-      date: transactionDate(record, document),
-      amount: transactionAmount(record),
-      currencyCode: /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : "USD",
-      icon: categoryIcon(category),
-    });
-  }
-
-  return { results, total };
-}
-
-export function selectSearchResults(document: BackupDocument): SearchResult[] {
-  return document.transactions.map((record, index) => {
-    const category = text(
-      record.categoryName,
-      lookupName(document.categories, record.category),
-    );
-    const account = text(
-      record.accountName,
-      lookupName(document.accounts, record.account),
-    );
-    const accountRecord = document.accounts.find((item) =>
-      references(item, record.account),
-    );
-    const currencyCode = text(
-      record.currencyCode,
-      text(accountRecord?.currencyCode, "USD"),
-    ).toUpperCase();
-    return {
-      id: recordId(record, index),
-      title: text(record.name, i18n.t("common.untitledTransaction")),
-      category,
-      account,
-      date: transactionDate(record, document),
-      amount: transactionAmount(record),
-      currencyCode: /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : "USD",
-      icon: categoryIcon(category),
-    };
-  });
 }
 
 function reportingAmount(document: BackupDocument, transaction: JsonObject) {

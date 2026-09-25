@@ -16,6 +16,7 @@ import {
   CollapsingHeaderSpacer,
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
+import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 import { AccountCard } from "./components/account-card";
 
 const INITIAL_DELAY = 45;
@@ -52,7 +53,9 @@ export function AccountsScreen() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View>
-            <CollapsingHeaderSpacer />
+            <CollapsingHeaderSpacer height={TAB_HEADER_HEIGHT} />
+            {/* With the list gap, 28pt below the header like Home. */}
+            <View className="h-3.5" />
             {!!paymentError && (
               <Animated.View
                 entering={reveal(1)}
@@ -102,21 +105,13 @@ export function AccountsScreen() {
           </Animated.View>
         }
       />
-      <CollapsingHeader headerHidden={headerHidden} scrollY={scrollY}>
-        <Animated.View
-          entering={reveal(0)}
-          className="flex-row items-center justify-between py-4"
-        >
-          <Text
-            accessibilityRole="header"
-            className="font-manrope-bold text-2xl text-foreground"
-          >
-            {t("accounts.list.title")}
-          </Text>
-          <Text className="font-sans text-sm text-muted">
-            {t("accounts.list.count", { count: accounts.length })}
-          </Text>
-        </Animated.View>
+      <CollapsingHeader
+        height={TAB_HEADER_HEIGHT}
+        horizontalInset={20}
+        headerHidden={headerHidden}
+        scrollY={scrollY}
+      >
+        <TabHeader />
       </CollapsingHeader>
     </View>
   );

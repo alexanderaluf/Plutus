@@ -61,6 +61,12 @@ import { TrendingUpFill } from "@material-symbols-svg/react-native/rounded/icons
 import { TranslateFill } from "@material-symbols-svg/react-native/rounded/icons/translate";
 import { TrophyFill } from "@material-symbols-svg/react-native/rounded/icons/trophy";
 import { TuneFill } from "@material-symbols-svg/react-native/rounded/icons/tune";
+import { CalendarMonthFill } from "@material-symbols-svg/react-native/rounded/icons/calendar-month";
+import { LocationOnFill } from "@material-symbols-svg/react-native/rounded/icons/location-on";
+import { NotesFill } from "@material-symbols-svg/react-native/rounded/icons/notes";
+import { ReceiptLongFill } from "@material-symbols-svg/react-native/rounded/icons/receipt-long";
+import { SellFill } from "@material-symbols-svg/react-native/rounded/icons/sell";
+import { SortFill } from "@material-symbols-svg/react-native/rounded/icons/sort";
 import { VerifiedUserFill } from "@material-symbols-svg/react-native/rounded/icons/verified-user";
 import { VisibilityFill } from "@material-symbols-svg/react-native/rounded/icons/visibility";
 import { VisibilityOffFill } from "@material-symbols-svg/react-native/rounded/icons/visibility-off";
@@ -78,6 +84,7 @@ const icons = {
   "arrow-bottom-left": CallReceivedFill,
   "arrow-left": ArrowBackFill,
   "arrow-top-right": ArrowOutwardFill,
+  calendar: CalendarMonthFill,
   bank: AccountBalanceFill,
   backup: BackupFill,
   bell: NotificationsFill,
@@ -114,17 +121,22 @@ const icons = {
   "home-variant": HomeFill,
   magnify: SearchFill,
   "magnify-close": SearchOffFill,
+  "map-marker": LocationOnFill,
+  notes: NotesFill,
   nfc: ContactlessFill,
   "notifications-active": NotificationsActiveFill,
   pencil: EditFill,
   "photo-library": PhotoLibraryFill,
   "piggy-bank": SavingsFill,
+  receipt: ReceiptLongFill,
   plus: AddFill,
   "plus-thick": AddFill,
   save: SaveFill,
   "shield-check": VerifiedUserFill,
+  sort: SortFill,
   shopping: ShoppingBagFill,
   "swap-horizontal": SwapHorizFill,
+  tag: SellFill,
   "trending-down": TrendingDownFill,
   "trending-up": TrendingUpFill,
   translate: TranslateFill,

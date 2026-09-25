@@ -12,12 +12,26 @@ type RowAnimation = {
 const STAGGER_MS = 40;
 const MAX_DELAY_MS = 240;
 
+export type VisibleRowFadeOptions = {
+  /**
+   * Animate only the first batch of visible rows (the page entrance). Every
+   * row mounted or scrolled into view afterwards appears immediately.
+   */
+  entryOnly?: boolean;
+  /** Clock time before which no row starts, e.g. until a page header has entered. */
+  revealAfter?: number;
+};
+
 // UI-only state for one section visit. Virtualized rows can unmount without
 // losing their reveal history; mounting an off-screen row never starts a fade.
-export function createVisibleRowFade(clock: () => number = Date.now) {
+export function createVisibleRowFade(
+  clock: () => number = Date.now,
+  { entryOnly = false, revealAfter = 0 }: VisibleRowFadeOptions = {},
+) {
   const seen = new Set<string>();
   const visible = new Map<string, { start: number; delivered: boolean }>();
   const listeners = new Map<string, RowAnimation>();
+  let entered = false;
 
   const hasSeen = (key: string) => {
     const pending = visible.get(key);
@@ -26,6 +40,11 @@ export function createVisibleRowFade(clock: () => number = Date.now) {
 
   return {
     hasSeen,
+    /**
+     * Whether a row mounting now will be shown without an animation. Cells
+     * start in this state so a row created mid-scroll never flashes blank.
+     */
+    isSettled: (key: string) => hasSeen(key) || entered,
     register(key: string, animation: RowAnimation) {
       listeners.set(key, animation);
       if (hasSeen(key)) animation.finish();
@@ -33,7 +52,8 @@ export function createVisibleRowFade(clock: () => number = Date.now) {
         const pending = visible.get(key)!;
         animation.reveal(Math.max(0, pending.start - clock()));
         pending.delivered = true;
-      } else animation.hide();
+      } else if (entered) animation.finish();
+      else animation.hide();
       return () => {
         if (listeners.get(key) === animation) listeners.delete(key);
       };
@@ -60,15 +80,27 @@ export function createVisibleRowFade(clock: () => number = Date.now) {
       let rank = 0;
       for (const row of ordered) {
         if (visible.has(row.key)) continue;
-        if (seen.has(row.key)) {
+        if (seen.has(row.key) || entered) {
           visible.set(row.key, { start: now, delivered: true });
           listeners.get(row.key)?.finish();
           continue;
         }
-        const delay = Math.min(rank++ * STAGGER_MS, MAX_DELAY_MS);
+        const delay =
+          Math.max(0, revealAfter - now) +
+          Math.min(rank++ * STAGGER_MS, MAX_DELAY_MS);
         const animation = listeners.get(row.key);
         visible.set(row.key, { start: now + delay, delivered: !!animation });
         animation?.reveal(delay);
+      }
+      if (entryOnly && ordered.length && !entered) {
+        entered = true;
+        // Rows pre-mounted below the fold were hidden awaiting a reveal; show
+        // them now so scrolling never exposes a blank row.
+        for (const [key, animation] of listeners)
+          if (!visible.has(key)) {
+            seen.add(key);
+            animation.finish();
+          }
       }
     },
   };
