@@ -524,7 +524,7 @@ test("migration defaults automatic off and atomic repository rolls back ledger a
       }),
     );
     assert.deepEqual(await readDocument(adapter), before);
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 19);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 20);
   } finally {
     db.close();
   }

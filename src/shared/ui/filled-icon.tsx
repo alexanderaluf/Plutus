@@ -39,6 +39,7 @@ import { HomeFill } from "@material-symbols-svg/react-native/rounded/icons/home"
 import { KeyboardArrowUpFill } from "@material-symbols-svg/react-native/rounded/icons/keyboard-arrow-up";
 import { LocalCafeFill } from "@material-symbols-svg/react-native/rounded/icons/local-cafe";
 import { ManageAccountsFill } from "@material-symbols-svg/react-native/rounded/icons/manage-accounts";
+import { MicFill } from "@material-symbols-svg/react-native/rounded/icons/mic";
 import { NotificationsFill } from "@material-symbols-svg/react-native/rounded/icons/notifications";
 import { NotificationsActiveFill } from "@material-symbols-svg/react-native/rounded/icons/notifications-active";
 import { PaymentsFill } from "@material-symbols-svg/react-native/rounded/icons/payments";
@@ -46,6 +47,7 @@ import { PersonFill } from "@material-symbols-svg/react-native/rounded/icons/per
 import { PhotoLibraryFill } from "@material-symbols-svg/react-native/rounded/icons/photo-library";
 import { RestaurantFill } from "@material-symbols-svg/react-native/rounded/icons/restaurant";
 import { SaveFill } from "@material-symbols-svg/react-native/rounded/icons/save";
+import { SendFill } from "@material-symbols-svg/react-native/rounded/icons/send";
 import { SavingsFill } from "@material-symbols-svg/react-native/rounded/icons/savings";
 import { ScheduleFill } from "@material-symbols-svg/react-native/rounded/icons/schedule";
 import {
@@ -67,6 +69,7 @@ import { NotesFill } from "@material-symbols-svg/react-native/rounded/icons/note
 import { ReceiptLongFill } from "@material-symbols-svg/react-native/rounded/icons/receipt-long";
 import { SellFill } from "@material-symbols-svg/react-native/rounded/icons/sell";
 import { SortFill } from "@material-symbols-svg/react-native/rounded/icons/sort";
+import { SmartToyFill } from "@material-symbols-svg/react-native/rounded/icons/smart-toy";
 import { VerifiedUserFill } from "@material-symbols-svg/react-native/rounded/icons/verified-user";
 import { VisibilityFill } from "@material-symbols-svg/react-native/rounded/icons/visibility";
 import { VisibilityOffFill } from "@material-symbols-svg/react-native/rounded/icons/visibility-off";
@@ -120,6 +123,7 @@ const icons = {
   home: HomeFill,
   "home-variant": HomeFill,
   magnify: SearchFill,
+  mic: MicFill,
   "magnify-close": SearchOffFill,
   "map-marker": LocationOnFill,
   notes: NotesFill,
@@ -132,9 +136,11 @@ const icons = {
   plus: AddFill,
   "plus-thick": AddFill,
   save: SaveFill,
+  send: SendFill,
   "shield-check": VerifiedUserFill,
   sort: SortFill,
   shopping: ShoppingBagFill,
+  "smart-toy": SmartToyFill,
   "swap-horizontal": SwapHorizFill,
   tag: SellFill,
   "trending-down": TrendingDownFill,

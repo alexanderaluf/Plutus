@@ -45,6 +45,7 @@ export function createLegacyDevelopmentBackup(): BackupDocument {
       amountsHidden: false,
       monthStartDay: 1,
       weekStartDay: 0,
+      aiExitWarningDismissed: false,
     },
     users: [
       {

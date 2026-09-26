@@ -1,4 +1,5 @@
 import { en } from "./en";
+import { localAIRu } from "./local-ai";
 
 /**
  * Russian translations override the English source catalog. Keeping the source
@@ -8,6 +9,7 @@ import { en } from "./en";
  */
 export const ru = {
   ...en,
+  localAI: localAIRu,
   onboarding: {
     ...en.onboarding,
     welcome: "Настройте Plutus",

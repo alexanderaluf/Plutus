@@ -44,6 +44,7 @@ export function createDefaultBackup(): BackupDocument {
       monthStartDay: 1,
       weekStartDay: 0,
       amountsHidden: false,
+      aiExitWarningDismissed: false,
     },
     categories: [
       {

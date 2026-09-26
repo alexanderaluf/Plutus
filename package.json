@@ -11,8 +11,11 @@
     "@react-native-community/datetimepicker": "9.1.0",
     "eslint-config-expo": "~57.0.2",
     "expo": "~57.0.25",
+    "expo-asset": "~57.0.18",
+    "expo-audio": "~57.0.5",
     "expo-background-task": "~57.0.20",
     "expo-blur": "~57.0.3",
+    "expo-build-properties": "~57.0.22",
     "expo-constants": "~57.0.17",
     "expo-device": "~57.0.2",
     "expo-document-picker": "~57.0.2",
@@ -43,6 +46,8 @@
     "react-i18next": "^17.0.13",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
+    "react-native-litert-lm": "^0.7.0",
+    "react-native-nitro-modules": "^0.37.1",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
@@ -63,6 +68,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-expo-jsi-xcode26.cjs",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",

@@ -25,10 +25,12 @@ export function BudgetOverviewCard({
   budget: b,
   expanded,
   onToggle,
+  onOpen,
 }: {
   budget: Budget;
   expanded: boolean;
   onToggle: () => void;
+  onOpen?: () => void;
 }) {
   const { formatCurrency } = useCurrencyFormat();
   const { formatDayMonth } = useAppDate();
@@ -36,8 +38,8 @@ export function BudgetOverviewCard({
   const { t, i18n } = useTranslation();
   const labels = useBudgetLabels();
   const money = (amount: number) => formatCurrency(amount, b.currencyCode);
-  const open = () =>
-    router.push({ pathname: "/budgets/[id]", params: { id: b.id } });
+  const open = onOpen ?? (() =>
+    router.push({ pathname: "/budgets/[id]", params: { id: b.id } }));
   const remaining = t(
     b.remaining < 0
       ? b.transactionType === 0
