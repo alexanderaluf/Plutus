@@ -3,14 +3,23 @@
     "name": "Plutus",
     "slug": "plutus",
     "version": "1.0.0",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "orientation": "portrait",
     "backgroundColor": "#DCE7E0",
     "scheme": "plutus",
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.plutus.budgettracker",
-      "icon": "./assets/plutus.icon"
+      "icon": "./assets/plutus.icon",
+      "entitlements": {
+        "com.apple.developer.kernel.extended-virtual-addressing": true
+      },
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow Plutus to record voice messages for private on-device AI chat."
+      }
     },
     "android": {
       "package": "com.plutus.budgettracker",
@@ -28,7 +37,7 @@
         {
           "photosPermission": "Allow Plutus to select profile photos and receipt images.",
           "cameraPermission": false,
-          "microphonePermission": false
+          "microphonePermission": "Allow Plutus to record voice messages for private on-device AI chat."
         }
       ],
       [
@@ -43,7 +52,7 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#DCE7E0",
-          "image": "./assets/splash-logo.png",
+          "image": "./assets/icons-android/splash-icon-light.png",
           "imageWidth": 100,
           "android": {
             "image": "./assets/icons-android/splash-icon-light.png",
@@ -68,15 +77,35 @@
         {
           "supportsRTL": true,
           "supportedLocales": {
-            "ios": ["en", "he", "ru"],
-            "android": ["en", "he", "ru"]
+            "ios": [
+              "en",
+              "he",
+              "ru"
+            ],
+            "android": [
+              "en",
+              "he",
+              "ru"
+            ]
           }
         }
       ],
       "expo-background-task",
       "expo-notifications",
       "expo-image",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Plutus to record a voice message for private on-device AI chat.",
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "react-native-litert-lm",
+      "./plugins/with-local-ai-android-ndk",
+      "./plugins/with-local-ai-ios-build",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

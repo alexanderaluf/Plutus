@@ -1,7 +1,9 @@
 import { onboardingEn } from "./onboarding";
 import { recurringEn } from "./recurring";
+import { localAIEn } from "./local-ai";
 
 export const en = {
+  localAI: localAIEn,
   onboarding: onboardingEn,
   recurring: recurringEn,
   common: {

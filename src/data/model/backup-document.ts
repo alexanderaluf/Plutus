@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from "./json";
 
 export const BACKUP_VERSION = 3;
-export const LOCAL_SCHEMA_VERSION = 19;
+export const LOCAL_SCHEMA_VERSION = 20;
 export const DEFAULT_CATEGORIES_REVISION = 1;
 
 export const APP_LANGUAGES = ["en", "he", "ru"] as const;
@@ -83,6 +83,8 @@ export interface LocalBackupMetadata extends JsonObject {
   weekStartDay: number;
   /** Masks every monetary amount in the UI until the user reveals them again. */
   amountsHidden: boolean;
+  /** UI preference only; no chat messages are persisted. */
+  aiExitWarningDismissed: boolean;
 }
 
 export interface BackupDocument extends JsonObject {

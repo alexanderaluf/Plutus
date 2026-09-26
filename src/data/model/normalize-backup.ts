@@ -226,6 +226,7 @@ export function normalizeBackupDocument(value: unknown): BackupDocument {
         ? local.weekStartDay
         : 0,
     amountsHidden: local.amountsHidden === true,
+    aiExitWarningDismissed: local.aiExitWarningDismissed === true,
   };
 
   return document;

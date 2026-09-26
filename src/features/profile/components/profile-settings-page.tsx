@@ -1,4 +1,5 @@
 import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
+import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Alert, Pressable, View } from "react-native";
 import Animated, {
@@ -36,8 +37,13 @@ function SettingsRow({
   onPress?: () => void;
 }) {
   const { t } = useTranslation();
+  const router = useRouter();
 
   function handlePress() {
+    if (item.id === "local-ai") {
+      router.push("/ai");
+      return;
+    }
     if (onPress) {
       onPress();
       return;
@@ -132,6 +138,13 @@ export function ProfileSettingsPage({
 }: ProfileSettingsPageProps) {
   const { t } = useTranslation();
   const primarySettings: SettingsItem[] = [
+    {
+      id: "local-ai",
+      title: t("localAI.title"),
+      description: t("localAI.privacyTitle"),
+      icon: "smart-toy",
+      iconBackground: "#a8b6f3",
+    },
     {
       id: "theme",
       title: t("settings.items.theme.title"),

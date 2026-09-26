@@ -44,13 +44,29 @@ export function TabHeader() {
         </Text>
         <Text
           accessibilityRole="header"
-          className="mt-1 font-manrope-bold text-2xl text-foreground"
+          className="mt-1 font-manrope-bold text-xl text-foreground"
+          numberOfLines={1}
         >
           {t(`home.greetings.${greeting}`, {
             name: activeProfile.name.split(" ")[0],
           })}
         </Text>
       </View>
+
+      <Pressable
+        accessibilityLabel={t("localAI.open")}
+        accessibilityRole="button"
+        hitSlop={6}
+        onPress={() => router.push("/ai")}
+        style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1, marginEnd: 8 })}
+      >
+        <View
+          className="size-10 items-center justify-center rounded-full"
+          style={{ backgroundColor: theme.surface }}
+        >
+          <FilledIcon color={theme.accent} name="smart-toy" size={25} />
+        </View>
+      </Pressable>
 
       <Pressable
         accessibilityLabel={t("home.openProfile")}
