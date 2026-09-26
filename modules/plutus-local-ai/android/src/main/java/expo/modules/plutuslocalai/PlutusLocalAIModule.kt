@@ -1,12 +1,17 @@
 package expo.modules.plutuslocalai
 
 import android.app.DownloadManager
+import android.app.ActivityManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -16,6 +21,8 @@ import expo.modules.kotlin.functions.Coroutine
 import java.io.File
 import java.io.RandomAccessFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 
 /** The model stays in app-private storage. Chat content is never uploaded. */
@@ -25,6 +32,8 @@ class PlutusLocalAIModule : Module() {
   private var recordingFile: File? = null
   @Volatile private var recording = false
   private var downloadReceiver: BroadcastReceiver? = null
+  private var speechRecognizer: SpeechRecognizer? = null
+  private var speechResult: CompletableDeferred<String>? = null
 
   private val context: Context get() = requireNotNull(appContext.reactContext).applicationContext
 
@@ -49,6 +58,13 @@ class PlutusLocalAIModule : Module() {
     OnDestroy {
       downloadReceiver?.let { receiver -> runCatching { appContext.reactContext?.applicationContext?.unregisterReceiver(receiver) } }
       downloadReceiver = null
+      android.os.Handler(android.os.Looper.getMainLooper()).post {
+        speechRecognizer?.cancel()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        speechResult?.cancel()
+        speechResult = null
+      }
     }
 
     AsyncFunction("isInstalledAsync") Coroutine { ->
@@ -71,8 +87,81 @@ class PlutusLocalAIModule : Module() {
       }
     }
 
+    AsyncFunction("getAvailableMemoryAsync") Coroutine { ->
+      withContext(Dispatchers.IO) {
+        val memory = ActivityManager.MemoryInfo()
+        context.getSystemService(ActivityManager::class.java).getMemoryInfo(memory)
+        if (memory.lowMemory) 0L else memory.availMem
+      }
+    }
+
     AsyncFunction("clearRuntimeCacheAsync") Coroutine { ->
       withContext(Dispatchers.IO) { LocalAIModelStore.clearRuntimeCache(context) }
+    }
+
+    AsyncFunction("startVoiceRecognitionAsync") Coroutine { language: String ->
+      withContext(Dispatchers.Main) {
+        check(Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
+          "On-device speech recognition is unavailable on this device"
+        }
+        check(speechRecognizer == null) { "Speech recognition is already running" }
+        val result = CompletableDeferred<String>()
+        val recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+        speechResult = result
+        speechRecognizer = recognizer
+        recognizer.setRecognitionListener(object : RecognitionListener {
+          override fun onReadyForSpeech(params: Bundle?) = Unit
+          override fun onBeginningOfSpeech() = Unit
+          override fun onRmsChanged(rmsdB: Float) = Unit
+          override fun onBufferReceived(buffer: ByteArray?) = Unit
+          override fun onEndOfSpeech() = Unit
+          override fun onPartialResults(partialResults: Bundle?) = Unit
+          override fun onEvent(eventType: Int, params: Bundle?) = Unit
+          override fun onError(error: Int) {
+            if (!result.isCompleted) result.completeExceptionally(IllegalStateException("Speech recognition failed ($error)"))
+          }
+          override fun onResults(results: Bundle?) {
+            val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()
+            if (!result.isCompleted) {
+              if (text.isNullOrEmpty()) result.completeExceptionally(IllegalStateException("No speech detected"))
+              else result.complete(text)
+            }
+          }
+        })
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+          putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+          putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
+          putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        }
+        recognizer.startListening(intent)
+      }
+    }
+
+    AsyncFunction("stopVoiceRecognitionAsync") Coroutine { ->
+      val result = withContext(Dispatchers.Main) {
+        val pending = checkNotNull(speechResult) { "Speech recognition is not running" }
+        if (!pending.isCompleted) speechRecognizer?.stopListening()
+        pending
+      }
+      try {
+        withTimeout(20_000) { result.await() }
+      } finally {
+        withContext(Dispatchers.Main) {
+          speechRecognizer?.destroy()
+          speechRecognizer = null
+          speechResult = null
+        }
+      }
+    }
+
+    AsyncFunction("cancelVoiceRecognitionAsync") Coroutine { ->
+      withContext(Dispatchers.Main) {
+        speechRecognizer?.cancel()
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        speechResult?.cancel()
+        speechResult = null
+      }
     }
 
     AsyncFunction("startRecordingAsync") Coroutine { ->

@@ -15,6 +15,7 @@
     "expo-audio": "~57.0.5",
     "expo-background-task": "~57.0.20",
     "expo-blur": "~57.0.3",
+    "expo-build-properties": "~57.0.22",
     "expo-constants": "~57.0.17",
     "expo-device": "~57.0.2",
     "expo-document-picker": "~57.0.2",

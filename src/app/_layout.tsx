@@ -17,6 +17,7 @@ import { HeroUINativeProvider } from "heroui-native";
 import { useEffect, type PropsWithChildren } from "react";
 import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LayoutDirection, useUniwind } from "uniwind";
 
 import { initializeLocalDatabase } from "@/data/database/safe-startup";
@@ -113,31 +114,33 @@ export default function RootLayout() {
         backgroundColor: ROOT_BACKGROUNDS[theme === "dark" ? "dark" : "light"],
       }}
     >
-      <StorageBoundary>
-        <SQLiteProvider
-          databaseName="budget-manager.db"
-          onInit={initializeLocalDatabase}
-        >
-          <LocalDataProvider>
-            <LocalizationProvider>
-              <LocalizedHeroUIProvider>
-                <AppThemeController />
-                <AppSystemBars />
-                <AppBottomSheetPortalLayer>
-                  <View style={{ flex: 1 }}>
-                    <OnboardingGate>
-                      <ProfileProvider>
-                        <AppNavigation />
-                      </ProfileProvider>
-                    </OnboardingGate>
-                    <AppBottomSheetPortalHost />
-                  </View>
-                </AppBottomSheetPortalLayer>
-              </LocalizedHeroUIProvider>
-            </LocalizationProvider>
-          </LocalDataProvider>
-        </SQLiteProvider>
-      </StorageBoundary>
+      <SafeAreaProvider>
+        <StorageBoundary>
+          <SQLiteProvider
+            databaseName="budget-manager.db"
+            onInit={initializeLocalDatabase}
+          >
+            <LocalDataProvider>
+              <LocalizationProvider>
+                <LocalizedHeroUIProvider>
+                  <AppThemeController />
+                  <AppSystemBars />
+                  <AppBottomSheetPortalLayer>
+                    <View style={{ flex: 1 }}>
+                      <OnboardingGate>
+                        <ProfileProvider>
+                          <AppNavigation />
+                        </ProfileProvider>
+                      </OnboardingGate>
+                      <AppBottomSheetPortalHost />
+                    </View>
+                  </AppBottomSheetPortalLayer>
+                </LocalizedHeroUIProvider>
+              </LocalizationProvider>
+            </LocalDataProvider>
+          </SQLiteProvider>
+        </StorageBoundary>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

@@ -12,7 +12,12 @@ declare class PlutusLocalAIModule extends NativeModule<PlutusLocalAIModuleEvents
   /** Starts a system-managed download that continues outside the app. */
   downloadAsync(): Promise<void>;
   getModelPathAsync(): Promise<string>;
+  getAvailableMemoryAsync(): Promise<number>;
   clearRuntimeCacheAsync(): Promise<void>;
+  startVoiceRecognitionAsync(language: string): Promise<void>;
+  stopVoiceRecognitionAsync(): Promise<string>;
+  cancelVoiceRecognitionAsync(): Promise<void>;
+  transcribeRecordingAsync(uri: string, language: string): Promise<string>;
   startRecordingAsync(): Promise<void>;
   stopRecordingAsync(): Promise<string>;
   stopRecordingAndDeleteAsync(): Promise<void>;

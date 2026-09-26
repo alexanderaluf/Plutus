@@ -1,16 +1,20 @@
 import ExpoModulesCore
 import Foundation
 import AVFoundation
+import Speech
+import Darwin
 
 public class PlutusLocalAIModule: Module {
   private var recorder: AVAudioRecorder?
   private var recordingURL: URL?
+  private var speechTask: SFSpeechRecognitionTask?
   private let store = LocalAIModelStore.shared
 
   public func definition() -> ModuleDefinition {
     Name("PlutusLocalAI")
 
     OnCreate { self.store.activate() }
+    OnDestroy { self.speechTask?.cancel(); self.speechTask = nil }
 
     AsyncFunction("isInstalledAsync") { () -> Bool in self.store.isInstalled() }
 
@@ -30,7 +34,52 @@ public class PlutusLocalAIModule: Module {
       return try self.store.modelFile().path
     }
 
+    AsyncFunction("getAvailableMemoryAsync") { () -> Double in
+      Double(os_proc_available_memory())
+    }
+
     AsyncFunction("clearRuntimeCacheAsync") { () throws in try self.store.clearRuntimeCache() }
+
+    AsyncFunction("cancelVoiceRecognitionAsync") { () in
+      self.speechTask?.cancel()
+      self.speechTask = nil
+    }
+
+    AsyncFunction("transcribeRecordingAsync") { (uri: String, language: String, promise: Promise) in
+      guard let url = URL(string: uri), url.isFileURL else {
+        promise.reject("VOICE_FILE", "Invalid voice recording")
+        return
+      }
+      let recognizer = SFSpeechRecognizer(locale: Locale(identifier: language))
+      guard let recognizer, recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
+        promise.reject("VOICE_UNAVAILABLE", "On-device speech recognition is unavailable for this language")
+        return
+      }
+      SFSpeechRecognizer.requestAuthorization { status in
+        guard status == .authorized else {
+          promise.reject("VOICE_PERMISSION", "Speech recognition permission was denied")
+          return
+        }
+        let request = SFSpeechURLRecognitionRequest(url: url)
+        request.requiresOnDeviceRecognition = true
+        request.shouldReportPartialResults = false
+        var finished = false
+        self.speechTask = recognizer.recognitionTask(with: request) { result, error in
+          guard !finished else { return }
+          if let error {
+            finished = true
+            self.speechTask = nil
+            promise.reject("VOICE_FAILED", error.localizedDescription)
+          } else if let result, result.isFinal {
+            finished = true
+            self.speechTask = nil
+            let text = result.bestTranscription.formattedString.trimmingCharacters(in: .whitespacesAndNewlines)
+            if text.isEmpty { promise.reject("VOICE_EMPTY", "No speech detected") }
+            else { promise.resolve(text) }
+          }
+        }
+      }
+    }
 
     AsyncFunction("startRecordingAsync") { () throws in
       guard self.recorder == nil else { throw NSError(domain: "PlutusLocalAI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Already recording"]) }

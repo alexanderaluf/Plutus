@@ -18,7 +18,8 @@
         "com.apple.developer.kernel.extended-virtual-addressing": true
       },
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Allow Plutus to record voice messages for private on-device AI chat."
+        "NSMicrophoneUsageDescription": "Allow Plutus to record voice messages for private on-device AI chat.",
+        "NSSpeechRecognitionUsageDescription": "Allow Plutus to transcribe voice messages on this device for private AI chat."
       }
     },
     "android": {
@@ -105,7 +106,15 @@
       "react-native-litert-lm",
       "./plugins/with-local-ai-android-ndk",
       "./plugins/with-local-ai-ios-build",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

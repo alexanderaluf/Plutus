@@ -4,17 +4,17 @@ import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   BackHandler,
-  KeyboardAvoidingView,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
-  TextInput,
   View,
 } from "react-native";
 import { AudioModule } from "expo-audio";
 import { File } from "expo-file-system";
 
 import { useLocalData } from "@/data/local-data-provider";
+import { profileCurrency } from "@/data/model/transaction-conversion";
 import { selectAccounts } from "@/data/selectors/document-selectors";
 import { selectBudgets } from "@/data/selectors/budget-selectors";
 import {
@@ -28,14 +28,34 @@ import type { Transaction } from "@/features/home/types";
 import { TransactionDetailSheet } from "@/features/transactions/transaction-detail-sheet";
 import { EdgeToEdgeLayout } from "@/shared/ui/edge-to-edge-layout";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { Text } from "@/shared/ui/app-text";
 import nativeAI from "../../../modules/plutus-local-ai/src/PlutusLocalAIModule";
 import {
-  inferReadTools,
-  parseReadTools,
-  runReadTools,
-  type ChatCard,
-} from "./chat-tools";
+  chatSystemPrompt,
+  HEALTH_TOOL_CALL,
+  SNAPSHOT_TOOL_CALL,
+  toolResultsPrompt,
+} from "./chat-prompts";
+import {
+  inferPeriod,
+  inferToolCalls,
+  isAdviceQuestion,
+  looksLikeMissingData,
+  looksLikeToolRequest,
+  parseToolCalls,
+  stripToolJson,
+  type ChatToolCall,
+} from "./chat-tool-protocol";
+import { runChatTools, type ChatCard } from "./chat-tools";
+import {
+  ChatComposer,
+  KeyboardSpacer,
+  useChatKeyboard,
+} from "./components/chat-composer";
+import { LeaveChatDialog } from "./components/leave-chat-dialog";
+import { DirectionalText } from "./components/markdown-message";
+import { TypewriterMarkdown } from "./components/typewriter-markdown";
 import { checkLocalAICompatibility } from "./model-compatibility";
 import {
   LOCAL_AI_MODEL,
@@ -49,7 +69,41 @@ type ChatMessage = {
   role: "user" | "assistant";
   text: string;
   cards: ChatCard[];
+  /** False while the model is still streaming this answer. */
+  final: boolean;
+  /** True until the typewriter reveal has shown the whole answer once. */
+  typing: boolean;
 };
+
+type ChatPhase = "idle" | "thinking" | "reading" | "answering";
+
+/** Recent turns replayed into a fresh engine conversation for each question. */
+function transcript(messages: ChatMessage[]) {
+  return messages
+    .filter((message) => message.text.trim())
+    .slice(-6)
+    .map((message) => ({
+      role: message.role === "user" ? "user" : "model",
+      content: message.text.slice(0, 600),
+    }));
+}
+
+/** Tool JSON must never flash in the bubble while an answer streams. */
+function isToolRequestPrefix(text: string) {
+  const start = text.trimStart();
+  return start.startsWith("{") || /^```(json)?\s*(\{|$)/i.test(start);
+}
+
+function withAdviceTools(calls: ChatToolCall[]) {
+  const names = new Set(calls.map((call) => call.name));
+  return [
+    ...(names.has("financial_health") ? [] : [HEALTH_TOOL_CALL]),
+    ...calls,
+    ...(names.has("financial_snapshot") ? [] : [SNAPSHOT_TOOL_CALL]),
+  ];
+}
+
+const SUGGESTIONS = ["advice", "spending", "netWorth", "upcoming", "compare"] as const;
 
 function ChatCards({
   cards,
@@ -130,7 +184,10 @@ export function LocalAIScreen() {
   const engine = useLocalAIEngine(installed);
   const { ready } = engine;
   const llm = engine.engine;
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<ChatPhase>("idle");
+  const busy = phase !== "idle";
+  const keyboard = useChatKeyboard();
+  const [composerHeight, setComposerHeight] = useState(112);
   const [recording, setRecording] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
@@ -155,6 +212,7 @@ export function LocalAIScreen() {
     return () => {
       active = false;
       void nativeAI?.stopRecordingAndDeleteAsync();
+      void nativeAI?.cancelVoiceRecognitionAsync();
     };
   }, []);
 
@@ -235,78 +293,174 @@ export function LocalAIScreen() {
     else router.back();
   };
 
-  const send = async (value: string, voice = false) => {
-    if (!llm.current || !ready || busy || (!voice && !value.trim())) return;
+  const send = async (value: string) => {
+    const question = value.trim();
+    const model = llm.current;
+    if (!model || !ready || busy || !question) return;
     setError("");
-    setBusy(true);
+    setPhase("thinking");
+    const history = transcript(messages);
+    const questionId = ++messageId.current;
+    const answerId = ++messageId.current;
     setMessages((current) => [
       ...current,
       {
-        id: ++messageId.current,
+        id: questionId,
         role: "user",
-        text: voice ? t("localAI.voiceMessage") : value.trim(),
+        text: question,
         cards: [],
+        final: true,
+        typing: false,
       },
     ]);
     setDraft("");
-    try {
-      const first = voice
-        ? await llm.current.execute([
-            { type: "text", text: "Answer the user's spoken question." },
-            { type: "audio", path: value },
-          ])
-        : await llm.current.execute([{ type: "text", text: value.trim() }]);
-      const tools = [
-        ...new Set([
-          ...parseReadTools(first),
-          ...(!voice ? inferReadTools(value) : []),
-        ]),
-      ];
-      let answer = first;
-      let cards: ChatCard[] = [];
-      if (tools.length) {
-        const result = runReadTools(
-          document,
-          tools,
-          i18n.resolvedLanguage ?? "en",
-        );
-        cards = result.cards;
-        answer = await llm.current.execute([
+    const showAnswer = (text: string, final: boolean, cards: ChatCard[] = []) =>
+      setMessages((current) => {
+        const existing = current.find((message) => message.id === answerId);
+        return [
+          ...current.filter((message) => message.id !== answerId),
           {
-            type: "text",
-            text: `TOOL_RESULTS ${JSON.stringify(result.facts)}. Answer the user's latest question briefly. The app will display these records as tappable cards.`,
+            id: answerId,
+            role: "assistant",
+            text,
+            cards,
+            final,
+            typing: existing?.typing ?? true,
           },
-        ]);
+        ];
+      });
+    try {
+      const now = new Date();
+      const currency = profileCurrency(
+        document,
+        document._local.selectedProfileId ?? "",
+      );
+      const systemPrompt = chatSystemPrompt(now, currency);
+      const advice = isAdviceQuestion(question);
+      // A fresh conversation per question keeps the KV cache bounded while
+      // the short transcript preserves follow-up context.
+      model.resetConversation(JSON.stringify(history), systemPrompt);
+      const first = await model.execute([{ type: "text", text: question }]);
+      const requested = parseToolCalls(first);
+      const period = inferPeriod(question);
+      let calls: ChatToolCall[] = (requested ?? []).map((call) =>
+        period && !call.args.period && !call.args.from && !call.args.to
+          ? { ...call, args: { ...call.args, period } }
+          : call,
+      );
+      if (!calls.length) calls = inferToolCalls(question);
+      if (!calls.length && (requested !== null || looksLikeMissingData(first)))
+        calls = [SNAPSHOT_TOOL_CALL];
+      // Open-ended advice always reads most of the document first.
+      if (advice) calls = withAdviceTools(calls);
+      if (!calls.length) {
+        const direct = stripToolJson(first);
+        showAnswer(direct || t("localAI.emptyAnswer"), true);
+        return;
       }
-      setMessages((current) => [
-        ...current,
-        {
-          id: ++messageId.current,
-          role: "assistant",
-          text: answer.trim() || t("localAI.emptyAnswer"),
-          cards,
-        },
-      ]);
-    } catch (cause) {
-      setError(String(cause));
+
+      const charBudget = Math.max(
+        2_000,
+        Math.round((engine.contextTokens - 3_300) * 2.8),
+      );
+      const answerWith = async (toolCalls: readonly ChatToolCall[]) => {
+        setPhase("reading");
+        const result = runChatTools(document, toolCalls, { charBudget, now });
+        const mode = toolCalls.some((call) => call.name === "financial_health")
+          ? "advice"
+          : "answer";
+        let streamed = "";
+        const answer = await model.execute(
+          [
+            {
+              type: "text",
+              text: toolResultsPrompt(question, result.facts, mode),
+            },
+          ],
+          (token) => {
+            streamed += token;
+            if (isToolRequestPrefix(streamed)) return;
+            setPhase("answering");
+            showAnswer(streamed, false);
+          },
+        );
+        return { answer: answer.trim(), cards: result.cards };
+      };
+
+      let result = await answerWith(calls);
+      // The model may ask for more tools or say it lacks data; retry once
+      // with those tools, or with the whole-document snapshot.
+      const followUp = looksLikeToolRequest(result.answer)
+        ? parseToolCalls(result.answer)
+        : null;
+      const hasSnapshot = calls.some(
+        (call) => call.name === "financial_snapshot",
+      );
+      if (
+        followUp !== null ||
+        (looksLikeMissingData(result.answer) && !hasSnapshot)
+      ) {
+        model.resetConversation(JSON.stringify(history), systemPrompt);
+        result = await answerWith(
+          followUp?.length && !hasSnapshot
+            ? followUp
+            : hasSnapshot
+              ? [SNAPSHOT_TOOL_CALL]
+              : [...calls, SNAPSHOT_TOOL_CALL],
+        );
+      }
+      const answer = stripToolJson(result.answer);
+      showAnswer(answer || t("localAI.emptyAnswer"), true, result.cards);
+    } catch {
+      setMessages((current) =>
+        current.filter((message) => message.id !== answerId),
+      );
+      setError(t("localAI.generationFailed"));
     } finally {
-      if (voice)
-        try {
-          new File(value).delete();
-        } catch {
-          /* cache already gone */
-        }
-      setBusy(false);
+      setPhase("idle");
     }
   };
+
+  const finishTyping = useCallback((id: number) => {
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === id ? { ...message, typing: false } : message,
+      ),
+    );
+  }, []);
+
+  useEffect(() => {
+    const sub = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50),
+    );
+    return () => sub.remove();
+  }, []);
 
   const toggleRecording = async () => {
     try {
       if (!nativeAI) return;
       if (recording) {
-        const uri = await nativeAI.stopRecordingAsync();
+        let transcript: string;
+        if (Platform.OS === "android") {
+          transcript = await nativeAI.stopVoiceRecognitionAsync();
+        } else {
+          const uri = await nativeAI.stopRecordingAsync();
+          try {
+            transcript = await nativeAI.transcribeRecordingAsync(
+              uri,
+              i18n.resolvedLanguage ?? "en",
+            );
+          } finally {
+            try {
+              new File(uri).delete();
+            } catch {
+              /* The temporary recording may already be gone. */
+            }
+          }
+        }
         setRecording(false);
-        await send(uri, true);
+        await send(transcript);
         return;
       }
       const permission = await AudioModule.requestRecordingPermissionsAsync();
@@ -314,11 +468,15 @@ export function LocalAIScreen() {
         setError(t("localAI.microphoneDenied"));
         return;
       }
-      await nativeAI.startRecordingAsync();
+      if (Platform.OS === "android")
+        await nativeAI.startVoiceRecognitionAsync(
+          i18n.resolvedLanguage ?? "en",
+        );
+      else await nativeAI.startRecordingAsync();
       setRecording(true);
-    } catch (cause) {
+    } catch {
       setRecording(false);
-      setError(String(cause));
+      setError(t("localAI.voiceUnavailable"));
     }
   };
 
@@ -342,10 +500,7 @@ export function LocalAIScreen() {
     >
       {(insets) => (
         <>
-          <KeyboardAvoidingView
-            className="flex-1"
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-          >
+          <View className="flex-1">
             <ScrollView
               ref={scroll}
               className="flex-1"
@@ -353,11 +508,14 @@ export function LocalAIScreen() {
               // The header floats above the viewport; start content below it.
               contentContainerStyle={{
                 paddingTop: insets.top + 8,
-                paddingBottom: installed ? 24 : insets.bottom + 24,
+                paddingBottom: installed && nativeAI ? 0 : insets.bottom + 24,
               }}
-              onContentSizeChange={() =>
-                scroll.current?.scrollToEnd({ animated: true })
-              }
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              onContentSizeChange={() => {
+                if (messages.length > 0 || busy)
+                  scroll.current?.scrollToEnd({ animated: true });
+              }}
             >
               <View className="rounded-3xl bg-surface p-4">
                 <Text className="font-manrope-semibold text-base text-foreground">
@@ -449,29 +607,53 @@ export function LocalAIScreen() {
                     </Pressable>
                   )}
                   {messages.length === 0 && (
-                    <Text className="px-3 py-6 text-center text-muted">
-                      {t("localAI.chatWelcome")}
-                    </Text>
+                    <View className="gap-3 py-4">
+                      <Text className="px-3 text-center text-muted">
+                        {t("localAI.chatWelcome")}
+                      </Text>
+                      <View className="flex-row flex-wrap justify-center gap-2">
+                        {SUGGESTIONS.map((key) => (
+                          <Pressable
+                            key={key}
+                            accessibilityRole="button"
+                            disabled={!ready || busy}
+                            onPress={() =>
+                              void send(t(`localAI.suggestions.${key}`))
+                            }
+                            className="rounded-full border border-border bg-surface px-4 py-2"
+                            style={{ opacity: ready ? 1 : 0.5 }}
+                          >
+                            <Text className="text-sm text-foreground">
+                              {t(`localAI.suggestions.${key}`)}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </View>
+                    </View>
                   )}
                   {messages.map((message) => (
                     <View
                       key={message.id}
                       className={`gap-2 ${message.role === "user" ? "items-end" : "items-start"}`}
                     >
-                      <View
-                        className={`max-w-[92%] rounded-3xl p-4 ${message.role === "user" ? "bg-accent" : "bg-surface"}`}
-                      >
-                        <Text
-                          className={
-                            message.role === "user"
-                              ? "text-background"
-                              : "text-foreground"
-                          }
-                        >
-                          {message.text}
-                        </Text>
-                      </View>
-                      {message.cards.length > 0 && (
+                      {message.role === "user" ? (
+                        <View className="max-w-[85%] rounded-3xl rounded-ee-lg bg-accent px-4 py-3">
+                          <DirectionalText
+                            text={message.text}
+                            className="text-[15px] leading-6 text-background"
+                          />
+                        </View>
+                      ) : (
+                        <View className="w-full rounded-3xl rounded-es-lg bg-surface px-4 py-3.5">
+                          <TypewriterMarkdown
+                            text={message.text}
+                            animate={message.typing}
+                            final={message.final}
+                            onDone={() => finishTyping(message.id)}
+                          />
+                        </View>
+                      )}
+                      {message.cards.length > 0 && !message.typing && (
                         <View className="w-full">
                           <ChatCards
                             cards={message.cards}
@@ -482,97 +664,67 @@ export function LocalAIScreen() {
                       )}
                     </View>
                   ))}
-                  {busy && <ActivityIndicator />}
+                  {(phase === "thinking" || phase === "reading") && (
+                    <View className="flex-row items-center gap-2 self-start rounded-full bg-surface px-4 py-2.5">
+                      <ActivityIndicator size="small" />
+                      <Text className="text-sm text-muted">
+                        {phase === "reading"
+                          ? t("localAI.readingRecords")
+                          : t("localAI.thinking")}
+                      </Text>
+                    </View>
+                  )}
                 </>
               )}
-              {!!(error || engine.error) && (
+              {!!(error || engine.error || engine.memoryLimited) && (
                 <Text className="rounded-2xl bg-surface p-3 text-danger">
-                  {error || engine.error}
+                  {error || (engine.memoryLimited
+                    ? t("localAI.memoryUnavailable")
+                    : engine.error)}
                 </Text>
+              )}
+              {installed && nativeAI && (
+                <KeyboardSpacer
+                  keyboard={keyboard}
+                  bottomInset={insets.bottom}
+                  base={composerHeight + insets.bottom + 24}
+                />
               )}
             </ScrollView>
             {installed && nativeAI && (
-              <View
-                className="flex-row items-end gap-2 border-t border-border bg-background px-3 pt-2"
-                style={{ paddingBottom: insets.bottom + 8 }}
-              >
-                <TextInput
-                  accessibilityLabel={t("localAI.messagePlaceholder")}
-                  placeholder={t("localAI.messagePlaceholder")}
-                  value={draft}
-                  onChangeText={setDraft}
-                  multiline
-                  editable={ready && !busy && !recording}
-                  className="max-h-28 min-h-11 flex-1 rounded-2xl bg-surface px-4 py-2 text-foreground"
-                  placeholderTextColor="#888"
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    recording
-                      ? t("localAI.stopRecording")
-                      : t("localAI.recordVoice")
-                  }
-                  onPress={() => void toggleRecording()}
-                  disabled={!ready || busy}
-                  className="size-11 items-center justify-center rounded-full bg-surface"
-                >
-                  <FilledIcon name="mic" size={22} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("localAI.send")}
-                  onPress={() => void send(draft)}
-                  disabled={!ready || busy || !draft.trim()}
-                  className="size-11 items-center justify-center rounded-full bg-accent"
-                >
-                  <FilledIcon name="send" size={22} />
-                </Pressable>
-              </View>
+              <BottomSafeAreaGradient fadeHeight={composerHeight + 24} />
             )}
-          </KeyboardAvoidingView>
+            {installed && nativeAI && (
+              <ChatComposer
+                keyboard={keyboard}
+                bottomInset={insets.bottom}
+                draft={draft}
+                onChangeDraft={setDraft}
+                onSend={() => void send(draft)}
+                onToggleRecording={() => void toggleRecording()}
+                recording={recording}
+                ready={ready}
+                busy={busy}
+                onLayoutHeight={setComposerHeight}
+              />
+            )}
+          </View>
           {selectedTransaction && (
             <TransactionDetailSheet
               transaction={selectedTransaction}
               onDismiss={() => setSelectedTransaction(null)}
             />
           )}
-          {exitWarning && (
-            <View className="absolute inset-0 items-center justify-center bg-black/60 px-6">
-              <View className="w-full gap-4 rounded-3xl bg-surface p-6">
-                <Text className="font-manrope-bold text-lg text-foreground">
-                  {t("localAI.exitTitle")}
-                </Text>
-                <Text className="text-muted">
-                  {t("localAI.exitDescription")}
-                </Text>
-                <Pressable
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: doNotShowAgain }}
-                  onPress={() => setDoNotShowAgain((value) => !value)}
-                >
-                  <Text className="text-foreground">
-                    {doNotShowAgain ? "☑" : "☐"} {t("localAI.doNotShowAgain")}
-                  </Text>
-                </Pressable>
-                <View className="flex-row justify-end gap-5">
-                  <Pressable
-                    onPress={() => {
-                      setPendingDestination(null);
-                      setExitWarning(false);
-                    }}
-                  >
-                    <Text className="text-foreground">{t("localAI.stay")}</Text>
-                  </Pressable>
-                  <Pressable onPress={() => void confirmExit()}>
-                    <Text className="font-manrope-bold text-accent">
-                      {t("localAI.leave")}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          )}
+          <LeaveChatDialog
+            isOpen={exitWarning}
+            doNotShowAgain={doNotShowAgain}
+            onDoNotShowAgainChange={setDoNotShowAgain}
+            onStay={() => {
+              setPendingDestination(null);
+              setExitWarning(false);
+            }}
+            onLeave={() => void confirmExit()}
+          />
         </>
       )}
     </EdgeToEdgeLayout>
