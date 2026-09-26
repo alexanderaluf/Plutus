@@ -406,7 +406,7 @@ test("JSON backup round trip preserves all new account options and unknown field
   );
   assert.deepEqual(restored.accounts, next.accounts);
   assert.deepEqual(restored.unknown, next.unknown);
-  assert.equal(restored._local.schemaVersion, 20);
+  assert.equal(restored._local.schemaVersion, 21);
   assert.equal(restored._local.themeMode, "dark");
   assert.equal(restored._local.accentColor, "violet");
   assert.equal(
@@ -1486,7 +1486,7 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     );
     await migrateLocalDatabase(database);
     const migrated = await readDocument(database);
-    assert.equal(migrated._local.schemaVersion, 20);
+    assert.equal(migrated._local.schemaVersion, 21);
     assert.equal(migrated._local.themeMode, "system");
     assert.equal(migrated._local.accentColor, "cyan");
     assert.equal(migrated.accounts[0].accountType, "bank");
@@ -1497,7 +1497,7 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     assert.deepEqual(migrated.importedUnknown, { keep: true });
     assert.equal(
       (await database.getFirstAsync("PRAGMA user_version")).user_version,
-      20,
+      21,
     );
     const next = storeExchangeRates(add(migrated), rateTable());
     await writeDocument(database, next);

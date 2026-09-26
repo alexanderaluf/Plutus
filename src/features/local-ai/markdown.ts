@@ -10,7 +10,9 @@ export type InlineNode =
   | { kind: "italic"; children: InlineNode[] }
   | { kind: "strike"; children: InlineNode[] }
   | { kind: "code"; text: string }
-  | { kind: "link"; children: InlineNode[] };
+  | { kind: "link"; children: InlineNode[] }
+  /** A record reference such as @A1, resolved by the chat to a live record. */
+  | { kind: "mention"; ref: string };
 
 export type TableAlign = "left" | "center" | "right" | null;
 
@@ -25,6 +27,8 @@ export type MarkdownBlock =
   | { kind: "quote"; content: InlineNode[] }
   | { kind: "code"; text: string }
   | { kind: "rule" }
+  /** A line containing only record references: rendered as inline cards. */
+  | { kind: "mentions"; refs: string[] }
   | {
       kind: "table";
       header: InlineNode[][];
@@ -32,10 +36,14 @@ export type MarkdownBlock =
       rows: InlineNode[][][];
     };
 
+const MENTION = /@([ATBRGLSCP]\d{1,3})\b/;
+const MENTION_LINE = /^(?:[-*•]\s*)?(?:@[ATBRGLSCP]\d{1,3}\b[\s,;.]*)+$/;
+
 const INLINE_RULES: {
   pattern: RegExp;
   build: (match: RegExpExecArray) => InlineNode;
 }[] = [
+  { pattern: MENTION, build: (m) => ({ kind: "mention", ref: m[1] }) },
   { pattern: /`([^`\n]+)`/, build: (m) => ({ kind: "code", text: m[1] }) },
   {
     pattern: /\*\*(?=\S)([\s\S]+?)(?<=\S)\*\*|__(?=\S)([\s\S]+?)(?<=\S)__/,
@@ -126,6 +134,15 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
       });
       continue;
     }
+    if (MENTION_LINE.test(trimmed)) {
+      flush();
+      const refs = [...trimmed.matchAll(/@([ATBRGLSCP]\d{1,3})\b/g)].map((match) => match[1]);
+      const previous = blocks[blocks.length - 1];
+      // Consecutive reference lines form one group of cards.
+      if (previous?.kind === "mentions") previous.refs.push(...refs);
+      else blocks.push({ kind: "mentions", refs });
+      continue;
+    }
     if (/^([-*_])(\s*\1){2,}$/.test(trimmed)) {
       flush();
       blocks.push({ kind: "rule" });
@@ -203,7 +220,9 @@ export function parseMarkdown(source: string): MarkdownBlock[] {
 
 export function plainText(nodes: InlineNode[]): string {
   return nodes
-    .map((node) => ("text" in node ? node.text : plainText(node.children)))
+    .map((node) =>
+      node.kind === "mention" ? "" : "text" in node ? node.text : plainText(node.children),
+    )
     .join("");
 }
 

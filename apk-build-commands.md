@@ -1,11 +1,2 @@
-# 1. Navigate to the android folder on drive P:
-
-cd P:\budget-tracker\android
-
-# 2. Set Java 17
-
-$env:JAVA_HOME = "C:\Program Files\Java\jdk-17"; .\gradlew.bat assembleRelease
-
-# 3. Assemble the release APK
-
-.\gradlew.bat assembleRelease
+cd android && JAVA_HOME=/opt/homebrew/opt/openjdk@17 ANDROID_HOME=/opt/homebrew/share/android-commandlinetools ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+adb install -r app/build/outputs/apk/release/app-release.apk

@@ -2,12 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LiteRTLMInstance } from "react-native-litert-lm";
 
 import nativeAI from "../../../modules/plutus-local-ai/src/PlutusLocalAIModule";
-import { chatSystemPrompt } from "./chat-prompts";
 import { LOCAL_AI_MODEL } from "./model-compatibility-policy";
 
 const MODEL_CONFIG = {
-  // Replaced per question with today's date and the profile currency.
-  systemPrompt: chatSystemPrompt(new Date(), "USD"),
+  // Replaced per question with today's date, currency and the tool packs.
+  systemPrompt: "You are Plutus, a private on-device financial assistant.",
   maxOutputTokens: 1024,
   // Reasoning tokens would compete with record context and slow replies.
   thinking: { enabled: false },
@@ -41,6 +40,8 @@ export function useLocalAIEngine(enabled: boolean) {
     error: string;
     memoryLimited: boolean;
     contextTokens: number;
+    /** True when the engine was created with the audio backend. */
+    audio?: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -59,11 +60,17 @@ export function useLocalAIEngine(enabled: boolean) {
       let memoryLimited = false;
       // Some Android GPU drivers initialize LiteRT-LM successfully but fail on
       // the first decode. Prefer the stable CPU path for this small model.
-      const attempts = (["cpu", "gpu"] as const).flatMap((backend) =>
-        CONTEXT_SIZES.map((maxContextTokens) => ({ backend, maxContextTokens })),
-      );
-      for (const { backend, maxContextTokens } of attempts) {
-        const config = { ...MODEL_CONFIG, backend, maxContextTokens };
+      // `multimodal` must be explicit: without it the runtime guesses from the
+      // file name, treats Gemma 4 as text-only and never creates the audio
+      // backend, so voice input cannot work. Text-only is the last resort.
+      const attempts = [
+        ...(["cpu", "gpu"] as const).flatMap((backend) =>
+          CONTEXT_SIZES.map((maxContextTokens) => ({ backend, maxContextTokens, multimodal: true })),
+        ),
+        { backend: "cpu" as const, maxContextTokens: 4096, multimodal: false },
+      ];
+      for (const { backend, maxContextTokens, multimodal } of attempts) {
+        const config = { ...MODEL_CONFIG, backend, maxContextTokens, multimodal };
         const estimate = estimateMemory({
           modelFileSizeBytes: LOCAL_AI_MODEL.sizeBytes,
           availableMemoryBytes: availableMemory,
@@ -87,6 +94,7 @@ export function useLocalAIEngine(enabled: boolean) {
             error: "",
             memoryLimited: false,
             contextTokens: maxContextTokens,
+            audio: multimodal,
           });
           return;
         } catch (cause) {
@@ -152,6 +160,7 @@ export function useLocalAIEngine(enabled: boolean) {
     error,
     memoryLimited: status === "failed" && !!settled?.memoryLimited,
     contextTokens: settled?.contextTokens ?? 0,
+    audioCapable: status === "ready" && settled?.audio === true,
     retry,
     release,
   };

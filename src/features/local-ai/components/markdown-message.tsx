@@ -17,6 +17,7 @@ import {
   type TableAlign,
 } from "../markdown";
 import { detectDirection, type TextDirection } from "../text-direction";
+import { useMentions } from "./mention-context";
 
 const MONOSPACE = Platform.select({ ios: "Menlo", default: "monospace" });
 
@@ -66,6 +67,33 @@ function DirectionBlock({
   return <View style={{ direction: dir }}>{children}</View>;
 }
 
+function MentionName({ refId }: { refId: string }) {
+  const mentions = useMentions();
+  const label = mentions?.label(refId);
+  if (!mentions || !label) return null;
+  return (
+    <Text
+      accessibilityRole="link"
+      className="font-manrope-semibold text-accent"
+      onPress={() => mentions.press(refId)}
+    >
+      {label}
+    </Text>
+  );
+}
+
+function MentionCards({ refs }: { refs: string[] }) {
+  const mentions = useMentions();
+  if (!mentions) return null;
+  return (
+    <View className="gap-2 py-0.5">
+      {refs.map((ref, index) => (
+        <View key={`${ref}-${index}`}>{mentions.card(ref)}</View>
+      ))}
+    </View>
+  );
+}
+
 function Inline({ nodes }: { nodes: InlineNode[] }) {
   return (
     <>
@@ -97,6 +125,8 @@ function Inline({ nodes }: { nodes: InlineNode[] }) {
                 <Inline nodes={node.children} />
               </Text>
             );
+          case "mention":
+            return <MentionName key={index} refId={node.ref} />;
           case "code":
             return (
               <Text
@@ -114,9 +144,9 @@ function Inline({ nodes }: { nodes: InlineNode[] }) {
 }
 
 const HEADING_CLASS = {
-  1: "text-xl",
-  2: "text-lg",
-  3: "text-base",
+  1: "mt-2 text-[22px] leading-8",
+  2: "mt-2 text-[19px] leading-7",
+  3: "mt-1 text-[16px] leading-6",
 } as const;
 
 /** "left"/"right" mean start/end inside a direction-aware block. */
@@ -262,8 +292,8 @@ function Block({ block, dir }: { block: MarkdownBlock; dir: TextDirection }) {
       );
     case "quote":
       return (
-        <View className="rounded-e-xl border-s-4 border-accent bg-surface-secondary px-3 py-2">
-          <DirText dir={dir} className="text-[15px] leading-6 text-muted">
+        <View className="rounded-e-xl border-s-4 border-accent bg-surface-secondary px-3.5 py-2.5">
+          <DirText dir={dir} className="text-[15px] leading-6 text-foreground" style={{ fontStyle: "italic" }}>
             <Inline nodes={block.content} />
           </DirText>
         </View>
@@ -285,7 +315,9 @@ function Block({ block, dir }: { block: MarkdownBlock; dir: TextDirection }) {
         </ScrollView>
       );
     case "rule":
-      return <View className="my-1 h-px bg-border" />;
+      return <View className="my-2 h-px bg-border" />;
+    case "mentions":
+      return <MentionCards refs={block.refs} />;
     case "table":
       return <Table block={block} />;
   }

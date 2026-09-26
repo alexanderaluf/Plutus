@@ -68,13 +68,14 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "postinstall": "node scripts/patch-expo-jsi-xcode26.cjs",
+    "postinstall": "node scripts/patch-expo-jsi-xcode26.cjs && node scripts/patch-litert-lm.cjs",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --test tests/*.test.cjs"
   },
   "private": true
 }

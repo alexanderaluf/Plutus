@@ -46,6 +46,7 @@ export function createLegacyDevelopmentBackup(): BackupDocument {
       monthStartDay: 1,
       weekStartDay: 0,
       aiExitWarningDismissed: false,
+      aiFirstChatAt: null,
     },
     users: [
       {

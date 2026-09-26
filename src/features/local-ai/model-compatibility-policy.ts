@@ -1,11 +1,34 @@
 // Requirements from the upstream Gemma 4 E2B LiteRT-LM Android listing.
 // This policy only evaluates hardware. It does not assert runtime availability.
+export interface ModelManifest {
+  modelId: string;
+  name: string;
+  fileName: string;
+  sizeBytes: number;
+  /** Verified natively after download (LocalAIModelStore). */
+  sha256: string;
+  minMemoryBytes: number;
+  minFreeStorageBytes: number;
+  contextLimit: number;
+  supportsAudio: boolean;
+  supportsVision: boolean;
+  runtimeVersion: string;
+}
+
+/** Versioned so a future model update changes one record, not scattered constants. */
 export const LOCAL_AI_MODEL = {
+  modelId: "litert-community/gemma-4-E2B-it-litert-lm@6e5c4f1",
   name: "Gemma 4 E2B",
+  fileName: "gemma-4-E2B-it.litertlm",
   sizeBytes: 2_588_147_712,
+  sha256: "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
   minMemoryBytes: 8_000_000_000,
   minFreeStorageBytes: 2 * 2_588_147_712 + 1_000_000_000,
-} as const;
+  contextLimit: 32_768,
+  supportsAudio: true,
+  supportsVision: true,
+  runtimeVersion: "LiteRT-LM 0.15.0 (react-native-litert-lm 0.7.0)",
+} as const satisfies ModelManifest;
 
 export type CompatibilityReason =
   | "platform"

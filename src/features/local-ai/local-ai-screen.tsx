@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigation, useRouter } from "expo-router";
+import { uuid } from "expo-modules-core";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -8,23 +9,14 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  TextInput,
   View,
 } from "react-native";
-import { AudioModule } from "expo-audio";
-import { File } from "expo-file-system";
 
 import { useLocalData } from "@/data/local-data-provider";
 import { profileCurrency } from "@/data/model/transaction-conversion";
-import { selectAccounts } from "@/data/selectors/document-selectors";
-import { selectBudgets } from "@/data/selectors/budget-selectors";
-import {
-  createTransactionIndex,
-  createTransactionProjector,
-} from "@/data/selectors/transaction-selectors";
-import { AccountCard } from "@/features/accounts/components/account-card";
-import { BudgetOverviewCard } from "@/features/home/components/budget-card";
-import { TransactionRow } from "@/features/home/components/transaction-list";
 import type { Transaction } from "@/features/home/types";
+import { useProfiles } from "@/features/profile/profile-provider";
 import { TransactionDetailSheet } from "@/features/transactions/transaction-detail-sheet";
 import { EdgeToEdgeLayout } from "@/shared/ui/edge-to-edge-layout";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -32,22 +24,22 @@ import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { Text } from "@/shared/ui/app-text";
 import nativeAI from "../../../modules/plutus-local-ai/src/PlutusLocalAIModule";
 import {
-  chatSystemPrompt,
-  HEALTH_TOOL_CALL,
-  SNAPSHOT_TOOL_CALL,
-  toolResultsPrompt,
-} from "./chat-prompts";
-import {
-  inferPeriod,
-  inferToolCalls,
-  isAdviceQuestion,
-  looksLikeMissingData,
-  looksLikeToolRequest,
-  parseToolCalls,
-  stripToolJson,
-  type ChatToolCall,
-} from "./chat-tool-protocol";
-import { runChatTools, type ChatCard } from "./chat-tools";
+  explainMutationResult,
+  mutationHistoryEntry,
+  runChatTurn,
+  type ChatPhase,
+  type HistoryTurn,
+  type Translate,
+} from "./chat-controller";
+import type { PromptContext } from "./chat-prompts";
+import { ChangeProposalCard } from "./components/change-proposal-card";
+import { ChatCards } from "./components/chat-cards";
+import { ChatEntityCard, entityLabel, useEntityData } from "./components/chat-entity-cards";
+import { CommandSheet } from "./components/command-sheet";
+import { MentionContext, type MentionResolver } from "./components/mention-context";
+import { ThinkingIndicator, type ThinkingStage } from "./components/thinking-indicator";
+import type { ChatCommand } from "./commands";
+import type { ChatToolCall } from "./chat-tool-protocol";
 import {
   ChatComposer,
   KeyboardSpacer,
@@ -56,13 +48,23 @@ import {
 import { LeaveChatDialog } from "./components/leave-chat-dialog";
 import { DirectionalText } from "./components/markdown-message";
 import { TypewriterMarkdown } from "./components/typewriter-markdown";
+import type { EvidenceAudit } from "./evidence";
 import { checkLocalAICompatibility } from "./model-compatibility";
 import {
   LOCAL_AI_MODEL,
   type LocalAICompatibility,
 } from "./model-compatibility-policy";
+import type {
+  ChangeFields,
+  MutableEntityType,
+  MutationResult,
+} from "./mutations/change-types";
+import { ProposalStore } from "./mutations/proposal-store";
+import type { ChatCard } from "./tools/tool-context";
 import { useLocalAIEngine } from "./use-local-ai-engine";
 import { useModelDownload } from "./use-model-download";
+import { useVoiceInput } from "./voice/use-voice-input";
+import { VOICE_LIMITS } from "./voice/voice-audio";
 
 type ChatMessage = {
   id: number;
@@ -73,104 +75,104 @@ type ChatMessage = {
   final: boolean;
   /** True until the typewriter reveal has shown the whole answer once. */
   typing: boolean;
+  /** What the model sees for this turn when it differs from the text. */
+  history?: string;
+  audit?: EvidenceAudit;
+  /** @reference → record, for cards the answer places inline. */
+  mentions?: Record<string, ChatCard>;
 };
 
-type ChatPhase = "idle" | "thinking" | "reading" | "answering";
+const MENTION_USE = /@([ATBRGLSCP]\d{1,3})\b/;
 
-/** Recent turns replayed into a fresh engine conversation for each question. */
-function transcript(messages: ChatMessage[]) {
-  return messages
-    .filter((message) => message.text.trim())
-    .slice(-6)
-    .map((message) => ({
-      role: message.role === "user" ? "user" : "model",
-      content: message.text.slice(0, 600),
-    }));
-}
-
-/** Tool JSON must never flash in the bubble while an answer streams. */
-function isToolRequestPrefix(text: string) {
-  const start = text.trimStart();
-  return start.startsWith("{") || /^```(json)?\s*(\{|$)/i.test(start);
-}
-
-function withAdviceTools(calls: ChatToolCall[]) {
-  const names = new Set(calls.map((call) => call.name));
-  return [
-    ...(names.has("financial_health") ? [] : [HEALTH_TOOL_CALL]),
-    ...calls,
-    ...(names.has("financial_snapshot") ? [] : [SNAPSHOT_TOOL_CALL]),
-  ];
-}
-
-const SUGGESTIONS = ["advice", "spending", "netWorth", "upcoming", "compare"] as const;
-
-function ChatCards({
-  cards,
+/**
+ * One assistant answer. Records the model mentions with @references render
+ * inline at that point of the text; a tap opens the record in the app.
+ */
+function AssistantMessage({
+  message,
+  data,
   onTransaction,
-  onNavigate,
+  onDone,
 }: {
-  cards: ChatCard[];
+  message: ChatMessage;
+  data: ReturnType<typeof useEntityData>;
   onTransaction: (transaction: Transaction) => void;
-  onNavigate: (target: { kind: "account" | "budget"; id: string }) => void;
+  onDone: () => void;
 }) {
-  const { document } = useLocalData();
-  const { i18n } = useTranslation();
-  const transactionIndex = useMemo(
-    () => createTransactionIndex(document),
-    [document],
-  );
-  const project = useMemo(
-    () => createTransactionProjector(document, i18n.resolvedLanguage),
-    [document, i18n.resolvedLanguage],
-  );
-  const accounts = useMemo(() => selectAccounts(document), [document]);
-  const budgets = useMemo(() => selectBudgets(document), [document]);
-  return (
-    <View className="gap-2">
-      {cards.map((card) => {
-        if (card.kind === "transaction") {
-          const entry = transactionIndex.find((item) => item.id === card.id);
-          if (!entry) return null;
-          return (
-            <View
-              key={`transaction-${card.id}`}
-              className="rounded-2xl border border-border bg-surface px-3"
-            >
-              <TransactionRow
-                transaction={project(entry)}
-                showBorder={false}
-                onPress={onTransaction}
-              />
-            </View>
-          );
-        }
-        if (card.kind === "account") {
-          const account = accounts.find((item) => item.id === card.id);
-          return account ? (
-            <Pressable
-              key={`account-${card.id}`}
-              accessibilityRole="button"
-              onPress={() => onNavigate({ kind: "account", id: card.id })}
-            >
-              <AccountCard account={account} />
-            </Pressable>
-          ) : null;
-        }
-        const budget = budgets.find((item) => item.id === card.id);
-        return budget ? (
-          <BudgetOverviewCard
-            key={`budget-${card.id}`}
-            budget={budget}
-            expanded={false}
-            onToggle={() => onNavigate({ kind: "budget", id: card.id })}
-            onOpen={() => onNavigate({ kind: "budget", id: card.id })}
-          />
+  const router = useRouter();
+  const mentions = message.mentions;
+  const resolver = useMemo<MentionResolver | null>(() => {
+    if (!mentions) return null;
+    return {
+      card: (ref) => {
+        const card = mentions[ref];
+        return card && card.kind !== "change_proposal" ? (
+          <ChatEntityCard card={card} data={data} onTransaction={onTransaction} />
         ) : null;
-      })}
+      },
+      label: (ref) => {
+        const card = mentions[ref];
+        return card && card.kind !== "change_proposal" ? entityLabel(card, data) : null;
+      },
+      press: (ref) => {
+        const card = mentions[ref];
+        if (!card || card.kind === "change_proposal") return;
+        if (card.kind === "transaction") {
+          const transaction = data.transaction(card.id);
+          if (transaction) onTransaction(transaction);
+          return;
+        }
+        const route = {
+          account: "/accounts/[id]",
+          budget: "/budgets/[id]",
+          category: "/categories/[id]",
+          recurring: "/recurring/[id]",
+        } as const;
+        if (card.kind in route)
+          router.push({ pathname: route[card.kind as keyof typeof route], params: { id: card.id } });
+      },
+    };
+  }, [mentions, data, onTransaction, router]);
+  return (
+    <View className="w-full rounded-3xl rounded-es-lg bg-surface px-4 py-3.5">
+      <MentionContext.Provider value={resolver}>
+        <TypewriterMarkdown
+          text={message.text}
+          animate={message.typing}
+          final={message.final}
+          onDone={onDone}
+        />
+      </MentionContext.Provider>
     </View>
   );
 }
+
+/** Recent turns replayed into a fresh engine conversation for each question. */
+function transcript(messages: ChatMessage[]): HistoryTurn[] {
+  return messages
+    .filter((message) => (message.history ?? message.text).trim())
+    .slice(-6)
+    .map((message) => ({
+      role: message.role === "user" ? "user" : "model",
+      content: (message.history ?? message.text).slice(0, 600),
+    }));
+}
+
+const SUGGESTIONS = ["advice", "spending", "upcoming", "afford", "addExpense"] as const;
+
+const RESULT_CARD: Partial<Record<MutableEntityType, Exclude<ChatCard["kind"], "change_proposal" | "financial_priority">>> = {
+  transaction: "transaction",
+  budget: "budget",
+  account: "account",
+  recurring: "recurring",
+  goal: "goal",
+  loan: "loan",
+  asset: "asset",
+  category: "category",
+};
+
+/** Development-only: flags numbers the answer used that no tool supplied. */
+const AUDIT_ANSWERS = typeof __DEV__ !== "undefined" && __DEV__;
 
 export function LocalAIScreen() {
   const { t, i18n } = useTranslation();
@@ -184,25 +186,53 @@ export function LocalAIScreen() {
   const engine = useLocalAIEngine(installed);
   const { ready } = engine;
   const llm = engine.engine;
+  const { activeProfile } = useProfiles();
   const [phase, setPhase] = useState<ChatPhase>("idle");
-  const busy = phase !== "idle";
   const keyboard = useChatKeyboard();
   const [composerHeight, setComposerHeight] = useState(112);
-  const [recording, setRecording] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
   const [selectedTransaction, setSelectedTransaction] =
     useState<Transaction | null>(null);
   const [exitWarning, setExitWarning] = useState(false);
   const [doNotShowAgain, setDoNotShowAgain] = useState(false);
-  const [pendingDestination, setPendingDestination] = useState<{
-    kind: "account" | "budget";
-    id: string;
-  } | null>(null);
+  const [commandSheet, setCommandSheet] = useState<{ query: string } | null>(null);
+  const composerInput = useRef<TextInput>(null);
+  const entityData = useEntityData();
+  // Auto-scroll follows a streaming answer only while the user is at the end.
+  const following = useRef(true);
+  const userScrolling = useRef(false);
   const allowExit = useRef(false);
   const messageId = useRef(0);
   const scroll = useRef<ScrollView>(null);
+  // Proposals live only in memory for this chat; an app restart drops them.
+  const [proposals] = useState(() => new ProposalStore(() => uuid.v4()));
+  // Bumped when the store changes so cards re-read its status.
+  const [, setProposalVersion] = useState(0);
+  const [proposalState, setProposalState] = useState<
+    Record<string, { busy?: boolean; error?: string; result?: MutationResult }>
+  >({});
+  const structuredOutput = useRef({ enabled: false });
+  const translate = t as unknown as Translate;
+  const voiceLanguage = i18n.resolvedLanguage ?? "en";
+  const sendRef = useRef<(value: string) => Promise<void>>(async () => undefined);
+  const voice = useVoiceInput({
+    model: llm,
+    language: voiceLanguage,
+    onTranscript: (text) => void sendRef.current(text),
+    onError: (code) =>
+      setError(
+        t(`localAI.voiceErrors.${code}` as "localAI.voiceErrors.AUDIO_EMPTY", {
+          defaultValue: t("localAI.voiceUnavailable"),
+        }),
+      ),
+  });
+  const busy = phase !== "idle" || voice.busy;
 
   useEffect(() => {
     let active = true;
@@ -211,10 +241,9 @@ export function LocalAIScreen() {
     });
     return () => {
       active = false;
-      void nativeAI?.stopRecordingAndDeleteAsync();
-      void nativeAI?.cancelVoiceRecognitionAsync();
+      proposals.clear();
     };
-  }, []);
+  }, [proposals]);
 
   const incompatibilityReasons =
     compatibility?.reasons.filter(
@@ -231,24 +260,6 @@ export function LocalAIScreen() {
     }
     setExitWarning(true);
   }, [document._local.aiExitWarningDismissed, router]);
-  const navigateFromCard = (target: {
-    kind: "account" | "budget";
-    id: string;
-  }) => {
-    if (document._local.aiExitWarningDismissed) {
-      setMessages([]);
-      engine.release();
-      allowExit.current = true;
-      router.replace({
-        pathname:
-          target.kind === "account" ? "/accounts/[id]" : "/budgets/[id]",
-        params: { id: target.id },
-      });
-      return;
-    }
-    setPendingDestination(target);
-    setExitWarning(true);
-  };
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       requestExit();
@@ -279,42 +290,47 @@ export function LocalAIScreen() {
     }
     allowExit.current = true;
     setMessages([]);
+    proposals.clear();
     setExitWarning(false);
+    await voice.cancel();
     engine.release();
-    await nativeAI?.stopRecordingAndDeleteAsync().catch(() => undefined);
-    if (pendingDestination)
-      router.replace({
-        pathname:
-          pendingDestination.kind === "account"
-            ? "/accounts/[id]"
-            : "/budgets/[id]",
-        params: { id: pendingDestination.id },
-      });
-    else router.back();
+    router.back();
   };
 
-  const send = async (value: string) => {
+  const promptContext = (): PromptContext => ({
+    now: new Date(),
+    currency: profileCurrency(document, document._local.selectedProfileId ?? ""),
+    monthStartDay: document._local.monthStartDay,
+    appLanguage: document._local.appLanguage,
+    profileName: activeProfile?.name,
+  });
+
+  const append = (message: Omit<ChatMessage, "id">) => {
+    const id = ++messageId.current;
+    setMessages((current) => [...current, { ...message, id }]);
+    return id;
+  };
+
+  const send = async (value: string, forcedCalls?: ChatToolCall[]) => {
     const question = value.trim();
     const model = llm.current;
-    if (!model || !ready || busy || !question) return;
+    if (!model || !ready || phase !== "idle" || !question) return;
     setError("");
     setPhase("thinking");
-    const history = transcript(messages);
-    const questionId = ++messageId.current;
+    following.current = true;
+    setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
+    const history = transcript(messagesRef.current);
+    append({ role: "user", text: question, cards: [], final: true, typing: false });
+    if (!document._local.aiFirstChatAt)
+      // Only a UI preference; failure to save just shows the intro again.
+      void updateDocument((current) =>
+        current._local.aiFirstChatAt
+          ? current
+          : { ...current, _local: { ...current._local, aiFirstChatAt: new Date().toISOString() } },
+      ).catch(() => undefined);
     const answerId = ++messageId.current;
-    setMessages((current) => [
-      ...current,
-      {
-        id: questionId,
-        role: "user",
-        text: question,
-        cards: [],
-        final: true,
-        typing: false,
-      },
-    ]);
     setDraft("");
-    const showAnswer = (text: string, final: boolean, cards: ChatCard[] = []) =>
+    const showAnswer = (text: string, final: boolean, extra: Partial<ChatMessage> = {}) =>
       setMessages((current) => {
         const existing = current.find((message) => message.id === answerId);
         return [
@@ -323,103 +339,162 @@ export function LocalAIScreen() {
             id: answerId,
             role: "assistant",
             text,
-            cards,
+            cards: [],
             final,
             typing: existing?.typing ?? true,
+            ...extra,
           },
         ];
       });
     try {
-      const now = new Date();
-      const currency = profileCurrency(
+      const result = await runChatTurn({
+        model,
         document,
-        document._local.selectedProfileId ?? "",
-      );
-      const systemPrompt = chatSystemPrompt(now, currency);
-      const advice = isAdviceQuestion(question);
-      // A fresh conversation per question keeps the KV cache bounded while
-      // the short transcript preserves follow-up context.
-      model.resetConversation(JSON.stringify(history), systemPrompt);
-      const first = await model.execute([{ type: "text", text: question }]);
-      const requested = parseToolCalls(first);
-      const period = inferPeriod(question);
-      let calls: ChatToolCall[] = (requested ?? []).map((call) =>
-        period && !call.args.period && !call.args.from && !call.args.to
-          ? { ...call, args: { ...call.args, period } }
-          : call,
-      );
-      if (!calls.length) calls = inferToolCalls(question);
-      if (!calls.length && (requested !== null || looksLikeMissingData(first)))
-        calls = [SNAPSHOT_TOOL_CALL];
-      // Open-ended advice always reads most of the document first.
-      if (advice) calls = withAdviceTools(calls);
-      if (!calls.length) {
-        const direct = stripToolJson(first);
-        showAnswer(direct || t("localAI.emptyAnswer"), true);
-        return;
-      }
-
-      const charBudget = Math.max(
-        2_000,
-        Math.round((engine.contextTokens - 3_300) * 2.8),
-      );
-      const answerWith = async (toolCalls: readonly ChatToolCall[]) => {
-        setPhase("reading");
-        const result = runChatTools(document, toolCalls, { charBudget, now });
-        const mode = toolCalls.some((call) => call.name === "financial_health")
-          ? "advice"
-          : "answer";
-        let streamed = "";
-        const answer = await model.execute(
-          [
-            {
-              type: "text",
-              text: toolResultsPrompt(question, result.facts, mode),
-            },
-          ],
-          (token) => {
-            streamed += token;
-            if (isToolRequestPrefix(streamed)) return;
-            setPhase("answering");
-            showAnswer(streamed, false);
-          },
-        );
-        return { answer: answer.trim(), cards: result.cards };
-      };
-
-      let result = await answerWith(calls);
-      // The model may ask for more tools or say it lacks data; retry once
-      // with those tools, or with the whole-document snapshot.
-      const followUp = looksLikeToolRequest(result.answer)
-        ? parseToolCalls(result.answer)
-        : null;
-      const hasSnapshot = calls.some(
-        (call) => call.name === "financial_snapshot",
-      );
-      if (
-        followUp !== null ||
-        (looksLikeMissingData(result.answer) && !hasSnapshot)
-      ) {
-        model.resetConversation(JSON.stringify(history), systemPrompt);
-        result = await answerWith(
-          followUp?.length && !hasSnapshot
-            ? followUp
-            : hasSnapshot
-              ? [SNAPSHOT_TOOL_CALL]
-              : [...calls, SNAPSHOT_TOOL_CALL],
-        );
-      }
-      const answer = stripToolJson(result.answer);
-      showAnswer(answer || t("localAI.emptyAnswer"), true, result.cards);
+        question,
+        history,
+        prompt: promptContext(),
+        contextTokens: engine.contextTokens,
+        proposals,
+        t: translate,
+        structuredOutput: structuredOutput.current,
+        audit: AUDIT_ANSWERS,
+        forcedCalls,
+        onPhase: setPhase,
+        onToken: (text) => showAnswer(text, false),
+      });
+      if (result.kind === "proposal") {
+        const proposal = proposals.get(result.proposalId);
+        showAnswer(result.text, true, {
+          cards: result.cards,
+          history: `${result.text} [PROPOSAL pending review: ${proposal?.operation} ${proposal?.entityType} "${proposal?.entityName}"]`,
+        });
+      } else if (result.kind === "clarification") {
+        showAnswer(result.text, true, {
+          cards: result.cards,
+          history: result.cards.length
+            ? `${result.text} (candidate ids: ${result.cards.map((card) => ("id" in card ? card.id : "")).join(", ")})`
+            : undefined,
+        });
+      } else
+        showAnswer(result.text, true, {
+          cards: result.cards,
+          audit: result.audit,
+          mentions: result.mentions ?? {},
+        });
     } catch {
-      setMessages((current) =>
-        current.filter((message) => message.id !== answerId),
-      );
+      setMessages((current) => current.filter((message) => message.id !== answerId));
       setError(t("localAI.generationFailed"));
     } finally {
       setPhase("idle");
     }
   };
+  useEffect(() => {
+    sendRef.current = send;
+  });
+
+  /** Only this handler — the user's tap — can execute a proposal. */
+  const decide = async (proposalId: string, confirm: boolean) => {
+    const proposal = proposals.get(proposalId);
+    if (!proposal) return;
+    setProposalState((current) => ({ ...current, [proposalId]: { busy: true } }));
+    const result = confirm
+      ? await proposals.execute(proposalId, updateDocument)
+      : proposals.cancel(proposalId);
+    setProposalState((current) => ({ ...current, [proposalId]: { result } }));
+    setProposalVersion((value) => value + 1);
+    const history = [...transcript(messagesRef.current), mutationHistoryEntry(result)];
+    const model = llm.current;
+    const card =
+      result.status === "completed" && proposal.operation !== "delete" && proposal.entityId
+        ? RESULT_CARD[proposal.entityType]
+        : undefined;
+    let text: string = t(`localAI.proposal.results.${result.status}`, { name: proposal.entityName });
+    // The model explains the real outcome once the app has decided it.
+    if (result.status !== "cancelled" && model && ready && phase === "idle") {
+      setPhase("thinking");
+      try {
+        text = await explainMutationResult({
+          model,
+          history,
+          prompt: promptContext(),
+          result,
+          question: messagesRef.current.filter((message) => message.role === "user").at(-1)?.text ?? "",
+          t: translate,
+        });
+      } finally {
+        setPhase("idle");
+      }
+    }
+    append({
+      role: "assistant",
+      text,
+      cards: card && proposal.entityId ? [{ kind: card, id: proposal.entityId } as ChatCard] : [],
+      final: true,
+      typing: true,
+      history: mutationHistoryEntry(result).content,
+    });
+  };
+
+  const revise = (proposalId: string, patch: ChangeFields) => {
+    const result = proposals.revise(document, proposalId, patch);
+    if (!result.ok) {
+      setProposalState((current) => ({ ...current, [proposalId]: { error: result.message } }));
+      return;
+    }
+    const next = result.proposal.proposalId;
+    setMessages((current) =>
+      current.map((message) => ({
+        ...message,
+        cards: message.cards.map((card) =>
+          card.kind === "change_proposal" && card.proposalId === proposalId
+            ? { kind: "change_proposal", proposalId: next }
+            : card,
+        ),
+      })),
+    );
+    setProposalVersion((value) => value + 1);
+  };
+
+  const renderProposal = (proposalId: string) => {
+    const proposal = proposals.get(proposalId);
+    if (!proposal) return null;
+    const state = proposalState[proposalId] ?? {};
+    return (
+      <ChangeProposalCard
+        key={proposalId}
+        proposal={proposal}
+        status={proposals.status(proposalId) ?? "expired"}
+        result={state.result}
+        busy={!!state.busy || phase !== "idle"}
+        error={state.error}
+        onConfirm={() => void decide(proposalId, true)}
+        onCancel={() => void decide(proposalId, false)}
+        onRevise={(patch) => revise(proposalId, patch)}
+      />
+    );
+  };
+
+  /** "/" menu: run a capability directly, or prefill a sentence to finish. */
+  const runCommand = (command: ChatCommand) => {
+    if (command.template) {
+      setDraft(t(`localAI.commands.templates.${command.id}` as "localAI.commands.templates.addExpense"));
+      setTimeout(() => composerInput.current?.focus(), 350);
+      return;
+    }
+    if (command.calls)
+      void send(t(`localAI.commands.items.${command.id}` as "localAI.commands.items.netWorth"), command.calls);
+  };
+
+  const thinkingStage: ThinkingStage | null =
+    voice.state.type === "transcribing" || voice.state.type === "validating_audio" || voice.state.type === "finalizing"
+      ? "transcribing"
+      : phase === "thinking"
+        ? "thinking"
+        : phase === "reading"
+          ? "reading"
+          : phase === "answering" && !messages.some((message) => message.role === "assistant" && !message.final && message.text)
+            ? "answering"
+            : null;
 
   const finishTyping = useCallback((id: number) => {
     setMessages((current) =>
@@ -436,49 +511,6 @@ export function LocalAIScreen() {
     );
     return () => sub.remove();
   }, []);
-
-  const toggleRecording = async () => {
-    try {
-      if (!nativeAI) return;
-      if (recording) {
-        let transcript: string;
-        if (Platform.OS === "android") {
-          transcript = await nativeAI.stopVoiceRecognitionAsync();
-        } else {
-          const uri = await nativeAI.stopRecordingAsync();
-          try {
-            transcript = await nativeAI.transcribeRecordingAsync(
-              uri,
-              i18n.resolvedLanguage ?? "en",
-            );
-          } finally {
-            try {
-              new File(uri).delete();
-            } catch {
-              /* The temporary recording may already be gone. */
-            }
-          }
-        }
-        setRecording(false);
-        await send(transcript);
-        return;
-      }
-      const permission = await AudioModule.requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        setError(t("localAI.microphoneDenied"));
-        return;
-      }
-      if (Platform.OS === "android")
-        await nativeAI.startVoiceRecognitionAsync(
-          i18n.resolvedLanguage ?? "en",
-        );
-      else await nativeAI.startRecordingAsync();
-      setRecording(true);
-    } catch {
-      setRecording(false);
-      setError(t("localAI.voiceUnavailable"));
-    }
-  };
 
   return (
     <EdgeToEdgeLayout
@@ -512,19 +544,42 @@ export function LocalAIScreen() {
               }}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="interactive"
+              scrollEventThrottle={32}
+              // Touching the list pauses following so the user can read.
+              onTouchStart={() => {
+                if (busy || messages.some((message) => message.typing)) following.current = false;
+              }}
+              onScrollBeginDrag={() => {
+                userScrolling.current = true;
+                following.current = false;
+              }}
+              onMomentumScrollEnd={() => {
+                userScrolling.current = false;
+              }}
+              onScroll={({ nativeEvent }) => {
+                if (!userScrolling.current) return;
+                const distance =
+                  nativeEvent.contentSize.height -
+                  (nativeEvent.contentOffset.y + nativeEvent.layoutMeasurement.height);
+                // Scrolling back to the end resumes following the answer.
+                following.current = distance < 56;
+              }}
               onContentSizeChange={() => {
-                if (messages.length > 0 || busy)
-                  scroll.current?.scrollToEnd({ animated: true });
+                if (following.current && (messages.length > 0 || busy))
+                  scroll.current?.scrollToEnd({ animated: false });
               }}
             >
-              <View className="rounded-3xl bg-surface p-4">
-                <Text className="font-manrope-semibold text-base text-foreground">
-                  {t("localAI.privacyTitle")}
-                </Text>
-                <Text className="mt-1 font-sans text-sm leading-5 text-muted">
-                  {t("localAI.privacyDescription")}
-                </Text>
-              </View>
+              {/* Introduces the private model only until the first chat message. */}
+              {!document._local.aiFirstChatAt && (
+                <View className="rounded-3xl bg-surface p-4">
+                  <Text className="font-manrope-semibold text-base text-foreground">
+                    {t("localAI.privacyTitle")}
+                  </Text>
+                  <Text className="mt-1 font-sans text-sm leading-5 text-muted">
+                    {t("localAI.privacyDescription")}
+                  </Text>
+                </View>
+              )}
               {compatibility === null ? (
                 <ActivityIndicator />
               ) : incompatibilityReasons.length > 0 ? (
@@ -644,36 +699,40 @@ export function LocalAIScreen() {
                           />
                         </View>
                       ) : (
-                        <View className="w-full rounded-3xl rounded-es-lg bg-surface px-4 py-3.5">
-                          <TypewriterMarkdown
-                            text={message.text}
-                            animate={message.typing}
-                            final={message.final}
-                            onDone={() => finishTyping(message.id)}
-                          />
-                        </View>
+                        <AssistantMessage
+                          message={message}
+                          data={entityData}
+                          onTransaction={setSelectedTransaction}
+                          onDone={() => finishTyping(message.id)}
+                        />
                       )}
-                      {message.cards.length > 0 && !message.typing && (
-                        <View className="w-full">
-                          <ChatCards
-                            cards={message.cards}
-                            onTransaction={setSelectedTransaction}
-                            onNavigate={navigateFromCard}
-                          />
-                        </View>
+                      {AUDIT_ANSWERS && !!message.audit?.unsupported.length && (
+                        <Text className="px-2 text-[11px] text-muted">
+                          {`dev audit: ${message.audit.unsupported.length} number(s) not in the evidence: ${message.audit.unsupported.slice(0, 5).join(", ")}`}
+                        </Text>
                       )}
+                      {message.cards.length > 0 &&
+                        !message.typing &&
+                        // Answers show their records inline; the list below is
+                        // only a fallback when the answer mentioned none.
+                        (!message.mentions || !MENTION_USE.test(message.text)) && (
+                          <View className="w-full gap-2">
+                            {message.mentions && (
+                              <Text className="px-1 pt-1 text-[12px] font-manrope-semibold uppercase tracking-widest text-muted">
+                                {t("localAI.relatedRecords")}
+                              </Text>
+                            )}
+                            <ChatCards
+                              cards={message.mentions ? message.cards.slice(0, 4) : message.cards}
+                              data={entityData}
+                              onTransaction={setSelectedTransaction}
+                              renderProposal={renderProposal}
+                            />
+                          </View>
+                        )}
                     </View>
                   ))}
-                  {(phase === "thinking" || phase === "reading") && (
-                    <View className="flex-row items-center gap-2 self-start rounded-full bg-surface px-4 py-2.5">
-                      <ActivityIndicator size="small" />
-                      <Text className="text-sm text-muted">
-                        {phase === "reading"
-                          ? t("localAI.readingRecords")
-                          : t("localAI.thinking")}
-                      </Text>
-                    </View>
-                  )}
+                  {thinkingStage && <ThinkingIndicator stage={thinkingStage} />}
                 </>
               )}
               {!!(error || engine.error || engine.memoryLimited) && (
@@ -701,14 +760,34 @@ export function LocalAIScreen() {
                 draft={draft}
                 onChangeDraft={setDraft}
                 onSend={() => void send(draft)}
-                onToggleRecording={() => void toggleRecording()}
-                recording={recording}
+                onOpenCommands={() => {
+                  Keyboard.dismiss();
+                  setCommandSheet({ query: "" });
+                }}
+                inputRef={composerInput}
+                voice={voice.state}
+                levels={voice.levels}
+                maxSeconds={VOICE_LIMITS.maxDurationMs / 1000}
+                voiceAvailable={engine.audioCapable}
+                onStartRecording={() => {
+                  setError("");
+                  void voice.start();
+                }}
+                onStopRecording={() => void voice.stop()}
+                onCancelRecording={() => void voice.cancel()}
                 ready={ready}
                 busy={busy}
                 onLayoutHeight={setComposerHeight}
               />
             )}
           </View>
+          {commandSheet && (
+            <CommandSheet
+              initialQuery={commandSheet.query}
+              onSelect={runCommand}
+              onDismiss={() => setCommandSheet(null)}
+            />
+          )}
           {selectedTransaction && (
             <TransactionDetailSheet
               transaction={selectedTransaction}
@@ -719,10 +798,7 @@ export function LocalAIScreen() {
             isOpen={exitWarning}
             doNotShowAgain={doNotShowAgain}
             onDoNotShowAgainChange={setDoNotShowAgain}
-            onStay={() => {
-              setPendingDestination(null);
-              setExitWarning(false);
-            }}
+            onStay={() => setExitWarning(false)}
             onLeave={() => void confirmExit()}
           />
         </>

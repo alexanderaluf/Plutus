@@ -10,6 +10,7 @@ import { useTimeOfDayGreeting } from "@/shared/lib/use-time-of-day-greeting";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import { AIChatIcon } from "@/shared/ui/ai-chat-icon";
 
 /** Slot height every tab reserves for this header (spacer and collapse clip). */
 export const TAB_HEADER_HEIGHT = 64;
@@ -64,7 +65,7 @@ export function TabHeader() {
           className="size-10 items-center justify-center rounded-full"
           style={{ backgroundColor: theme.surface }}
         >
-          <FilledIcon color={theme.accent} name="smart-toy" size={25} />
+          <AIChatIcon color={theme.accent} size={24} />
         </View>
       </Pressable>
 

@@ -5,6 +5,10 @@ import {
     AddFillW600,
 } from "@material-symbols-svg/react-native/rounded/icons/add";
 import { AddCardFill } from "@material-symbols-svg/react-native/rounded/icons/add-card";
+import { ArrowUpwardFillW600 } from "@material-symbols-svg/react-native/rounded/icons/arrow-upward";
+import { ChatBubbleFill } from "@material-symbols-svg/react-native/rounded/icons/chat-bubble";
+import { GraphicEqFillW600 } from "@material-symbols-svg/react-native/rounded/icons/graphic-eq";
+import { StopFillW600 } from "@material-symbols-svg/react-native/rounded/icons/stop";
 import { ArrowBackFill } from "@material-symbols-svg/react-native/rounded/icons/arrow-back";
 import { ArrowForwardFill } from "@material-symbols-svg/react-native/rounded/icons/arrow-forward";
 import { ArrowOutwardFill } from "@material-symbols-svg/react-native/rounded/icons/arrow-outward";
@@ -39,7 +43,7 @@ import { HomeFill } from "@material-symbols-svg/react-native/rounded/icons/home"
 import { KeyboardArrowUpFill } from "@material-symbols-svg/react-native/rounded/icons/keyboard-arrow-up";
 import { LocalCafeFill } from "@material-symbols-svg/react-native/rounded/icons/local-cafe";
 import { ManageAccountsFill } from "@material-symbols-svg/react-native/rounded/icons/manage-accounts";
-import { MicFill } from "@material-symbols-svg/react-native/rounded/icons/mic";
+import { MicFill, MicFillW600 } from "@material-symbols-svg/react-native/rounded/icons/mic";
 import { NotificationsFill } from "@material-symbols-svg/react-native/rounded/icons/notifications";
 import { NotificationsActiveFill } from "@material-symbols-svg/react-native/rounded/icons/notifications-active";
 import { PaymentsFill } from "@material-symbols-svg/react-native/rounded/icons/payments";
@@ -86,6 +90,11 @@ const icons = {
   "account-cog": ManageAccountsFill,
   "arrow-bottom-left": CallReceivedFill,
   "arrow-left": ArrowBackFill,
+  "arrow-upward": ArrowUpwardFillW600,
+  "chat-bubble": ChatBubbleFill,
+  "graphic-eq": GraphicEqFillW600,
+  "mic-bold": MicFillW600,
+  stop: StopFillW600,
   "arrow-top-right": ArrowOutwardFill,
   calendar: CalendarMonthFill,
   bank: AccountBalanceFill,

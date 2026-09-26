@@ -128,7 +128,14 @@ test("tool requests keep only approved tools and sanitized arguments", () => {
     parseToolCalls(
       'Sure: {"tools":[{"name":"cash_flow","args":{"period":"last_month","limit":"900","sql":"DROP"}}]}',
     ),
-    [{ name: "cash_flow", args: { period: "last_month", limit: 50 } }],
+    // Keys the tool does not accept (limit, sql) are dropped.
+    [{ name: "cash_flow", args: { period: "last_month" } }],
+  );
+  assert.deepEqual(
+    parseToolCalls(
+      '{"tools":[{"name":"search_transactions","args":{"limit":"900","merchant":"Cafe"}}]}',
+    ),
+    [{ name: "search_transactions", args: { merchant: "Cafe", limit: 50 } }],
   );
 });
 
@@ -270,7 +277,7 @@ test("malformed tool JSON is recovered and never shown as an answer", () => {
   assert.equal(stripToolJson("Plain answer."), "Plain answer.");
 });
 
-test("open-ended questions are routed to the whole-document health review", () => {
+test("open-ended questions are routed to the mandatory advice bundle", () => {
   for (const question of [
     "How do I improve my finance?",
     "איך אני יכול לשפר את המצב הכלכלי שלי?",
@@ -279,9 +286,9 @@ test("open-ended questions are routed to the whole-document health review", () =
     assert.ok(isAdviceQuestion(question), question);
     assert.deepEqual(
       inferToolCalls(question)
-        .slice(0, 2)
+        .slice(0, 1)
         .map((call) => call.name),
-      ["financial_health", "financial_snapshot"],
+      ["financial_advice_context"],
     );
   }
   assert.equal(isAdviceQuestion("What is my balance?"), false);

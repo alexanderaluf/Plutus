@@ -45,6 +45,7 @@ export function createDefaultBackup(): BackupDocument {
       weekStartDay: 0,
       amountsHidden: false,
       aiExitWarningDismissed: false,
+      aiFirstChatAt: null,
     },
     categories: [
       {

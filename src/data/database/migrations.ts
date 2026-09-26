@@ -7,7 +7,7 @@ import {
 } from "../model/normalize-backup";
 import { getSetupStatus } from "../model/onboarding";
 
-export const DATABASE_VERSION = 20;
+export const DATABASE_VERSION = 21;
 export const STORAGE_RECOVERY_MESSAGE =
   "Your saved data could not be opened safely. Nothing has been reset. Keep this installation and export a recovery copy before seeking help.";
 

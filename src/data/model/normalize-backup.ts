@@ -227,6 +227,11 @@ export function normalizeBackupDocument(value: unknown): BackupDocument {
         : 0,
     amountsHidden: local.amountsHidden === true,
     aiExitWarningDismissed: local.aiExitWarningDismissed === true,
+    aiFirstChatAt:
+      typeof local.aiFirstChatAt === "string" &&
+      Number.isFinite(Date.parse(local.aiFirstChatAt))
+        ? local.aiFirstChatAt
+        : null,
   };
 
   return document;
