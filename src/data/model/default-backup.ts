@@ -46,6 +46,7 @@ export function createDefaultBackup(): BackupDocument {
       amountsHidden: false,
       aiExitWarningDismissed: false,
       aiFirstChatAt: null,
+      aiModelKey: "E2B",
     },
     categories: [
       {

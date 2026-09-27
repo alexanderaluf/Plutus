@@ -1,5 +1,5 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { useRef, useState } from "react";
-import { Alert } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useLocalData } from "@/data/local-data-provider";
 import { occurrenceKey, skipRecurring } from "@/data/model/recurring-record";
@@ -43,7 +43,7 @@ export function useRecurringActions() {
     }
   }
   function skip(item: Recurring) {
-    Alert.alert(
+    AppAlert.alert(
       t("recurring.skipTitle"),
       t("recurring.skipBody", {
         date: item.next?.toLocaleString(i18n.resolvedLanguage),

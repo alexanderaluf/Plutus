@@ -3,11 +3,15 @@ import * as Device from "expo-device";
 import { Paths } from "expo-file-system";
 import { Platform } from "react-native";
 import {
+  LOCAL_AI_MODELS,
   evaluateLocalAICompatibility,
+  type LocalAIModelKey,
   type LocalAICompatibility,
 } from "./model-compatibility-policy";
 
-export async function checkLocalAICompatibility(): Promise<LocalAICompatibility> {
+export async function checkLocalAICompatibility(
+  modelKey: LocalAIModelKey = "E2B",
+): Promise<LocalAICompatibility> {
   // Paths is an Expo SDK native API and is available in Expo Go. If an OS
   // refuses a capacity query, fail closed instead of guessing free space.
   let freeStorageBytes: number | null = null;
@@ -16,13 +20,16 @@ export async function checkLocalAICompatibility(): Promise<LocalAICompatibility>
   } catch {
     // A reason is shown to the user by evaluateLocalAICompatibility.
   }
-  return evaluateLocalAICompatibility({
-    platform: Platform.OS,
-    isDevice: Device.isDevice,
-    architectures: Device.supportedCpuArchitectures,
-    totalMemoryBytes: Device.totalMemory,
-    freeStorageBytes,
-    isExpoGo:
-      Constants.executionEnvironment === ExecutionEnvironment.StoreClient,
-  });
+  return evaluateLocalAICompatibility(
+    {
+      platform: Platform.OS,
+      isDevice: Device.isDevice,
+      architectures: Device.supportedCpuArchitectures,
+      totalMemoryBytes: Device.totalMemory,
+      freeStorageBytes,
+      isExpoGo:
+        Constants.executionEnvironment === ExecutionEnvironment.StoreClient,
+    },
+    LOCAL_AI_MODELS[modelKey],
+  );
 }

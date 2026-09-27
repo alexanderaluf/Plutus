@@ -1,3 +1,4 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import {
   EdgeToEdgeLayout,
   EdgeToEdgeScrollView,
@@ -7,7 +8,6 @@ import { Button, Input } from "heroui-native";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -170,7 +170,7 @@ export function UserEditorScreen() {
       }));
       router.back();
     } catch {
-      Alert.alert(
+      AppAlert.alert(
         t("profile.editor.saveErrorTitle"),
         t("profile.editor.saveError"),
       );

@@ -37,6 +37,10 @@ function mount({
   let releaseWrite;
   const events = [],
     alerts = [];
+  const showAlert = (title, message, buttons) => {
+    alerts.push({ title, message });
+    if (buttons) buttons[confirm ? 1 : 0].onPress();
+  };
   const button = Object.assign(() => {}, { Label: "Label" });
   const layoutAnimation = {
     duration: () => layoutAnimation,
@@ -98,10 +102,7 @@ function mount({
       StyleSheet: { absoluteFill: {}, create: (sheet) => sheet },
       useWindowDimensions: () => ({ width: 390, height: 844 }),
       Alert: {
-        alert: (title, message, buttons) => {
-          alerts.push({ title, message });
-          if (buttons) buttons[confirm ? 1 : 0].onPress();
-        },
+        alert: showAlert,
       },
     },
     "react-native-reanimated": {
@@ -159,6 +160,7 @@ function mount({
       }),
     },
     "@/shared/ui/app-text": { Text: "Text" },
+    "@/shared/ui/app-alert": { AppAlert: { alert: showAlert } },
     "@/shared/ui/filled-icon": { FilledIcon: "Icon" },
     "@/features/profile/components/currency-selector-sheet": {
       CurrencySelectorSheet: "CurrencySheet",

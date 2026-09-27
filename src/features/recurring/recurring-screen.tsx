@@ -1,9 +1,10 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { BlurTargetView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Animated, AppState, Pressable, View } from "react-native";
+import { Animated, AppState, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { localDateKey } from "@/data/model/recurring-record";
@@ -493,7 +494,7 @@ export function RecurringScreen() {
             isIconOnly
             accessibilityLabel={t("recurring.info")}
             onPress={() =>
-              Alert.alert(
+              AppAlert.alert(
                 t("recurring.info"),
                 `${t("recurring.infoBody")}\n\n${t(recurringBackgroundAvailable ? "recurring.background" : "recurring.foreground")}`,
               )

@@ -51,6 +51,15 @@ const {
   createJsonBackupDocument,
 } = require("../src/data/backup/document-export.ts");
 const now = "2026-09-14T12:00:00.000Z";
+test("local model choice defaults safely and survives document normalization", () => {
+  const fresh = createDefaultBackup();
+  assert.equal(fresh._local.aiModelKey, "E2B");
+  fresh._local.aiModelKey = "E4B";
+  assert.equal(normalizeBackupDocument(fresh)._local.aiModelKey, "E4B");
+  const old = createDefaultBackup();
+  delete old._local.aiModelKey;
+  assert.equal(normalizeBackupDocument(old)._local.aiModelKey, "E2B");
+});
 const values = {
   name: " Alex ",
   language: "he",

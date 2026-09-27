@@ -9,7 +9,7 @@ const source = ts.transpileModule(fs.readFileSync(filename, "utf8"), {
 }).outputText;
 const moduleShim = { exports: {} };
 new Function("module", "exports", source)(moduleShim, moduleShim.exports);
-const { evaluateLocalAICompatibility, LOCAL_AI_MODEL } = moduleShim.exports;
+const { evaluateLocalAICompatibility, LOCAL_AI_MODEL, LOCAL_AI_MODELS } = moduleShim.exports;
 
 const suitableDevice = {
   platform: "android",
@@ -43,6 +43,8 @@ test("each unavailable hardware measurement fails closed with a reason", () => {
 });
 
 test("low memory and storage are rejected", () => {
+  assert.equal(LOCAL_AI_MODELS.E2B.minMemoryBytes, 4_000_000_000);
+  assert.equal(LOCAL_AI_MODELS.E4B.minMemoryBytes, 4_000_000_000);
   const result = evaluateLocalAICompatibility({
     ...suitableDevice,
     totalMemoryBytes: LOCAL_AI_MODEL.minMemoryBytes - 1,
@@ -58,4 +60,13 @@ test("simulators and unsupported platforms are rejected", () => {
     isDevice: false,
   });
   assert.deepEqual(result.reasons, ["platform", "simulator"]);
+});
+
+test("E4B has a separate verified file and requires more free storage", () => {
+  assert.notEqual(LOCAL_AI_MODELS.E2B.fileName, LOCAL_AI_MODELS.E4B.fileName);
+  assert.notEqual(LOCAL_AI_MODELS.E2B.sha256, LOCAL_AI_MODELS.E4B.sha256);
+  assert.deepEqual(
+    evaluateLocalAICompatibility(suitableDevice, LOCAL_AI_MODELS.E4B).reasons,
+    ["storage-low"],
+  );
 });

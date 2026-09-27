@@ -1,6 +1,7 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { Image, type ImageSource } from "expo-image";
 import { useTranslation } from "react-i18next";
-import { Alert, Linking, Pressable, StyleSheet, View } from "react-native";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
@@ -59,7 +60,7 @@ function CreditLinkRow({ link }: { link: CreditLink }) {
     try {
       await Linking.openURL(link.url);
     } catch {
-      Alert.alert(
+      AppAlert.alert(
         t("credits.openLinkError.title"),
         t("credits.openLinkError.description"),
       );

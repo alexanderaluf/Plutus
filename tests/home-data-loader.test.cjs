@@ -429,6 +429,28 @@ test("currency formatting reuses formatters and still follows locale/sign change
   }
 });
 
+test("currency formatting works when iOS Intl omits formatToParts", async () => {
+  const { formatCurrency, formatSignedCurrency } = require("../src/shared/lib/currency.ts");
+  const NumberFormat = Intl.NumberFormat;
+  Intl.NumberFormat = function (...args) {
+    const formatter = new NumberFormat(...args);
+    return {
+      format: (value) => formatter.format(value),
+      resolvedOptions: () => formatter.resolvedOptions(),
+    };
+  };
+  try {
+    await i18n.changeLanguage("en");
+    assert.equal(formatCurrency(12.5, "CHF"), "12.50 CHF");
+    assert.equal(formatSignedCurrency(-12.5, "CHF"), "-12.50 CHF");
+    await i18n.changeLanguage("he");
+    assert.equal(formatCurrency(12.5, "ILS"), "12.50₪");
+  } finally {
+    Intl.NumberFormat = NumberFormat;
+    await i18n.changeLanguage("en");
+  }
+});
+
 function hookHarness() {
   let cursor = 0;
   const slots = [],

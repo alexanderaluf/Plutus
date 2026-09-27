@@ -1,3 +1,4 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { EdgeToEdgeLayout } from "@/shared/ui/edge-to-edge-layout";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import Animated from "react-native-reanimated";
@@ -11,7 +12,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, FlatList, I18nManager, Pressable, View } from "react-native";
+import { FlatList, I18nManager, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import type { CategoryType } from "@/data/model/category-record";
@@ -81,7 +82,7 @@ export function CategoriesScreen() {
               variant="ghost"
               accessibilityLabel={t("categories.list.about")}
               onPress={() =>
-                Alert.alert(
+                AppAlert.alert(
                   t("categories.list.title"),
                   t("categories.list.aboutDescription"),
                 )

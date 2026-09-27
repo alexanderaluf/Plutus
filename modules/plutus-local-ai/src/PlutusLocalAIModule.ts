@@ -7,12 +7,13 @@ import type {
 } from "./PlutusLocalAI.types";
 
 declare class PlutusLocalAIModule extends NativeModule<PlutusLocalAIModuleEvents> {
-  isInstalledAsync(): Promise<boolean>;
+  isInstalledAsync(modelKey: string): Promise<boolean>;
   /** Also finalizes a finished transfer; safe to call from any screen. */
-  getDownloadStateAsync(): Promise<LocalAIDownloadState>;
+  getDownloadStateAsync(modelKey: string): Promise<LocalAIDownloadState>;
   /** Starts a system-managed download that continues outside the app. */
-  downloadAsync(): Promise<void>;
-  getModelPathAsync(): Promise<string>;
+  downloadAsync(modelKey: string): Promise<void>;
+  deleteModelAsync(modelKey: string): Promise<void>;
+  getModelPathAsync(modelKey: string): Promise<string>;
   getAvailableMemoryAsync(): Promise<number>;
   clearRuntimeCacheAsync(): Promise<void>;
   /** iOS only: cancels the platform on-device recognizer fallback. */

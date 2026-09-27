@@ -1,6 +1,7 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import * as ImagePicker from "expo-image-picker";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -26,7 +27,7 @@ export function ProfilePhotoPicker({
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      AppAlert.alert(
         t("profile.photo.permissionTitle"),
         t("profile.photo.permissionMessage"),
       );

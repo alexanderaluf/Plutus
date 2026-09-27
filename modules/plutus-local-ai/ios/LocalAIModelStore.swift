@@ -3,29 +3,31 @@ import ExpoModulesCore
 import Foundation
 import UIKit
 
-/// Process-wide owner of the model file. A background URLSession keeps the
-/// transfer running outside the chat screen and while the app is suspended.
-/// The verified model lives in Application Support/PlutusLocalAI: excluded from
-/// iCloud/device backups, deleted with the app, and kept across app updates.
-/// Only relative locations are derived at runtime because the container path
-/// changes between app versions.
+/// Owns independent background downloads and verified app-private model files.
 final class LocalAIModelStore: NSObject, URLSessionDownloadDelegate {
   static let shared = LocalAIModelStore()
   static let sessionIdentifier = "\(Bundle.main.bundleIdentifier ?? "plutus").local-ai-model"
 
-  static let modelName = "gemma-4-E2B-it.litertlm"
-  static let modelSize: Int64 = 2_588_147_712
-  private static let modelHash = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c"
-  private static let modelURL = URL(string: "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/6e5c4f1e395deb959c494953478fa5cec4b8008f/gemma-4-E2B-it.litertlm")!
-  private static let stagedName = "\(modelName).download"
-  private static let resumeName = "\(modelName).resume"
+  private struct Model {
+    let key: String
+    let name: String
+    let size: Int64
+    let hash: String
+    let url: URL
+  }
+  private static let models: [String: Model] = [
+    "E2B": Model(key: "E2B", name: "gemma-4-E2B-it.litertlm", size: 2_588_147_712,
+      hash: "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
+      url: URL(string: "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/6e5c4f1e395deb959c494953478fa5cec4b8008f/gemma-4-E2B-it.litertlm")!),
+    "E4B": Model(key: "E4B", name: "gemma-4-E4B-it.litertlm", size: 3_659_530_240,
+      hash: "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
+      url: URL(string: "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/28299f3/gemma-4-E4B-it.litertlm")!),
+  ]
   private static let runtimeTagKey = "plutus.localAI.runtimeTag"
-
-  /// Serializes all state; the session delegate runs on the same queue.
   private let queue = DispatchQueue(label: "plutus.local-ai.model")
-  private var received: Int64 = 0
-  private var verifying = false
-  private var lastError: String?
+  private var received: [String: Int64] = [:]
+  private var verifying: Set<String> = []
+  private var errors: [String: String] = [:]
   private var backgroundCompletionHandler: (() -> Void)?
 
   private lazy var session: URLSession = {
@@ -38,7 +40,6 @@ final class LocalAIModelStore: NSObject, URLSessionDownloadDelegate {
     return URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
   }()
 
-  /// Reconnects to a transfer that continued while the app was not running.
   func activate(backgroundCompletionHandler: (() -> Void)? = nil) {
     queue.async {
       if let backgroundCompletionHandler { self.backgroundCompletionHandler = backgroundCompletionHandler }
@@ -56,96 +57,112 @@ final class LocalAIModelStore: NSObject, URLSessionDownloadDelegate {
     return directory
   }
 
-  func modelFile() throws -> URL { try directory().appendingPathComponent(Self.modelName) }
-
-  func isInstalled() -> Bool {
-    guard let file = try? modelFile() else { return false }
-    return fileSize(file) == Self.modelSize
+  private func model(_ key: String) throws -> Model {
+    guard let model = Self.models[key] else { throw NSError(domain: "PlutusLocalAI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown local AI model"]) }
+    return model
   }
-
+  func modelFile(_ key: String) throws -> URL { try directory().appendingPathComponent(model(key).name) }
+  private func stagedFile(_ key: String) throws -> URL { try directory().appendingPathComponent(model(key).name + ".download") }
+  private func resumeFile(_ key: String) throws -> URL { try directory().appendingPathComponent(model(key).name + ".resume") }
   private func fileSize(_ file: URL) -> Int64? {
     guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path),
           let size = attributes[.size] as? NSNumber else { return nil }
     return size.int64Value
   }
+  func isInstalled(_ key: String) -> Bool {
+    guard let spec = try? model(key), let file = try? modelFile(key) else { return false }
+    return fileSize(file) == spec.size
+  }
 
-  /// Moves pre-release installs into the dedicated folder and drops superseded models.
-  private func migrateAndClean() throws {
-    let manager = FileManager.default
-    let directory = try directory()
-    let legacy = directory.deletingLastPathComponent().appendingPathComponent(Self.modelName)
-    if manager.fileExists(atPath: legacy.path) {
-      if fileSize(legacy) == Self.modelSize && !isInstalled() {
-        try? manager.moveItem(at: legacy, to: try modelFile())
-      }
-      try? manager.removeItem(at: legacy)
-    }
-    for entry in (try? manager.contentsOfDirectory(atPath: directory.path)) ?? []
-    where entry.hasSuffix(".litertlm") && entry != Self.modelName {
-      try? manager.removeItem(at: directory.appendingPathComponent(entry))
+  private func migrateLegacy() {
+    guard let spec = Self.models["E2B"], let destination = try? modelFile("E2B") else { return }
+    let legacy = destination.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(spec.name)
+    if FileManager.default.fileExists(atPath: legacy.path) {
+      if fileSize(legacy) == spec.size && !isInstalled("E2B") { try? FileManager.default.moveItem(at: legacy, to: destination) }
+      try? FileManager.default.removeItem(at: legacy)
     }
   }
 
-  func state(_ completion: @escaping ([String: Any?]) -> Void) {
-    queue.async {
-      try? self.migrateAndClean()
-      if self.isInstalled() { return completion(self.state("installed", Self.modelSize)) }
-      if self.verifying { return completion(self.state("verifying", Self.modelSize)) }
-      if let staged = try? self.directory().appendingPathComponent(Self.stagedName),
-         FileManager.default.fileExists(atPath: staged.path) {
-        // Downloaded, but the app stopped before verification finished.
-        self.verify(staged)
-        return completion(self.state("verifying", Self.modelSize))
-      }
-      self.session.getAllTasks { tasks in
-        self.queue.async {
-          if let task = tasks.first(where: { $0.state == .running || $0.state == .suspended }) {
-            let received = max(self.received, task.countOfBytesReceived)
-            return completion(self.state(task.state == .running ? "downloading" : "paused", received))
-          }
-          if let error = self.lastError {
-            return completion(["status": "failed", "received": 0, "total": Self.modelSize, "error": error])
-          }
-          completion(self.state("idle", 0))
-        }
-      }
+  func state(_ key: String, _ completion: @escaping ([String: Any?]) -> Void) {
+    queue.async { self.stateOnQueue(key, completion) }
+  }
+
+  private func stateOnQueue(_ key: String, _ completion: @escaping ([String: Any?]) -> Void) {
+    guard let spec = try? model(key) else {
+      completion(["status": "failed", "error": "Unknown local AI model"])
+      return
+    }
+    migrateLegacy()
+    if isInstalled(key) {
+      completion(state("installed", spec.size, spec.size))
+      return
+    }
+    if verifying.contains(key) {
+      completion(state("verifying", spec.size, spec.size))
+      return
+    }
+    if let staged = try? stagedFile(key), FileManager.default.fileExists(atPath: staged.path) {
+      verify(staged, spec)
+      completion(state("verifying", spec.size, spec.size))
+      return
+    }
+    session.getAllTasks { tasks in
+      self.queue.async { self.stateFromTasks(key, spec, tasks, completion) }
     }
   }
 
-  private func state(_ status: String, _ received: Int64) -> [String: Any?] {
-    ["status": status, "received": received, "total": Self.modelSize, "error": nil]
+  private func stateFromTasks(_ key: String, _ spec: Model, _ tasks: [URLSessionTask], _ completion: @escaping ([String: Any?]) -> Void) {
+    for task in tasks where self.key(for: task) == key {
+      if task.state == .running || task.state == .suspended {
+        let count = max(received[key] ?? 0, task.countOfBytesReceived)
+        completion(state(task.state == .running ? "downloading" : "paused", count, spec.size))
+        return
+      }
+    }
+    if let error = errors[key] {
+      completion(state("failed", 0, spec.size, error))
+    } else {
+      completion(state("idle", 0, spec.size))
+    }
+  }
+  private func state(_ status: String, _ received: Int64, _ size: Int64, _ error: String? = nil) -> [String: Any?] {
+    ["status": status, "received": received, "total": size, "error": error]
+  }
+  private func key(for task: URLSessionTask) -> String? {
+    if let key = task.taskDescription, Self.models[key] != nil { return key }
+    // Existing E2B downloads made before this version have no description.
+    if task.originalRequest?.url?.absoluteString.contains("gemma-4-E2B-it") == true { return "E2B" }
+    if task.originalRequest?.url?.absoluteString.contains("gemma-4-E4B-it") == true { return "E4B" }
+    return nil
   }
 
-  func start(_ completion: @escaping (Error?) -> Void) {
-    state { current in
+  func start(_ key: String, _ completion: @escaping (Error?) -> Void) {
+    state(key) { current in
       let status = current["status"] as? String
       guard status == "idle" || status == "failed" else { return completion(nil) }
       self.queue.async {
         do {
-          let resume = try self.directory().appendingPathComponent(Self.resumeName)
+          let spec = try self.model(key)
+          let resume = try self.resumeFile(key)
           let task: URLSessionDownloadTask
           if let data = try? Data(contentsOf: resume) {
             try? FileManager.default.removeItem(at: resume)
             task = self.session.downloadTask(withResumeData: data)
-          } else {
-            task = self.session.downloadTask(with: Self.modelURL)
-          }
-          task.countOfBytesClientExpectsToReceive = Self.modelSize
-          self.received = 0
-          self.lastError = nil
+          } else { task = self.session.downloadTask(with: spec.url) }
+          task.taskDescription = key
+          task.countOfBytesClientExpectsToReceive = spec.size
+          self.received[key] = 0
+          self.errors.removeValue(forKey: key)
           task.resume()
           completion(nil)
-        } catch {
-          completion(error)
-        }
+        } catch { completion(error) }
       }
     }
   }
 
-  /// Hashing a 2.6 GB file must not block the state queue.
-  private func verify(_ staged: URL) {
-    guard !verifying else { return }
-    verifying = true
+  private func verify(_ staged: URL, _ spec: Model) {
+    guard !verifying.contains(spec.key) else { return }
+    verifying.insert(spec.key)
     DispatchQueue.global(qos: .utility).async {
       var failure: String?
       do {
@@ -158,10 +175,10 @@ final class LocalAIModelStore: NSObject, URLSessionDownloadDelegate {
           size += Int64(chunk.count)
         }
         let actual = digest.finalize().map { String(format: "%02x", $0) }.joined()
-        guard size == Self.modelSize && actual == Self.modelHash else {
+        guard size == spec.size && actual == spec.hash else {
           throw NSError(domain: "PlutusLocalAI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Model download failed verification"])
         }
-        let destination = try self.modelFile()
+        let destination = try self.modelFile(spec.key)
         try? FileManager.default.removeItem(at: destination)
         try FileManager.default.moveItem(at: staged, to: destination)
       } catch {
@@ -169,14 +186,34 @@ final class LocalAIModelStore: NSObject, URLSessionDownloadDelegate {
         failure = error.localizedDescription
       }
       self.queue.async {
-        self.lastError = failure
-        self.verifying = false
+        self.errors[spec.key] = failure
+        self.verifying.remove(spec.key)
       }
     }
   }
 
-  /// LiteRT-LM writes its compiled caches next to the model. Drop them once after
-  /// each app install or update so a newer runtime never reads an older cache.
+  func delete(_ key: String, _ completion: @escaping (Error?) -> Void) {
+    queue.async {
+      do {
+        _ = try self.model(key)
+        guard !self.verifying.contains(key) else { throw NSError(domain: "PlutusLocalAI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Model is being verified"]) }
+        self.session.getAllTasks { tasks in
+          self.queue.async {
+            tasks.filter { self.key(for: $0) == key }.forEach { $0.cancel() }
+            do {
+              for file in [try self.modelFile(key), try self.stagedFile(key), try self.resumeFile(key)] {
+                if FileManager.default.fileExists(atPath: file.path) { try FileManager.default.removeItem(at: file) }
+              }
+              self.errors.removeValue(forKey: key)
+              try self.clearRuntimeCache(key)
+              completion(nil)
+            } catch { completion(error) }
+          }
+        }
+      } catch { completion(error) }
+    }
+  }
+
   func prepareRuntime() throws {
     let info = Bundle.main.infoDictionary
     let executable = Bundle.main.executableURL.flatMap { try? FileManager.default.attributesOfItem(atPath: $0.path)[.modificationDate] as? Date }
@@ -186,45 +223,38 @@ final class LocalAIModelStore: NSObject, URLSessionDownloadDelegate {
     UserDefaults.standard.set(tag, forKey: Self.runtimeTagKey)
   }
 
-  func clearRuntimeCache() throws {
+  func clearRuntimeCache(_ key: String? = nil) throws {
     let directory = try directory()
-    let keep: Set<String> = [Self.modelName, Self.stagedName, Self.resumeName]
+    let keep = Set(Self.models.values.flatMap { [$0.name, $0.name + ".download", $0.name + ".resume"] })
     for entry in try FileManager.default.contentsOfDirectory(atPath: directory.path) where !keep.contains(entry) {
-      try? FileManager.default.removeItem(at: directory.appendingPathComponent(entry))
+      if key == nil || entry.hasPrefix("gemma-4-\(key!)-it") { try? FileManager.default.removeItem(at: directory.appendingPathComponent(entry)) }
     }
   }
 
-  // MARK: - URLSessionDownloadDelegate (runs on `queue`)
-
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-    received = totalBytesWritten
+    if let key = key(for: downloadTask) { received[key] = totalBytesWritten }
   }
-
   func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-    // The system deletes `location` when this method returns, so move it now.
+    guard let key = key(for: downloadTask), let spec = Self.models[key] else { return }
     do {
       if let response = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
         throw NSError(domain: "PlutusLocalAI", code: 7, userInfo: [NSLocalizedDescriptionKey: "Model download failed (\(response.statusCode))"])
       }
-      let staged = try directory().appendingPathComponent(Self.stagedName)
+      let staged = try stagedFile(key)
       try? FileManager.default.removeItem(at: staged)
       try FileManager.default.moveItem(at: location, to: staged)
-      verify(staged)
-    } catch {
-      lastError = error.localizedDescription
-    }
+      verify(staged, spec)
+    } catch { errors[key] = error.localizedDescription }
   }
-
   func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-    received = 0
+    guard let key = key(for: task) else { return }
+    received[key] = 0
     guard let error else { return }
-    let resumeData = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data
-    if let resumeData, let resume = try? directory().appendingPathComponent(Self.resumeName) {
-      try? resumeData.write(to: resume)
-    }
-    lastError = error.localizedDescription
+    if (error as NSError).code == NSURLErrorCancelled { return }
+    if let resumeData = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data,
+       let resume = try? resumeFile(key) { try? resumeData.write(to: resume) }
+    errors[key] = error.localizedDescription
   }
-
   func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
     let handler = backgroundCompletionHandler
     backgroundCompletionHandler = nil
@@ -234,11 +264,7 @@ final class LocalAIModelStore: NSObject, URLSessionDownloadDelegate {
 
 public class PlutusLocalAIAppDelegateSubscriber: ExpoAppDelegateSubscriber {
   public func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
-    guard identifier == LocalAIModelStore.sessionIdentifier else {
-      // Expo waits for every subscriber; release sessions owned by other modules.
-      completionHandler()
-      return
-    }
+    guard identifier == LocalAIModelStore.sessionIdentifier else { completionHandler(); return }
     LocalAIModelStore.shared.activate(backgroundCompletionHandler: completionHandler)
   }
 }

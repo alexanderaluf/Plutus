@@ -1,10 +1,28 @@
 const baseEn = {
   title: "Plutus AI",
+  selectModel: "Choose model",
+  chooseModelHint: "Choose an installed model or download another one for private, on-device chat.",
+  selectedModel: "Current model",
+  manageModel: "Manage model storage",
+  modelInstalled: "Installed",
+  modelAvailable: "Not downloaded",
+  deleteModel: "Delete model",
+  deleteModelConfirm:
+    "Delete this model from your device? You can download it again later.",
+  cancel: "Cancel",
+  newChat: "New chat",
+  modelInfo: "Model information",
+  modelDetails:
+    "Google's instruction-tuned Gemma 4 model runs privately on this device. It can reason about your finances and use the same Plutus AI tools and prompts. The model supports text, image and audio input; this chat currently uses text and voice. The LiteRT-LM file supports up to 32K tokens of context; this app loads 4K–8K based on available memory.",
+  e2bPower:
+    "2.3B effective parameters (5.1B including embeddings). Smaller and generally faster on phones. Download: about 2.6 GB.",
+  e4bPower:
+    "4.5B effective parameters (8B including embeddings). Stronger reasoning and understanding, with higher storage and memory use. Download: about 3.7 GB.",
   open: "Open local AI chat",
   privacyTitle: "Private AI on your device",
   privacyDescription:
     "Plutus AI is designed to run on this device. Your financial data and chat stay here; no third-party AI service receives them. The model requires a one-time download before offline use.",
-  modelRequirements: "Model download: about {{size}} GB · Minimum memory: 8 GB",
+  modelRequirements: "Model download: about {{size}} GB · Minimum memory: 4 GB",
   checking: "Checking this device…",
   deviceSupported: "Your device meets the model's hardware requirements.",
   deviceUnsupported: "Your device does not support this model.",
@@ -59,20 +77,38 @@ const baseEn = {
     simulator: "A physical device is required for this large local model.",
     architecture: "A supported 64-bit processor could not be verified.",
     "memory-unknown": "Available device memory could not be verified.",
-    "memory-low": "This model requires at least 8 GB of device memory.",
+    "memory-low": "This model requires at least 4 GB of device memory.",
     "storage-unknown": "Free device storage could not be verified.",
     "storage-low":
-      "More free storage is needed for the download and verification. Keep at least 6.2 GB free.",
+      "More free storage is needed for this model's download and verification.",
   },
 } as const;
 
 const baseHe = {
   title: "Plutus AI",
+  selectModel: "בחירת מודל",
+  chooseModelHint: "אפשר לבחור מודל מותקן או להוריד מודל נוסף לצ׳אט פרטי במכשיר.",
+  selectedModel: "המודל הנוכחי",
+  manageModel: "ניהול אחסון המודל",
+  modelInstalled: "מותקן",
+  modelAvailable: "לא הורד",
+  deleteModel: "מחיקת מודל",
+  deleteModelConfirm:
+    "למחוק את המודל מהמכשיר? אפשר להוריד אותו שוב מאוחר יותר.",
+  cancel: "ביטול",
+  newChat: "שיחה חדשה",
+  modelInfo: "מידע על המודל",
+  modelDetails:
+    "Gemma 4 של Google פועל באופן פרטי במכשיר. הוא משתמש באותם כלים והנחיות של Plutus AI לניתוח הכספים. המודל תומך בטקסט, תמונות וקול; הצ׳אט הזה משתמש כעת בטקסט ובקול. הקובץ תומך בעד 32K טוקנים, והאפליקציה טוענת 4K–8K בהתאם לזיכרון הפנוי.",
+  e2bPower:
+    "2.3 מיליארד פרמטרים אפקטיביים (5.1 מיליארד כולל embeddings). קטן ומהיר יותר בדרך כלל בטלפונים. הורדה: כ־2.6 GB.",
+  e4bPower:
+    "4.5 מיליארד פרמטרים אפקטיביים (8 מיליארד כולל embeddings). יכולת הסקה והבנה חזקה יותר, עם שימוש גבוה יותר באחסון ובזיכרון. הורדה: כ־3.7 GB.",
   open: "פתיחת צ׳אט AI מקומי",
   privacyTitle: "בינה מלאכותית פרטית במכשיר שלך",
   privacyDescription:
     "Plutus AI מיועד לפעול במכשיר הזה. הנתונים הכספיים והשיחות נשארים כאן; הם לא נשלחים לשירות AI של צד שלישי. נדרשת הורדה חד־פעמית של המודל לפני שימוש ללא חיבור.",
-  modelRequirements: "הורדת המודל: כ־{{size}} GB · זיכרון מינימלי: 8 GB",
+  modelRequirements: "הורדת המודל: כ־{{size}} GB · זיכרון מינימלי: 4 GB",
   checking: "בודקים את המכשיר…",
   deviceSupported: "המכשיר שלך עומד בדרישות החומרה של המודל.",
   deviceUnsupported: "המכשיר שלך אינו תומך במודל הזה.",
@@ -127,21 +163,39 @@ const baseHe = {
     simulator: "נדרש מכשיר פיזי עבור המודל המקומי הגדול הזה.",
     architecture: "לא ניתן לאמת מעבד 64 סיביות נתמך.",
     "memory-unknown": "לא ניתן לאמת את זיכרון המכשיר.",
-    "memory-low": "המודל דורש לפחות 8 GB זיכרון במכשיר.",
+    "memory-low": "המודל דורש לפחות 4 GB זיכרון במכשיר.",
     "storage-unknown": "לא ניתן לאמת את נפח האחסון הפנוי.",
     "storage-low":
-      "נדרש עוד מקום פנוי להורדה ולאימות. יש להשאיר לפחות 6.2 GB פנויים.",
+      "נדרש עוד מקום פנוי להורדה ולאימות של המודל הזה.",
   },
 } as const;
 
 const baseRu = {
   title: "Plutus AI",
+  selectModel: "Выбрать модель",
+  chooseModelHint: "Выберите установленную модель или загрузите другую для приватного чата на устройстве.",
+  selectedModel: "Текущая модель",
+  manageModel: "Управление памятью модели",
+  modelInstalled: "Установлена",
+  modelAvailable: "Не загружена",
+  deleteModel: "Удалить модель",
+  deleteModelConfirm:
+    "Удалить модель с устройства? Позже её можно скачать снова.",
+  cancel: "Отмена",
+  newChat: "Новый чат",
+  modelInfo: "О модели",
+  modelDetails:
+    "Gemma 4 от Google работает локально на устройстве. Она использует те же инструменты и инструкции Plutus AI для анализа финансов. Модель поддерживает текст, изображения и аудио; этот чат сейчас использует текст и голос. Файл LiteRT-LM поддерживает до 32K токенов контекста; приложение загружает 4K–8K в зависимости от памяти.",
+  e2bPower:
+    "2,3 млрд эффективных параметров (5,1 млрд с эмбеддингами). Меньше и обычно быстрее на телефоне. Загрузка: около 2,6 ГБ.",
+  e4bPower:
+    "4,5 млрд эффективных параметров (8 млрд с эмбеддингами). Лучше справляется со сложными задачами, но требует больше памяти и места. Загрузка: около 3,7 ГБ.",
   open: "Открыть локальный ИИ-чат",
   privacyTitle: "Личный ИИ на вашем устройстве",
   privacyDescription:
     "Plutus AI предназначен для работы на этом устройстве. Финансовые данные и переписка остаются здесь и не передаются сторонним ИИ-сервисам. Для работы без сети модель нужно один раз скачать.",
   modelRequirements:
-    "Загрузка модели: около {{size}} ГБ · Минимум памяти: 8 ГБ",
+    "Загрузка модели: около {{size}} ГБ · Минимум памяти: 4 ГБ",
   checking: "Проверяем устройство…",
   deviceSupported: "Устройство соответствует аппаратным требованиям модели.",
   deviceUnsupported: "Устройство не поддерживает эту модель.",
@@ -196,10 +250,10 @@ const baseRu = {
     simulator: "Для этой большой локальной модели нужно физическое устройство.",
     architecture: "Не удалось подтвердить поддержку 64-разрядного процессора.",
     "memory-unknown": "Не удалось проверить объём памяти устройства.",
-    "memory-low": "Для модели требуется не менее 8 ГБ памяти устройства.",
+    "memory-low": "Для модели требуется не менее 4 ГБ памяти устройства.",
     "storage-unknown": "Не удалось проверить свободное место на устройстве.",
     "storage-low":
-      "Для загрузки и проверки нужно больше места. Освободите не менее 6,2 ГБ.",
+      "Для загрузки и проверки этой модели нужно больше места.",
   },
 } as const;
 

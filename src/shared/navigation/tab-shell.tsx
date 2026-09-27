@@ -1,8 +1,9 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { BlurTargetView } from "expo-blur";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 
 import { BottomNavigation } from "./bottom-navigation";
 import { getTabFromPathname, navigationItems } from "./navigation-config";
@@ -38,7 +39,7 @@ export function TabShell() {
       tabId === "reports"
         ? t("navigation.actions.filterReports")
         : t("navigation.actions.searchTransactions");
-    Alert.alert(action, t("navigation.actions.unavailable", { action }));
+    AppAlert.alert(action, t("navigation.actions.unavailable", { action }));
   }
 
   return (

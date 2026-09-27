@@ -145,6 +145,11 @@ balances continue to use `accountAmount` in `accountCurrencyCode`; profile repor
 use the frozen conversion rather than the latest shared rate cache. Card payment
 records retain `cardPaymentAllocations` for purchase-level settlement and audit.
 Existing transactions are preserved without inventing missing historical rates.
+
+Schema 22 adds `_local.aiModelKey` for the last selected on-device Gemma model.
+Older documents default to E2B. The preference is stored in SQLite with the
+other local settings; model binaries remain separate, app-private files and are
+never included in backups. Switching models does not alter financial records.
 The version 17 document is checkpointed before normalization, and the independent
 storage identity guard remains required.
 

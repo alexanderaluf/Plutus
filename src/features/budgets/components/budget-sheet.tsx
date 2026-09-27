@@ -1,19 +1,15 @@
 import { useAppLocalization } from "@/localization/localization-provider";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
+import { AppModal } from "@/shared/ui/app-modal";
 import type { PropsWithChildren } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
   ScrollView,
   View,
 } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Keep the existing Android/web modal, keyboard and backdrop behavior.
+// iOS keeps its native bottom sheet in budget-sheet.ios.tsx.
 export function BudgetSheet({
   title,
   children,
@@ -24,46 +20,19 @@ export function BudgetSheet({
   onClose: () => void;
   busy?: boolean;
 }>) {
-  const c = useAppThemeColors(),
-    insets = useSafeAreaInsets();
+  const c = useAppThemeColors();
   const { t } = useTranslation();
   const { direction } = useAppLocalization();
   return (
-    <Modal
-      transparent
+    <AppModal
       visible
-      animationType="slide"
-      statusBarTranslucent
+      presentation="sheet"
+      sheetHeight="82%"
+      dismissable={!busy}
+      backdropLabel={t("budgets.common.dismissSheet")}
       onRequestClose={() => !busy && onClose()}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{
-          flex: 1,
-          direction,
-          justifyContent: "flex-end",
-          backgroundColor: "rgba(0,0,0,.64)",
-          paddingTop: insets.top + 16,
-        }}
-      >
-        <Pressable
-          accessibilityLabel={t("budgets.common.dismissSheet")}
-          onPress={() => !busy && onClose()}
-          style={{ position: "absolute", top: 0, bottom: 0, left: 0, right: 0 }}
-        />
-        <View
-          accessibilityViewIsModal
-          style={{
-            height: "82%",
-            maxHeight: "100%",
-            backgroundColor: c.background,
-            borderTopLeftRadius: 30,
-            borderTopRightRadius: 30,
-            borderWidth: 1,
-            borderColor: c.border,
-            paddingBottom: Math.max(insets.bottom, 16),
-          }}
-        >
+        <View style={{ flex: 1, direction }}>
           <View
             style={{
               width: 38,
@@ -93,7 +62,6 @@ export function BudgetSheet({
             {children}
           </ScrollView>
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+    </AppModal>
   );
 }

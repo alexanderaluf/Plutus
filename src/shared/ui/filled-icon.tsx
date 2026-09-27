@@ -34,6 +34,7 @@ import {
     DonutLargeFillW600,
 } from "@material-symbols-svg/react-native/rounded/icons/donut-large";
 import { EditFill } from "@material-symbols-svg/react-native/rounded/icons/edit";
+import { EditSquareFill } from "@material-symbols-svg/react-native/rounded/icons/edit-square";
 import { ExperimentFill } from "@material-symbols-svg/react-native/rounded/icons/experiment";
 import { FilterAltFill } from "@material-symbols-svg/react-native/rounded/icons/filter-alt";
 import { FolderZipFill } from "@material-symbols-svg/react-native/rounded/icons/folder-zip";
@@ -138,6 +139,7 @@ const icons = {
   notes: NotesFill,
   nfc: ContactlessFill,
   "notifications-active": NotificationsActiveFill,
+  "new-chat": EditSquareFill,
   pencil: EditFill,
   "photo-library": PhotoLibraryFill,
   "piggy-bank": SavingsFill,

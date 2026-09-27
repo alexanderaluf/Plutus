@@ -1,3 +1,4 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { useCollapsingHeader } from "@/shared/ui/collapsing-header";
 import { useEdgeToEdgeContentInsets } from "@/shared/ui/edge-to-edge-layout";
 import {
@@ -11,8 +12,7 @@ import { Button, Switch as HeroSwitch, Input } from "heroui-native";
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    Alert,
-    Animated,
+      Animated,
     I18nManager,
     Keyboard,
     KeyboardAvoidingView,
@@ -319,7 +319,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
       const message =
         reason instanceof Error ? reason.message : t("accounts.form.saveError");
       setError(message);
-      Alert.alert(t("accounts.form.saveErrorTitle"), message);
+      AppAlert.alert(t("accounts.form.saveErrorTitle"), message);
     } finally {
       saving.current = false;
       setIsSaving(false);

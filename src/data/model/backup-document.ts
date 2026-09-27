@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from "./json";
 
 export const BACKUP_VERSION = 3;
-export const LOCAL_SCHEMA_VERSION = 21;
+export const LOCAL_SCHEMA_VERSION = 22;
 export const DEFAULT_CATEGORIES_REVISION = 1;
 
 export const APP_LANGUAGES = ["en", "he", "ru"] as const;
@@ -87,6 +87,8 @@ export interface LocalBackupMetadata extends JsonObject {
   aiExitWarningDismissed: boolean;
   /** When the user first sent a message to the local AI; hides the intro card. */
   aiFirstChatAt: string | null;
+  /** Last selected on-device model. Model files themselves are never backed up. */
+  aiModelKey: "E2B" | "E4B";
 }
 
 export interface BackupDocument extends JsonObject {

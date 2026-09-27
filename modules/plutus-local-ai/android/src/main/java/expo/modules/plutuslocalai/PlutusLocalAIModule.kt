@@ -59,23 +59,27 @@ class PlutusLocalAIModule : Module() {
       recordingFile = null
     }
 
-    AsyncFunction("isInstalledAsync") Coroutine { ->
-      withContext(Dispatchers.IO) { LocalAIModelStore.isInstalled(context) }
+    AsyncFunction("isInstalledAsync") Coroutine { modelKey: String ->
+      withContext(Dispatchers.IO) { LocalAIModelStore.isInstalled(context, modelKey) }
     }
 
-    AsyncFunction("getDownloadStateAsync") Coroutine { ->
-      withContext(Dispatchers.IO) { LocalAIModelStore.state(context) }
+    AsyncFunction("getDownloadStateAsync") Coroutine { modelKey: String ->
+      withContext(Dispatchers.IO) { LocalAIModelStore.state(context, modelKey) }
     }
 
-    AsyncFunction("downloadAsync") Coroutine { ->
-      withContext(Dispatchers.IO) { LocalAIModelStore.start(context) }
+    AsyncFunction("downloadAsync") Coroutine { modelKey: String ->
+      withContext(Dispatchers.IO) { LocalAIModelStore.start(context, modelKey) }
     }
 
-    AsyncFunction("getModelPathAsync") Coroutine { ->
+    AsyncFunction("deleteModelAsync") Coroutine { modelKey: String ->
+      withContext(Dispatchers.IO) { LocalAIModelStore.delete(context, modelKey) }
+    }
+
+    AsyncFunction("getModelPathAsync") Coroutine { modelKey: String ->
       withContext(Dispatchers.IO) {
-        check(LocalAIModelStore.isInstalled(context)) { "Model is not installed" }
+        check(LocalAIModelStore.isInstalled(context, modelKey)) { "Model is not installed" }
         LocalAIModelStore.prepareRuntime(context)
-        LocalAIModelStore.modelFile(context).absolutePath
+        LocalAIModelStore.modelFile(context, modelKey).absolutePath
       }
     }
 

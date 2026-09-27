@@ -25,7 +25,9 @@ function useElapsedSeconds(startedAt: number | null) {
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [startedAt]);
-  return startedAt === null ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000));
+  return startedAt === null
+    ? 0
+    : Math.max(0, Math.floor((now - startedAt) / 1000));
 }
 
 /**
@@ -34,9 +36,15 @@ function useElapsedSeconds(startedAt: number | null) {
  */
 function SoundWave({ levels, bars }: { levels: number[]; bars: number }) {
   const colors = useAppThemeColors();
-  const padded = [...Array(Math.max(0, bars - levels.length)).fill(0), ...levels.slice(-bars)];
+  const padded = [
+    ...Array(Math.max(0, bars - levels.length)).fill(0),
+    ...levels.slice(-bars),
+  ];
   return (
-    <View className="h-9 flex-1 flex-row items-center justify-between" style={{ gap: 2 }}>
+    <View
+      className="h-9 flex-1 flex-row items-center justify-between"
+      style={{ gap: 2 }}
+    >
       {padded.map((value, index) => (
         <View
           key={index}
@@ -73,6 +81,8 @@ export function ChatComposer({
   onChangeDraft,
   onSend,
   onOpenCommands,
+  modelName,
+  onOpenModels,
   inputRef,
   voice,
   levels,
@@ -92,6 +102,8 @@ export function ChatComposer({
   onSend: () => void;
   /** Opens the "/" menu of everything the assistant can do. */
   onOpenCommands: () => void;
+  modelName: string;
+  onOpenModels: () => void;
   inputRef?: React.RefObject<TextInput | null>;
   voice: VoiceState;
   /** Recent microphone levels (0…1), oldest first. */
@@ -122,7 +134,10 @@ export function ChatComposer({
     voice.type === "validating_audio" ||
     voice.type === "transcribing" ||
     voice.type === "requesting_permission";
-  const elapsed = Math.min(useElapsedSeconds(recording ? voice.startedAt : null), maxSeconds);
+  const elapsed = Math.min(
+    useElapsedSeconds(recording ? voice.startedAt : null),
+    maxSeconds,
+  );
   const nearLimit = maxSeconds - elapsed <= 10;
   const canSend = ready && !busy && !recording && !processing && !!draft.trim();
   const micDisabled = !ready || busy || processing || !voiceAvailable;
@@ -158,13 +173,19 @@ export function ChatComposer({
             <View
               className="min-h-11 flex-row items-center gap-3 px-3 py-2"
               accessibilityRole="timer"
-              accessibilityLabel={t("localAI.recordingTime", { elapsed: clock(elapsed), limit: clock(maxSeconds) })}
+              accessibilityLabel={t("localAI.recordingTime", {
+                elapsed: clock(elapsed),
+                limit: clock(maxSeconds),
+              })}
             >
               <View className="size-2.5 rounded-full bg-danger" />
               <SoundWave levels={levels} bars={WAVE_BARS} />
               <Text
                 className="font-manrope-semibold text-[15px]"
-                style={{ color: nearLimit ? colors.danger : colors.foreground, fontVariant: ["tabular-nums"] }}
+                style={{
+                  color: nearLimit ? colors.danger : colors.foreground,
+                  fontVariant: ["tabular-nums"],
+                }}
               >
                 {`${clock(elapsed)} / ${clock(maxSeconds)}`}
               </Text>
@@ -173,7 +194,9 @@ export function ChatComposer({
             <View className="min-h-11 flex-row items-center gap-3 px-3 py-2.5">
               <ActivityIndicator size="small" />
               <Text className="flex-1 text-base text-foreground">
-                {voice.type === "transcribing" ? t("localAI.transcribing") : t("localAI.preparingAudio")}
+                {voice.type === "transcribing"
+                  ? t("localAI.transcribing")
+                  : t("localAI.preparingAudio")}
               </Text>
             </View>
           )
@@ -211,8 +234,27 @@ export function ChatComposer({
               className="h-9 min-w-9 flex-row items-center justify-center rounded-full border border-border px-2.5"
               style={{ opacity: !ready || busy || processing ? 0.45 : 1 }}
             >
-              <Text className="font-manrope-bold text-[17px] text-foreground" style={{ lineHeight: 20 }}>
+              <Text
+                className="font-manrope-bold text-[17px] text-foreground"
+                style={{ lineHeight: 20 }}
+              >
                 /
+              </Text>
+            </Pressable>
+          )}
+          {!recording && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("localAI.selectModel")}
+              onPress={onOpenModels}
+              disabled={busy || processing}
+              className="min-h-9 max-w-[52%] flex-row items-center justify-center rounded-full border border-border px-3"
+            >
+              <Text
+                numberOfLines={1}
+                className="text-xs font-manrope-semibold text-foreground"
+              >
+                {modelName}
               </Text>
             </Pressable>
           )}
@@ -242,7 +284,11 @@ export function ChatComposer({
             <>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={voiceAvailable ? t("localAI.recordVoice") : t("localAI.voiceNeedsAudioEngine")}
+                accessibilityLabel={
+                  voiceAvailable
+                    ? t("localAI.recordVoice")
+                    : t("localAI.voiceNeedsAudioEngine")
+                }
                 onPress={onStartRecording}
                 disabled={micDisabled}
                 hitSlop={6}
@@ -258,9 +304,15 @@ export function ChatComposer({
                 disabled={!canSend}
                 hitSlop={6}
                 className="size-10 items-center justify-center rounded-full"
-                style={{ backgroundColor: canSend ? colors.foreground : colors.border }}
+                style={{
+                  backgroundColor: canSend ? colors.foreground : colors.border,
+                }}
               >
-                <FilledIcon name="arrow-upward" size={22} color={canSend ? colors.background : colors.muted} />
+                <FilledIcon
+                  name="arrow-upward"
+                  size={22}
+                  color={canSend ? colors.background : colors.muted}
+                />
               </Pressable>
             </>
           )}

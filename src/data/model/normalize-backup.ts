@@ -227,6 +227,7 @@ export function normalizeBackupDocument(value: unknown): BackupDocument {
         : 0,
     amountsHidden: local.amountsHidden === true,
     aiExitWarningDismissed: local.aiExitWarningDismissed === true,
+    aiModelKey: local.aiModelKey === "E4B" ? "E4B" : "E2B",
     aiFirstChatAt:
       typeof local.aiFirstChatAt === "string" &&
       Number.isFinite(Date.parse(local.aiFirstChatAt))

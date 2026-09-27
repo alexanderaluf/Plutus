@@ -1,8 +1,9 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { Button } from "heroui-native";
 import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
 
@@ -84,7 +85,7 @@ function confirmRestore(imported: ImportedBackup, t: TFunction) {
       return;
     }
 
-    Alert.alert(
+    AppAlert.alert(
       t("backup.restoreTitle"),
       t("backup.restoreDescription"),
       [
@@ -127,13 +128,13 @@ export function BackupManagement() {
       if (destination === "save") {
         const saved = await saveBackup(document, selectedFormat);
         if (saved) {
-          Alert.alert(t("backup.savedTitle"), t("backup.savedDescription"));
+          AppAlert.alert(t("backup.savedTitle"), t("backup.savedDescription"));
         }
       } else {
         await shareBackup(document, selectedFormat);
       }
     } catch (error) {
-      Alert.alert(
+      AppAlert.alert(
         t("backup.exportFailed"),
         getErrorMessage(error, t("backup.unexpectedError")),
       );
@@ -162,14 +163,14 @@ export function BackupManagement() {
       } else {
         await replaceDocument(imported.document);
       }
-      Alert.alert(
+      AppAlert.alert(
         t("backup.importComplete"),
         imported.format === "csv"
           ? t("backup.csvImportComplete")
           : t("backup.restoreComplete"),
       );
     } catch (error) {
-      Alert.alert(
+      AppAlert.alert(
         t("backup.importFailed"),
         getErrorMessage(error, t("backup.unexpectedError")),
       );

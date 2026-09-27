@@ -1,3 +1,4 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import {
   TopSafeAreaGradient,
   BottomSafeAreaGradient,
@@ -35,7 +36,6 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   BackHandler,
   Keyboard,
   KeyboardAvoidingView,
@@ -191,7 +191,7 @@ export function OnboardingScreen({
     onBusyChange(value);
   }
   function fail(error: unknown) {
-    Alert.alert(
+    AppAlert.alert(
       t("onboarding.failed"),
       error instanceof Error ? error.message : t("onboarding.retry"),
     );
@@ -208,7 +208,7 @@ export function OnboardingScreen({
       if (getSetupStatus(imported.document) !== "ready")
         throw new Error(t("onboarding.missingProfile"));
       const confirmed = await new Promise<boolean>((resolve) =>
-        Alert.alert(
+        AppAlert.alert(
           t("backup.restoreTitle"),
           t("backup.restoreDescription"),
           [

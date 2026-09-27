@@ -16,22 +16,28 @@ public class PlutusLocalAIModule: Module {
     OnCreate { self.store.activate() }
     OnDestroy { self.speechTask?.cancel(); self.speechTask = nil }
 
-    AsyncFunction("isInstalledAsync") { () -> Bool in self.store.isInstalled() }
+    AsyncFunction("isInstalledAsync") { (modelKey: String) -> Bool in self.store.isInstalled(modelKey) }
 
-    AsyncFunction("getDownloadStateAsync") { (promise: Promise) in
-      self.store.state { state in promise.resolve(state.mapValues { $0 ?? NSNull() }) }
+    AsyncFunction("getDownloadStateAsync") { (modelKey: String, promise: Promise) in
+      self.store.state(modelKey) { state in promise.resolve(state.mapValues { $0 ?? NSNull() }) }
     }
 
-    AsyncFunction("downloadAsync") { (promise: Promise) in
-      self.store.start { error in
+    AsyncFunction("downloadAsync") { (modelKey: String, promise: Promise) in
+      self.store.start(modelKey) { error in
         if let error { promise.reject(error) } else { promise.resolve() }
       }
     }
 
-    AsyncFunction("getModelPathAsync") { () throws -> String in
-      guard self.store.isInstalled() else { throw NSError(domain: "PlutusLocalAI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model is not installed"]) }
+    AsyncFunction("deleteModelAsync") { (modelKey: String, promise: Promise) in
+      self.store.delete(modelKey) { error in
+        if let error { promise.reject(error) } else { promise.resolve() }
+      }
+    }
+
+    AsyncFunction("getModelPathAsync") { (modelKey: String) throws -> String in
+      guard self.store.isInstalled(modelKey) else { throw NSError(domain: "PlutusLocalAI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model is not installed"]) }
       try self.store.prepareRuntime()
-      return try self.store.modelFile().path
+      return try self.store.modelFile(modelKey).path
     }
 
     AsyncFunction("getAvailableMemoryAsync") { () -> Double in

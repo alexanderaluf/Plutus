@@ -7,6 +7,8 @@ export const en = {
   onboarding: onboardingEn,
   recurring: recurringEn,
   common: {
+    okay: "OK",
+    cancel: "Cancel",
     back: "Go back",
     beta: "Beta",
     comingSoon: "Coming soon",

@@ -1,8 +1,8 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   Switch,
   TextInput,
@@ -451,7 +451,7 @@ export function ChangeProposalCard({
       return;
     }
     // Irreversible cascades need a second, explicit decision in native UI.
-    Alert.alert(
+    AppAlert.alert(
       t("localAI.proposal.strongTitle", { name: proposal.entityName }),
       [
         ...proposal.warnings,

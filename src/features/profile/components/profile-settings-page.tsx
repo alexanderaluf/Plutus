@@ -1,7 +1,8 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import Animated, {
   Easing,
   FadeInDown,
@@ -48,7 +49,7 @@ function SettingsRow({
       onPress();
       return;
     }
-    Alert.alert(item.title, t("settings.unavailableMessage"));
+    AppAlert.alert(item.title, t("settings.unavailableMessage"));
   }
 
   return (

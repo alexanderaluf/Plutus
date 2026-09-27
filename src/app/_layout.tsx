@@ -37,6 +37,7 @@ import {
   AppBottomSheetPortalHost,
   AppBottomSheetPortalLayer,
 } from "@/shared/ui/app-bottom-sheet-portal";
+import { AppAlertHost } from "@/shared/ui/app-alert";
 
 const ROOT_BACKGROUNDS = {
   dark: "#000000",
@@ -140,6 +141,7 @@ export default function RootLayout() {
             </LocalDataProvider>
           </SQLiteProvider>
         </StorageBoundary>
+        <AppAlertHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

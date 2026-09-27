@@ -7,6 +7,8 @@ export const he = {
   onboarding: onboardingHe,
   recurring: recurringHe,
   common: {
+    okay: "אישור",
+    cancel: "ביטול",
     back: "חזרה",
     beta: "בטא",
     comingSoon: "בקרוב",

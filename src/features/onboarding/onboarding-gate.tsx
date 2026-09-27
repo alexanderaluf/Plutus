@@ -1,5 +1,6 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { useState, type PropsWithChildren } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 import { Button } from "heroui-native";
 import { useSQLiteContext } from "expo-sqlite";
 import { useTranslation } from "react-i18next";
@@ -32,7 +33,7 @@ export function OnboardingGate({ children }: PropsWithChildren) {
     );
 
   async function leaveDemo() {
-    Alert.alert(
+    AppAlert.alert(
       t("onboarding.demoExitTitle"),
       t("onboarding.demoExitDescription"),
       [
@@ -49,7 +50,7 @@ export function OnboardingGate({ children }: PropsWithChildren) {
                 return createDefaultBackup();
               });
             } catch {
-              Alert.alert(t("onboarding.failed"), t("onboarding.retry"));
+              AppAlert.alert(t("onboarding.failed"), t("onboarding.retry"));
             } finally {
               setLeaving(false);
             }

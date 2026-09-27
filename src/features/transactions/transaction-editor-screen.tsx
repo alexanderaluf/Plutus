@@ -1,3 +1,4 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import {
   TopSafeAreaGradient,
   BottomSafeAreaGradient,
@@ -13,7 +14,6 @@ import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Alert,
   Animated,
   Image,
   Keyboard,
@@ -650,7 +650,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           ? reason.message
           : t("transactions.form.receiptSelectError");
       setError(message);
-      Alert.alert(t("transactions.form.receiptSelectErrorTitle"), message);
+      AppAlert.alert(t("transactions.form.receiptSelectErrorTitle"), message);
     }
   }
 
@@ -803,7 +803,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       }
       const message = transactionSaveError(reason);
       setError(message);
-      Alert.alert(t("transactions.form.saveErrorTitle"), message);
+      AppAlert.alert(t("transactions.form.saveErrorTitle"), message);
     } finally {
       saving.current = false;
       setIsSaving(false);

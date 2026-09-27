@@ -12,13 +12,13 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Modal,
   Platform,
   Pressable,
   SectionList,
   StyleSheet,
   View,
 } from "react-native";
+import { AppModal } from "@/shared/ui/app-modal";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   SafeAreaProvider,
@@ -65,8 +65,9 @@ export function PickerModal({
   const { t } = useTranslation();
 
   return (
-    <Modal
+    <AppModal
       visible
+      presentation="fullScreen"
       animationType="slide"
       presentationStyle="fullScreen"
       statusBarTranslucent
@@ -102,7 +103,7 @@ export function PickerModal({
           </EdgeToEdgeLayout>
         </SafeAreaProvider>
       </GestureHandlerRootView>
-    </Modal>
+    </AppModal>
   );
 }
 

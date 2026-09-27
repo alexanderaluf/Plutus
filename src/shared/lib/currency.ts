@@ -21,11 +21,23 @@ function currencyDisplay(currency: string, signed: boolean) {
     style: "currency",
     currency,
   });
-  const symbol =
-    reference.formatToParts(0).find((part) => part.type === "currency")
-      ?.value ?? currency;
   const { minimumFractionDigits, maximumFractionDigits } =
     reference.resolvedOptions();
+  // Hermes on some iOS builds implements NumberFormat.format() but omits
+  // formatToParts(). Derive the symbol from the formatted zero in that case.
+  const parts = typeof reference.formatToParts === "function"
+    ? reference.formatToParts(0)
+    : null;
+  const symbol = parts?.find((part) => part.type === "currency")?.value
+    ?? (() => {
+      const zero = new Intl.NumberFormat(language, {
+        minimumFractionDigits,
+        maximumFractionDigits,
+      }).format(0);
+      return reference.format(0)
+        .replace(zero, "")
+        .replace(/[\s\u200e\u200f\u061c]/g, "") || currency;
+    })();
   const format = new Intl.NumberFormat(language, {
     minimumFractionDigits,
     maximumFractionDigits,

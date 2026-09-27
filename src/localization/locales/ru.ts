@@ -206,6 +206,8 @@ export const ru = {
   },
   common: {
     ...en.common,
+    okay: "ОК",
+    cancel: "Отмена",
     back: "Назад",
     beta: "Бета",
     comingSoon: "Скоро",

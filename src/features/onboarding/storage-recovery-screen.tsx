@@ -1,5 +1,6 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { Component, useState, type PropsWithChildren } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
@@ -69,10 +70,10 @@ export function StorageRecoveryScreen({
       const directory = await Directory.pickDirectoryAsync();
       const destination = new File(directory, archive.name);
       await archive.copy(destination, { overwrite: true });
-      Alert.alert("Recovery copy saved", `Saved as ${archive.name}.`);
+      AppAlert.alert("Recovery copy saved", `Saved as ${archive.name}.`);
     } catch (error) {
       if (!isPickerCancellation(error))
-        Alert.alert(
+        AppAlert.alert(
           "Recovery export",
           error instanceof Error
             ? error.message
@@ -95,7 +96,7 @@ export function StorageRecoveryScreen({
         dialogTitle: "Share recovery copy",
       });
     } catch (error) {
-      Alert.alert(
+      AppAlert.alert(
         "Recovery export",
         error instanceof Error
           ? error.message
@@ -108,7 +109,7 @@ export function StorageRecoveryScreen({
 
   function confirmReset() {
     if (busyAction) return;
-    Alert.alert(
+    AppAlert.alert(
       "Erase local data and start over?",
       "This permanently removes every profile, transaction, attachment, and local recovery snapshot. Save a recovery copy first if possible.",
       [
@@ -121,7 +122,7 @@ export function StorageRecoveryScreen({
             try {
               await onReset();
             } catch (error) {
-              Alert.alert(
+              AppAlert.alert(
                 "Could not reset local data",
                 error instanceof Error
                   ? error.message
