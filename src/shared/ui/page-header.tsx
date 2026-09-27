@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { Text, View } from "react-native";
+import { View } from "react-native";
+
+import { Text } from "@/shared/ui/app-text";
 
 type PageHeaderProps = {
   eyebrow: string;
@@ -17,7 +19,7 @@ export function PageHeader({
   return (
     <View className="flex-row items-start justify-between gap-4 pt-3">
       <View className="flex-1">
-        <Text className="font-manrope-medium text-xs uppercase tracking-widest text-[#70d2eb]">
+        <Text className="font-manrope-medium text-xs uppercase tracking-widest text-accent">
           {eyebrow}
         </Text>
         <Text className="mt-1 font-manrope-bold text-2xl text-foreground">

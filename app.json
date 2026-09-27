@@ -3,33 +3,42 @@
     "name": "Plutus",
     "slug": "plutus",
     "version": "1.0.0",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "orientation": "portrait",
-    "backgroundColor": "#000000",
-    "icon": "./assets/images/icon.png",
+    "backgroundColor": "#DCE7E0",
     "scheme": "plutus",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.plutus.budgettracker",
+      "icon": "./assets/plutus.icon",
+      "entitlements": {
+        "com.apple.developer.kernel.extended-virtual-addressing": true
+      },
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Allow Plutus to record voice messages for private on-device AI chat.",
+        "NSSpeechRecognitionUsageDescription": "Allow Plutus to transcribe voice messages on this device for private AI chat."
+      }
     },
     "android": {
-      "backgroundColor": "#000000",
+      "package": "com.plutus.budgettracker",
+      "backgroundColor": "#DCE7E0",
+      "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
+        "foregroundImage": "./assets/icons-android/adaptive-icon.png",
+        "backgroundColor": "#DCE7E0"
+      }
     },
     "plugins": [
       "expo-router",
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Plutus to select a profile photo.",
+          "photosPermission": "Allow Plutus to select profile photos and receipt images.",
           "cameraPermission": false,
-          "microphonePermission": false
+          "microphonePermission": "Allow Plutus to record voice messages for private on-device AI chat."
         }
       ],
       [
@@ -37,19 +46,75 @@
         {
           "enforceContrast": false,
           "hidden": false,
-          "style": "light"
+          "style": "dark"
         }
       ],
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#DCE7E0",
+          "image": "./assets/icons-android/splash-icon-light.png",
+          "imageWidth": 100,
+          "android": {
+            "image": "./assets/icons-android/splash-icon-light.png",
+            "dark": {
+              "image": "./assets/icons-android/splash-icon-dark.png"
+            }
+          }
         }
       ],
       "expo-sqlite",
-      "expo-sharing"
+      [
+        "expo-file-system",
+        {
+          "supportsOpeningDocumentsInPlace": true,
+          "enableFileSharing": true
+        }
+      ],
+      "expo-sharing",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-localization",
+        {
+          "supportsRTL": true,
+          "supportedLocales": {
+            "ios": [
+              "en",
+              "he",
+              "ru"
+            ],
+            "android": [
+              "en",
+              "he",
+              "ru"
+            ]
+          }
+        }
+      ],
+      "expo-background-task",
+      "expo-notifications",
+      "expo-image",
+      "expo-web-browser",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Plutus to record a voice message for private on-device AI chat.",
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "react-native-litert-lm",
+      "./plugins/with-local-ai-android-ndk",
+      "./plugins/with-local-ai-ios-build",
+      "expo-asset",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

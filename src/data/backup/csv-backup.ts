@@ -1,5 +1,7 @@
 import { parse, unparse } from "papaparse";
 
+import { i18n } from "@/localization/i18n";
+
 import type { JsonObject, JsonValue } from "../model/json";
 import { isJsonObject } from "../model/json";
 
@@ -82,14 +84,18 @@ export function transactionsFromCsv(csv: string): JsonObject[] {
   });
 
   if (result.errors.length > 0) {
-    throw new Error(`CSV could not be parsed: ${result.errors[0].message}`);
+    throw new Error(
+      i18n.t("errors.backup.csvParse", {
+        message: result.errors[0].message,
+      }),
+    );
   }
 
   const now = new Date().toISOString();
   return result.data.map((row, index) => {
     const amount = Number(row.amount);
     if (!row.name?.trim() || !Number.isFinite(amount)) {
-      throw new Error(`CSV row ${index + 2} must include a name and amount.`);
+      throw new Error(i18n.t("errors.backup.csvRow", { row: index + 2 }));
     }
 
     const extraValue = parseJsonValue(row.extra, {});

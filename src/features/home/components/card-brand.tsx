@@ -1,4 +1,6 @@
-import { Text, View } from "react-native";
+import { View } from "react-native";
+
+import { Text } from "@/shared/ui/app-text";
 
 type CardBrandProps = {
   brand: "visa" | "mastercard" | "amex";

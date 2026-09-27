@@ -6,28 +6,47 @@
 @source "./node_modules/heroui-native/lib";
 
 @theme {
-  --font-sans: "Manrope_400Regular";
-  --font-manrope-medium: "Manrope_500Medium";
-  --font-manrope-semibold: "Manrope_600SemiBold";
-  --font-manrope-bold: "Manrope_700Bold";
+  --font-sans: "Huninn_400Regular";
+  --font-manrope-medium: "Huninn_400Regular";
+  --font-manrope-semibold: "Huninn_400Regular";
+  --font-manrope-bold: "Huninn_400Regular";
 }
 
 @layer theme {
   :root {
     @variant light {
-      --background: oklch(0.975 0.008 95);
-      --foreground: oklch(0.19 0.025 255);
-      --surface: oklch(1 0 0);
-      --surface-secondary: oklch(0.955 0.012 95);
-      --surface-tertiary: oklch(0.925 0.018 95);
-      --muted: oklch(0.52 0.02 255);
-      --accent: oklch(0.55 0.155 156);
-      --accent-foreground: oklch(0.99 0.005 95);
-      --success: oklch(0.68 0.16 150);
-      --warning: oklch(0.78 0.15 75);
-      --danger: oklch(0.62 0.21 26);
-      --border: oklch(0.89 0.014 95);
-      --separator: oklch(0.83 0.018 95);
+      --background: #dce7e0;
+      --foreground: #17231c;
+      --surface: #edf3ef;
+      --surface-foreground: #17231c;
+      --surface-secondary: #cfddd4;
+      --surface-secondary-foreground: #22332a;
+      --surface-tertiary: #becfc4;
+      --surface-tertiary-foreground: #22332a;
+      --overlay: #f2f6f3;
+      --overlay-foreground: #17231c;
+      --backdrop: rgba(16, 34, 25, 0.28);
+      --muted: #566a5f;
+      --default: #c7d7cd;
+      --default-foreground: #2b4035;
+      --accent: #087e8b;
+      --accent-foreground: #ffffff;
+      --field-background: #e8f0eb;
+      --field-foreground: #17231c;
+      --field-placeholder: #65786d;
+      --field-border: #adc1b5;
+      --success: #21885b;
+      --success-foreground: #ffffff;
+      --warning: #a96900;
+      --warning-foreground: #ffffff;
+      --danger: #c7473b;
+      --danger-foreground: #ffffff;
+      --segment: #cfddd4;
+      --segment-foreground: #22332a;
+      --border: #adc1b5;
+      --separator: #9db3a6;
+      --focus: var(--accent);
+      --link: var(--accent);
       --radius: 0.5rem;
     }
 
@@ -35,21 +54,35 @@
       --background: #000000;
       --foreground: #f2f2f2;
       --surface: #171717;
+      --surface-foreground: #f2f2f2;
       --surface-secondary: #202020;
+      --surface-secondary-foreground: #f2f2f2;
       --surface-tertiary: #2d2d2d;
+      --surface-tertiary-foreground: #f2f2f2;
+      --overlay: #202020;
+      --overlay-foreground: #f2f2f2;
+      --backdrop: rgba(0, 0, 0, 0.62);
       --muted: #a3a3a3;
       --default: #292929;
       --default-foreground: #f2f2f2;
       --accent: #70d2eb;
       --accent-foreground: #083442;
-      --success: #70d2eb;
-      --success-foreground: #083442;
+      --field-background: #202020;
+      --field-foreground: #f2f2f2;
+      --field-placeholder: #a3a3a3;
+      --field-border: #303030;
+      --success: #78d6a3;
+      --success-foreground: #103a27;
       --warning: #f2c66d;
       --warning-foreground: #17120a;
       --danger: #ef8175;
       --danger-foreground: #220b08;
+      --segment: #202020;
+      --segment-foreground: #f2f2f2;
       --border: #303030;
       --separator: #3b3b3b;
+      --focus: var(--accent);
+      --link: var(--accent);
       --radius: 0.5rem;
     }
   }

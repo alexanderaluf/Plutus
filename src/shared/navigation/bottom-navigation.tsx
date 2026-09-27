@@ -1,24 +1,24 @@
+import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { BlurView } from "expo-blur";
-import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import {
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    type LayoutChangeEvent,
-} from "react-native";
+import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, {
-    Easing,
-    runOnJS,
-    useAnimatedStyle,
-    useSharedValue,
-    withSpring,
-    withTiming,
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import {
+  SlidingIndicator,
+  useIndicatorFrames,
+} from "@/shared/ui/sliding-indicator";
 
 import { navigationItems } from "./navigation-config";
 import type { TabId } from "./types";
@@ -29,8 +29,6 @@ type BottomNavigationProps = {
   onChange: (item: TabId) => void;
   onActionPress: (item: TabId) => void;
 };
-
-type TabFrame = { width: number; x: number };
 
 const actionIcons = {
   home: "plus-thick",
@@ -45,33 +43,28 @@ export function BottomNavigation({
   onChange,
   onActionPress,
 }: BottomNavigationProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const indicatorX = useSharedValue(0);
-  const indicatorWidth = useSharedValue(0);
+  const colors = useAppThemeColors();
+  const { frames: tabFrames, onItemLayout } = useIndicatorFrames<TabId>();
   const actionOpacity = useSharedValue(1);
   const actionTranslateY = useSharedValue(0);
-  const [isIndicatorReady, setIsIndicatorReady] = useState(false);
   const [displayedActionItem, setDisplayedActionItem] =
     useState<TabId>(activeItem);
-  const tabFrames = useRef<Partial<Record<TabId, TabFrame>>>({});
   const targetActionItem = useRef(activeItem);
   const actionIcon = actionIcons[displayedActionItem];
-
-  useEffect(() => {
-    const activeFrame = tabFrames.current[activeItem];
-    if (!activeFrame) return;
-
-    indicatorX.value = withSpring(activeFrame.x, {
-      damping: 20,
-      mass: 0.7,
-      stiffness: 210,
-    });
-    indicatorWidth.value = withSpring(activeFrame.width, {
-      damping: 22,
-      mass: 0.7,
-      stiffness: 230,
-    });
-  }, [activeItem, indicatorWidth, indicatorX]);
+  const tabLabels: Record<TabId, string> = {
+    home: t("navigation.tabs.home"),
+    accounts: t("navigation.tabs.accounts"),
+    reports: t("navigation.tabs.reports"),
+    search: t("navigation.tabs.search"),
+  };
+  const actionLabels: Record<TabId, string> = {
+    home: t("navigation.actions.addTransaction"),
+    accounts: t("navigation.actions.addAccount"),
+    reports: t("navigation.actions.filterReports"),
+    search: t("navigation.actions.openSearch"),
+  };
 
   useEffect(() => {
     if (activeItem === displayedActionItem) return;
@@ -106,22 +99,6 @@ export function BottomNavigation({
     });
   }
 
-  function handleTabLayout(item: TabId, event: LayoutChangeEvent) {
-    const { width, x } = event.nativeEvent.layout;
-    tabFrames.current[item] = { width, x };
-
-    if (item === activeItem) {
-      indicatorX.value = x;
-      indicatorWidth.value = width;
-      setIsIndicatorReady(true);
-    }
-  }
-
-  const indicatorStyle = useAnimatedStyle(() => ({
-    width: indicatorWidth.value,
-    transform: [{ translateX: indicatorX.value }],
-  }));
-
   const actionIconStyle = useAnimatedStyle(() => ({
     opacity: actionOpacity.value,
     transform: [{ translateY: actionTranslateY.value }],
@@ -129,17 +106,18 @@ export function BottomNavigation({
 
   return (
     <>
-      <LinearGradient
-        colors={["rgba(0, 0, 0, 0)", "rgba(0, 0, 0, 0.72)", "#000000"]}
-        end={{ x: 0.5, y: 1 }}
-        locations={[0, 0.58, 1]}
-        pointerEvents="none"
-        start={{ x: 0.5, y: 0 }}
-        style={[styles.bottomScrim, { height: 104 + insets.bottom }]}
-      />
+      <BottomSafeAreaGradient fadeHeight={128} />
 
       <View style={[styles.dock, { bottom: Math.max(insets.bottom, 10) }]}>
-        <View style={styles.navigationPill}>
+        <View
+          style={[
+            styles.navigationPill,
+            {
+              backgroundColor: colorWithAlpha(colors.surface, 0.78),
+              borderColor: colors.border,
+            },
+          ]}
+        >
           <BlurView
             blurMethod="dimezisBlurViewSdk31Plus"
             blurReductionFactor={3}
@@ -147,16 +125,17 @@ export function BottomNavigation({
             intensity={36}
             pointerEvents="none"
             style={StyleSheet.absoluteFill}
-            tint="dark"
+            tint={colors.isDark ? "dark" : "light"}
           />
 
           <View accessibilityRole="tablist" style={styles.tabsTrack}>
-            {isIndicatorReady ? (
-              <Animated.View
-                pointerEvents="none"
-                style={[styles.activeIndicator, indicatorStyle]}
-              />
-            ) : null}
+            <SlidingIndicator
+              frame={tabFrames[activeItem]}
+              style={[
+                styles.activeIndicator,
+                { backgroundColor: colorWithAlpha(colors.foreground, 0.14) },
+              ]}
+            />
 
             {navigationItems.map((item) => {
               const isActive = item.id === activeItem;
@@ -164,11 +143,11 @@ export function BottomNavigation({
               return (
                 <Pressable
                   key={item.id}
-                  accessibilityLabel={item.label}
+                  accessibilityLabel={tabLabels[item.id]}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: isActive }}
                   hitSlop={4}
-                  onLayout={(event) => handleTabLayout(item.id, event)}
+                  onLayout={(event) => onItemLayout(item.id, event)}
                   onPress={() => onChange(item.id)}
                   style={({ pressed }) => [
                     styles.tab,
@@ -176,7 +155,7 @@ export function BottomNavigation({
                   ]}
                 >
                   <FilledIcon
-                    color={isActive ? "#70d2eb" : "#ededed"}
+                    color={isActive ? colors.accent : colors.foreground}
                     name={item.icon}
                     size={24}
                     weight={
@@ -187,9 +166,12 @@ export function BottomNavigation({
                     allowFontScaling={false}
                     className="font-manrope-bold"
                     numberOfLines={1}
-                    style={[styles.label, isActive && styles.activeLabel]}
+                    style={[
+                      styles.label,
+                      { color: isActive ? colors.accent : colors.foreground },
+                    ]}
                   >
-                    {item.label}
+                    {tabLabels[item.id]}
                   </Text>
                 </Pressable>
               );
@@ -198,25 +180,18 @@ export function BottomNavigation({
         </View>
 
         <Pressable
-          accessibilityLabel={
-            activeItem === "home"
-              ? "Add transaction"
-              : activeItem === "accounts"
-                ? "Add account"
-                : activeItem === "reports"
-                  ? "Filter reports"
-                  : "Open search"
-          }
+          accessibilityLabel={actionLabels[activeItem]}
           accessibilityRole="button"
           onPress={() => onActionPress(activeItem)}
           style={({ pressed }) => [
             styles.actionButton,
+            { backgroundColor: colors.accent },
             pressed && styles.pressed,
           ]}
         >
           <Animated.View style={[styles.actionIcon, actionIconStyle]}>
             <FilledIcon
-              color="#073442"
+              color={colors.accentForeground}
               name={actionIcon}
               size={29}
               weight={
@@ -234,13 +209,6 @@ export function BottomNavigation({
 }
 
 const styles = StyleSheet.create({
-  bottomScrim: {
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    right: 0,
-    zIndex: 10,
-  },
   dock: {
     alignItems: "center",
     flexDirection: "row",
@@ -254,7 +222,6 @@ const styles = StyleSheet.create({
   navigationPill: {
     alignItems: "stretch",
     backgroundColor: "transparent",
-    borderColor: "#303030",
     borderRadius: 30,
     borderWidth: 1,
     flex: 1,
@@ -276,26 +243,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   activeIndicator: {
-    bottom: 0,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 26,
-    left: 0,
-    position: "absolute",
-    top: 0,
   },
   label: {
-    color: "#ededed",
     fontSize: 10.5,
     lineHeight: 14,
     textAlign: "center",
     width: "100%",
   },
-  activeLabel: {
-    color: "#70d2eb",
-  },
   actionButton: {
     alignItems: "center",
-    backgroundColor: "#70d2eb",
     borderRadius: 29,
     height: 58,
     justifyContent: "center",

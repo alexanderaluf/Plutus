@@ -1,5 +1,8 @@
 import { Dialog } from "heroui-native";
-import { Pressable, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Pressable, View } from "react-native";
+
+import { Text } from "@/shared/ui/app-text";
 
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
@@ -20,20 +23,22 @@ export function CurrencySelectorDialog({
   onOpenChange,
   onSelect,
 }: CurrencySelectorDialogProps) {
+  const { t } = useTranslation();
+
   return (
     <Dialog isOpen={isOpen} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay />
-        <Dialog.Content className="gap-4 border border-border bg-[#171717]">
+        <Dialog.Content className="gap-4 border border-border bg-overlay">
           <Dialog.Close variant="ghost">
-            <FilledIcon color="#f2f2f2" name="close" size={19} />
+            <FilledIcon name="close" size={19} />
           </Dialog.Close>
-          <View className="gap-1 pr-8">
+          <View className="gap-1 pe-8">
             <Dialog.Title className="font-manrope-bold">
-              Select currency
+              {t("currency.selectTitle")}
             </Dialog.Title>
             <Dialog.Description>
-              Choose the default currency for this profile.
+              {t("currency.selectDescription")}
             </Dialog.Description>
           </View>
 
@@ -44,19 +49,25 @@ export function CurrencySelectorDialog({
               return (
                 <Pressable
                   key={currency.code}
-                  className={`flex-row items-center bg-[#202020] px-4 py-3 ${
+                  accessibilityLabel={t("currency.optionAccessibility", {
+                    name: currency.name,
+                    code: currency.code,
+                  })}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isSelected }}
+                  className={`flex-row items-center bg-surface-secondary px-4 py-3 ${
                     index < currencies.length - 1
                       ? "border-b border-border"
                       : ""
                   }`}
                   onPress={() => onSelect(currency)}
                 >
-                  <View className="size-9 items-center justify-center rounded-full bg-[#70d2eb]">
-                    <Text className="font-manrope-bold text-base text-[#073442]">
+                  <View className="size-9 items-center justify-center rounded-full bg-accent">
+                    <Text className="font-manrope-bold text-base text-accent-foreground">
                       {currency.symbol}
                     </Text>
                   </View>
-                  <View className="ml-3 flex-1">
+                  <View className="ms-3 flex-1">
                     <Text className="font-manrope-semibold text-sm text-foreground">
                       {currency.name}
                     </Text>
@@ -65,7 +76,7 @@ export function CurrencySelectorDialog({
                     </Text>
                   </View>
                   {isSelected ? (
-                    <FilledIcon color="#70d2eb" name="check" size={20} />
+                    <FilledIcon name="check" size={20} tone="accent" />
                   ) : null}
                 </Pressable>
               );

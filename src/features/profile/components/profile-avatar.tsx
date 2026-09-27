@@ -1,4 +1,8 @@
 import { Avatar } from "heroui-native";
+import { useTranslation } from "react-i18next";
+
+import { colorForeground } from "@/shared/icons/colors";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 
 type ProfileAvatarProps = {
   initials: string;
@@ -10,18 +14,24 @@ type ProfileAvatarProps = {
 
 export function ProfileAvatar({
   initials,
-  color = "#70d2eb",
+  color,
   imageUri,
   size = "md",
   dimension,
 }: ProfileAvatarProps) {
+  const { t } = useTranslation();
+  const theme = useAppThemeColors();
+  const backgroundColor = imageUri
+    ? theme.surfaceTertiary
+    : (color ?? theme.accent);
+
   return (
     <Avatar
-      accessibilityLabel={`Profile ${initials}`}
+      accessibilityLabel={t("profile.avatarAccessibility", { initials })}
       color="accent"
       size={size}
       style={{
-        backgroundColor: color,
+        backgroundColor,
         ...(dimension ? { width: dimension, height: dimension } : null),
       }}
     >
@@ -29,7 +39,10 @@ export function ProfileAvatar({
       <Avatar.Fallback
         textProps={{
           allowFontScaling: false,
-          style: { color: "#073442", fontFamily: "Manrope_700Bold" },
+          style: {
+            color: colorForeground(backgroundColor),
+            fontFamily: "Huninn_400Regular",
+          },
         }}
       >
         {initials}

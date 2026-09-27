@@ -1,3 +1,5 @@
+import type { SavingsAccountSummary } from "@/data/model/savings-account";
+
 export type AccountKind = "bank" | "checking" | "savings" | "credit" | "cash";
 
 export type Account = {
@@ -25,6 +27,23 @@ export type Account = {
   expense: number;
   monthlyIncome: number;
   monthlyExpense: number;
+  cycleIncome: number;
+  cycleExpense: number;
+  savingsSummary: SavingsAccountSummary | null;
+  creditLimit: number | null;
+  currentSpent: number;
+  availableCredit: number | null;
+  isOverdraft: boolean;
+  overdraftAmount: number;
+  creditUtilization: number;
+  billingCycle: CreditCardBillingCycle | null;
+};
+
+export type CreditCardBillingCycle = {
+  cycleStart: Date;
+  cycleEnd: Date;
+  nextPaymentDate: Date;
+  daysUntilPayment: number;
 };
 
 export type AccountPeriod = "Daily" | "Weekly" | "Monthly" | "Yearly";

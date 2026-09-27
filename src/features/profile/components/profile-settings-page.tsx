@@ -1,13 +1,21 @@
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { AppAlert } from "@/shared/ui/app-alert";
+import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
+import { useRouter } from "expo-router";
+import { useTranslation } from "react-i18next";
+import { Pressable, View } from "react-native";
 import Animated, {
-    Easing,
-    FadeInDown,
-    ReduceMotion,
+  Easing,
+  FadeInDown,
+  ReduceMotion,
 } from "react-native-reanimated";
 
+import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
+import { CreditsFooter } from "./credits-footer";
+
 type SettingsItem = {
+  id: string;
   description: string;
   icon: FilledIconName;
   iconBackground: string;
@@ -15,95 +23,40 @@ type SettingsItem = {
   badge?: string;
 };
 
-const primarySettings: SettingsItem[] = [
-  {
-    title: "Customize",
-    description: "Theme, home layout, icons, and transaction rows",
-    icon: "tune",
-    iconBackground: "#f187ae",
-  },
-  {
-    title: "Formats & Suggestions",
-    description: "Customize transaction entry formats and autofill suggestions",
-    icon: "format-paint",
-    iconBackground: "#ffc975",
-  },
-  {
-    title: "Data & Backup",
-    description: "Local backups, cloud backup, imports, and history",
-    icon: "backup",
-    iconBackground: "#79bced",
-  },
-  {
-    title: "Security & Reminders",
-    description: "App lock, reminders, notifications, and vibration",
-    icon: "notifications-active",
-    iconBackground: "#9bd59b",
-  },
-  {
-    title: "Money & Tools",
-    description: "Budgets, goals, loans, rates, reports, and finance tools",
-    icon: "wallet",
-    iconBackground: "#ca79da",
-  },
-  {
-    title: "Support & App",
-    description: "Help, community, sharing, legal info, and app details",
-    icon: "help",
-    iconBackground: "#74c8c5",
-  },
-  {
-    title: "Labs",
-    description: "Experimental switches and platform-specific options",
-    icon: "experiment",
-    iconBackground: "#929ce3",
-  },
-];
+type ProfileSettingsPageProps = {
+  onOpenBackup: () => void;
+  onOpenConverter: () => void;
+  onOpenLanguage: () => void;
+  onOpenTheme: () => void;
+};
 
-const toolSettings: SettingsItem[] = [
-  {
-    title: "Exchange rates",
-    description: "Manage currency conversion rates",
-    icon: "currency-exchange",
-    iconBackground: "#cbbab5",
-  },
-  {
-    title: "Currency converter",
-    description: "Quickly convert between currencies using your saved rates",
-    icon: "swap-horizontal",
-    iconBackground: "#65c8d9",
-  },
-  {
-    title: "Receipt gallery",
-    description: "Browse photos and receipts attached to your transactions",
-    icon: "photo-library",
-    iconBackground: "#dbe971",
-  },
-  {
-    title: "Net worth",
-    description: "Combine your accounts, assets and loans into one total",
-    icon: "trending-up",
-    iconBackground: "#ff9c87",
-  },
-  {
-    title: "Achievements",
-    description: "Track your milestones and rewards",
-    icon: "trophy",
-    iconBackground: "#a88ce0",
-    badge: "Beta",
-  },
-];
+function SettingsRow({
+  item,
+  onPress,
+}: {
+  item: SettingsItem;
+  onPress?: () => void;
+}) {
+  const { t } = useTranslation();
+  const router = useRouter();
 
-function SettingsRow({ item }: { item: SettingsItem }) {
   function handlePress() {
-    Alert.alert(item.title, "This section is ready for its dedicated settings.");
+    if (item.id === "local-ai") {
+      router.push("/ai");
+      return;
+    }
+    if (onPress) {
+      onPress();
+      return;
+    }
+    AppAlert.alert(item.title, t("settings.unavailableMessage"));
   }
 
   return (
     <Pressable
       accessibilityHint={item.description}
       accessibilityRole="button"
-      className="min-h-[92px] flex-row items-center bg-[#171717] px-4 py-4"
+      className="min-h-[92px] flex-row items-center bg-surface px-4 py-4"
       onPress={handlePress}
       style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
     >
@@ -111,21 +64,17 @@ function SettingsRow({ item }: { item: SettingsItem }) {
         className="size-[48px] items-center justify-center rounded-[14px]"
         style={{ backgroundColor: item.iconBackground }}
       >
-        <FilledIcon
-          color="#090909"
-          name={item.icon}
-          size={27}
-        />
+        <FilledIcon color="#090909" name={item.icon} size={27} />
       </View>
 
-      <View className="ml-4 flex-1 justify-center">
+      <View className="ms-4 flex-1 justify-center">
         <View className="flex-row items-center gap-2">
           <Text className="font-manrope-semibold text-[17px] leading-6 text-foreground">
             {item.title}
           </Text>
           {item.badge ? (
-            <View className="rounded-full bg-[#243238] px-2 py-0.5">
-              <Text className="font-manrope-semibold text-[11px] text-[#70d2eb]">
+            <View className="rounded-full bg-accent/10 px-2 py-0.5">
+              <Text className="font-manrope-semibold text-[11px] text-accent">
                 {item.badge}
               </Text>
             </View>
@@ -139,11 +88,37 @@ function SettingsRow({ item }: { item: SettingsItem }) {
   );
 }
 
-function SettingsGroup({ items }: { items: SettingsItem[] }) {
+function SettingsGroup({
+  items,
+  onOpenBackup,
+  onOpenConverter,
+  onOpenLanguage,
+  onOpenTheme,
+}: {
+  items: SettingsItem[];
+  onOpenBackup?: () => void;
+  onOpenConverter?: () => void;
+  onOpenLanguage?: () => void;
+  onOpenTheme?: () => void;
+}) {
   return (
-    <View className="gap-0.5 overflow-hidden rounded-[28px] bg-black">
+    <View className="gap-0.5 overflow-hidden rounded-[28px] bg-background">
       {items.map((item) => (
-        <SettingsRow item={item} key={item.title} />
+        <SettingsRow
+          item={item}
+          key={item.id}
+          onPress={
+            item.id === "theme"
+              ? onOpenTheme
+              : item.id === "language"
+                ? onOpenLanguage
+                : item.id === "backup"
+                  ? onOpenBackup
+                  : item.id === "converter"
+                    ? onOpenConverter
+                    : undefined
+          }
+        />
       ))}
     </View>
   );
@@ -156,9 +131,112 @@ function createRevealAnimation(delay: number) {
     .reduceMotion(ReduceMotion.System);
 }
 
-export function ProfileSettingsPage() {
+export function ProfileSettingsPage({
+  onOpenBackup,
+  onOpenConverter,
+  onOpenLanguage,
+  onOpenTheme,
+}: ProfileSettingsPageProps) {
+  const { t } = useTranslation();
+  const primarySettings: SettingsItem[] = [
+    {
+      id: "local-ai",
+      title: t("localAI.title"),
+      description: t("localAI.privacyTitle"),
+      icon: "smart-toy",
+      iconBackground: "#a8b6f3",
+    },
+    {
+      id: "theme",
+      title: t("settings.items.theme.title"),
+      description: t("settings.items.theme.description"),
+      icon: "tune",
+      iconBackground: "#f187ae",
+    },
+    {
+      id: "language",
+      title: t("settings.items.language.title"),
+      description: t("settings.items.language.description"),
+      icon: "translate",
+      iconBackground: "#77c8bd",
+    },
+    {
+      id: "formats",
+      title: t("settings.items.formats.title"),
+      description: t("settings.items.formats.description"),
+      icon: "format-paint",
+      iconBackground: "#ffc975",
+    },
+    {
+      id: "backup",
+      title: t("settings.items.backup.title"),
+      description: t("settings.items.backup.description"),
+      icon: "backup",
+      iconBackground: "#79bced",
+    },
+    {
+      id: "security",
+      title: t("settings.items.security.title"),
+      description: t("settings.items.security.description"),
+      icon: "notifications-active",
+      iconBackground: "#9bd59b",
+    },
+    {
+      id: "money",
+      title: t("settings.items.money.title"),
+      description: t("settings.items.money.description"),
+      icon: "wallet",
+      iconBackground: "#ca79da",
+    },
+    {
+      id: "support",
+      title: t("settings.items.support.title"),
+      description: t("settings.items.support.description"),
+      icon: "help",
+      iconBackground: "#74c8c5",
+    },
+    {
+      id: "labs",
+      title: t("settings.items.labs.title"),
+      description: t("settings.items.labs.description"),
+      icon: "experiment",
+      iconBackground: "#929ce3",
+    },
+  ];
+  const toolSettings: SettingsItem[] = [
+    {
+      id: "converter",
+      title: t("settings.items.converter.title"),
+      description: t("settings.items.converter.description"),
+      icon: "swap-horizontal",
+      iconBackground: "#65c8d9",
+    },
+    {
+      id: "receipts",
+      title: t("settings.items.receipts.title"),
+      description: t("settings.items.receipts.description"),
+      icon: "photo-library",
+      iconBackground: "#dbe971",
+    },
+    {
+      id: "net-worth",
+      title: t("settings.items.netWorth.title"),
+      description: t("settings.items.netWorth.description"),
+      icon: "trending-up",
+      iconBackground: "#ff9c87",
+    },
+    {
+      id: "achievements",
+      title: t("settings.items.achievements.title"),
+      description: t("settings.items.achievements.description"),
+      icon: "trophy",
+      iconBackground: "#a88ce0",
+      badge: t("common.beta"),
+    },
+  ];
+
   return (
-    <ScrollView
+    <EdgeToEdgeScrollView
       className="flex-1"
       contentContainerClassName="gap-4 px-4 pt-3"
       contentContainerStyle={{ paddingBottom: 28 }}
@@ -166,11 +244,19 @@ export function ProfileSettingsPage() {
       showsVerticalScrollIndicator={false}
     >
       <Animated.View entering={createRevealAnimation(45)}>
-        <SettingsGroup items={primarySettings} />
+        <SettingsGroup
+          items={primarySettings}
+          onOpenBackup={onOpenBackup}
+          onOpenLanguage={onOpenLanguage}
+          onOpenTheme={onOpenTheme}
+        />
       </Animated.View>
       <Animated.View entering={createRevealAnimation(130)}>
-        <SettingsGroup items={toolSettings} />
+        <SettingsGroup items={toolSettings} onOpenConverter={onOpenConverter} />
       </Animated.View>
-    </ScrollView>
+      <Animated.View entering={createRevealAnimation(205)}>
+        <CreditsFooter />
+      </Animated.View>
+    </EdgeToEdgeScrollView>
   );
 }

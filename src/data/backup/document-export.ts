@@ -8,6 +8,9 @@ const MEDIA_KEYS = new Set([
   "attachment",
   "attachmentUri",
   "attachments",
+  "receipt",
+  "receiptPath",
+  "receiptAttachmentId",
 ]);
 
 function stripMedia(value: JsonValue, key?: string): JsonValue {

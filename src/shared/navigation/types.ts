@@ -5,7 +5,6 @@ export type TabHref = "/" | "/accounts" | "/reports" | "/search";
 
 export type TabItem = {
   id: TabId;
-  label: string;
   href: TabHref;
   icon: FilledIconName;
 };

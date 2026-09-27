@@ -1,81 +1,96 @@
-import { Card } from "heroui-native";
-import { Text, View } from "react-native";
+import { memo } from "react";
+import { useTranslation } from "react-i18next";
+import { View } from "react-native";
 
-import { formatSignedCurrency } from "@/shared/lib/currency";
-import { FilledIcon } from "@/shared/ui/filled-icon";
+import type { createTransactionProjector } from "@/data/selectors/transaction-selectors";
+import { IndexedTransactionRow } from "@/features/home/components/transaction-list";
+import type { Transaction } from "@/features/home/types";
+import { useAppDate } from "@/shared/lib/use-app-date";
+import { Text } from "@/shared/ui/app-text";
+import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
-import type { SearchResult } from "../types";
+import type { SearchRow } from "../search-rows";
 
-type SearchResultsProps = {
-  query: string;
-  results: SearchResult[];
-};
+type DayRow = Extract<SearchRow, { kind: "day" }>;
+type TransactionRow = Extract<SearchRow, { kind: "transaction" }>;
 
-export function SearchResults({ query, results }: SearchResultsProps) {
-  if (results.length === 0) {
-    return (
-      <Card className="items-center border border-border bg-surface px-6 py-10">
-        <FilledIcon color="#70d2eb" name="magnify-close" size={30} />
-        <Text className="mt-4 font-manrope-bold text-base text-foreground">
-          No matching transactions
-        </Text>
-        <Text className="mt-1 text-center font-sans text-sm text-muted">
-          Try a merchant, category, or account name.
-        </Text>
-      </Card>
-    );
-  }
+export const SearchDayHeader = memo(function SearchDayHeader({
+  row,
+  todayKey,
+  yesterdayKey,
+}: {
+  row: DayRow;
+  todayKey: string;
+  yesterdayKey: string;
+}) {
+  const { t, i18n } = useTranslation();
+  const { formatDate } = useAppDate();
+  const label = !row.date
+    ? t("common.unknownDate")
+    : row.dayKey === todayKey
+      ? t("search.results.today")
+      : row.dayKey === yesterdayKey
+        ? t("search.results.yesterday")
+        : `${row.date.toLocaleDateString(i18n.resolvedLanguage, {
+            weekday: "long",
+          })} · ${formatDate(row.date)}`;
 
   return (
-    <Card className="border border-border bg-surface p-0">
-      <Card.Header className="flex-row items-center justify-between px-5 pb-2 pt-5">
-        <Card.Title className="font-manrope-bold text-lg text-foreground">
-          {query ? "Results" : "All activity"}
-        </Card.Title>
-        <Text className="font-manrope-semibold text-xs text-muted">
-          {results.length} {results.length === 1 ? "match" : "matches"}
-        </Text>
-      </Card.Header>
+    <Text
+      accessibilityRole="header"
+      className="px-1 pb-2 pt-5 font-manrope-semibold text-xs text-muted"
+    >
+      {label}
+    </Text>
+  );
+});
 
-      <Card.Body className="px-5 pb-3">
-        {results.map((result, index) => {
-          return (
-            <View
-              key={result.id}
-              className={`flex-row items-center py-4 ${
-                index < results.length - 1 ? "border-b border-border" : ""
-              }`}
-            >
-              <View
-                className="size-11 items-center justify-center rounded-xl"
-                style={{ backgroundColor: result.iconBackground }}
-              >
-                <FilledIcon color={result.color} name={result.icon} size={21} />
-              </View>
-              <View className="ml-3 flex-1">
-                <Text className="font-manrope-bold text-sm text-foreground">
-                  {result.title}
-                </Text>
-                <Text className="mt-0.5 font-sans text-xs text-muted">
-                  {result.category} · {result.account}
-                </Text>
-              </View>
-              <View className="ml-2 items-end">
-                <Text
-                  className={`font-manrope-bold text-sm ${
-                    result.amount > 0 ? "text-[#70d2eb]" : "text-foreground"
-                  }`}
-                >
-                  {formatSignedCurrency(result.amount)}
-                </Text>
-                <Text className="mt-0.5 font-sans text-[10px] text-muted">
-                  {result.date}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-      </Card.Body>
-    </Card>
+/** One cell of a day card: corners and dividers depend on its position. */
+export const SearchTransactionCell = memo(function SearchTransactionCell({
+  row,
+  project,
+  onPress,
+}: {
+  row: TransactionRow;
+  project: ReturnType<typeof createTransactionProjector>;
+  onPress: (transaction: Transaction) => void;
+}) {
+  return (
+    <View
+      className={`bg-surface px-4 ${row.first ? "rounded-t-3xl pt-1" : ""} ${
+        row.last ? "rounded-b-3xl pb-1" : ""
+      }`}
+    >
+      <IndexedTransactionRow
+        entry={row.entry}
+        project={project}
+        showBorder={!row.last}
+        onPress={onPress}
+      />
+    </View>
+  );
+});
+
+export function SearchEmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: FilledIconName;
+  title: string;
+  description: string;
+}) {
+  return (
+    <View className="items-center rounded-[28px] bg-surface px-6 py-12">
+      <View className="size-16 items-center justify-center rounded-full bg-surface-secondary">
+        <FilledIcon name={icon} size={30} tone="accent" />
+      </View>
+      <Text className="mt-4 text-center font-manrope-bold text-base text-foreground">
+        {title}
+      </Text>
+      <Text className="mt-1 text-center font-sans text-sm leading-5 text-muted">
+        {description}
+      </Text>
+    </View>
   );
 }

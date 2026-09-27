@@ -1,5 +1,7 @@
 import { strFromU8, unzipSync } from "fflate";
 
+import { i18n } from "@/localization/i18n";
+
 import type { ArchivedAttachment } from "../attachments/attachment-store";
 import { parseBackupDocument } from "../model/normalize-backup";
 
@@ -10,7 +12,7 @@ const MAX_ARCHIVE_FILES = 5000;
 
 export function parseZipBackup(bytes: Uint8Array) {
   if (bytes.byteLength > MAX_ARCHIVE_BYTES) {
-    throw new Error("Backup ZIP is too large to restore on this device.");
+    throw new Error(i18n.t("errors.backup.zipTooLarge"));
   }
 
   let archiveFileCount = 0;
@@ -22,13 +24,11 @@ export function parseZipBackup(bytes: Uint8Array) {
       uncompressedSize += file.originalSize;
 
       if (archiveFileCount > MAX_ARCHIVE_FILES) {
-        validationError = new Error("Backup ZIP contains too many files.");
+        validationError = new Error(i18n.t("errors.backup.tooManyFiles"));
       } else if (file.originalSize > MAX_SINGLE_FILE_BYTES) {
-        validationError = new Error("Backup ZIP contains an oversized file.");
+        validationError = new Error(i18n.t("errors.backup.oversizedFile"));
       } else if (uncompressedSize > MAX_UNCOMPRESSED_BYTES) {
-        validationError = new Error(
-          "Backup ZIP expands beyond the restore limit.",
-        );
+        validationError = new Error(i18n.t("errors.backup.expandedTooLarge"));
       }
 
       return validationError === null;
@@ -39,7 +39,7 @@ export function parseZipBackup(bytes: Uint8Array) {
 
   const backupFile = files["backup.json"];
   if (!backupFile) {
-    throw new Error("Backup ZIP does not contain backup.json.");
+    throw new Error(i18n.t("errors.backup.missingDocument"));
   }
 
   const document = parseBackupDocument(strFromU8(backupFile));
@@ -54,7 +54,7 @@ export function parseZipBackup(bytes: Uint8Array) {
       relativePath.startsWith("/") ||
       relativePath.includes("\\")
     ) {
-      throw new Error("Backup ZIP contains an unsafe attachment path.");
+      throw new Error(i18n.t("errors.backup.unsafeAttachmentPath"));
     }
     attachments.push({ relativePath, data });
   }
@@ -65,7 +65,9 @@ export function parseZipBackup(bytes: Uint8Array) {
   );
   if (missingAttachment) {
     throw new Error(
-      `Backup ZIP is missing attachment ${missingAttachment.fileName}.`,
+      i18n.t("errors.backup.missingAttachment", {
+        fileName: missingAttachment.fileName,
+      }),
     );
   }
 

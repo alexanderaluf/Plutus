@@ -1,7 +1,9 @@
 import { Card, Chip } from "heroui-native";
-import { Pressable, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Pressable, View } from "react-native";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
 import type { Account } from "../types";
@@ -13,14 +15,24 @@ type AccountListProps = {
 };
 
 export function AccountList({ accounts, onAccountPress }: AccountListProps) {
+  const { formatCurrency } = useCurrencyFormat();
+  const { t } = useTranslation();
+  const kindLabels: Record<Account["kind"], string> = {
+    bank: t("accounts.common.kinds.bank"),
+    checking: t("accounts.common.kinds.checking"),
+    savings: t("accounts.common.kinds.savings"),
+    cash: t("accounts.common.kinds.cash"),
+    credit: t("accounts.common.kinds.credit"),
+  };
+
   return (
     <Card className="border border-border bg-surface p-0">
       <Card.Header className="px-5 pb-2 pt-5">
         <Card.Title className="font-manrope-bold text-lg text-foreground">
-          Your accounts
+          {t("accounts.list.yourAccounts")}
         </Card.Title>
         <Card.Description className="mt-1 font-sans text-muted">
-          Saved on this device
+          {t("accounts.list.savedOnDevice")}
         </Card.Description>
       </Card.Header>
 
@@ -58,8 +70,12 @@ export function AccountList({ accounts, onAccountPress }: AccountListProps) {
                 {(account.isDefault || account.isExcluded) && (
                   <Text className="mt-1 font-sans text-xs text-muted">
                     {[
-                      account.isDefault ? "Default" : "",
-                      account.isExcluded ? "Excluded from totals" : "",
+                      account.isDefault
+                        ? t("accounts.common.badges.default")
+                        : "",
+                      account.isExcluded
+                        ? t("accounts.common.badges.excludedFromTotals")
+                        : "",
                     ]
                       .filter(Boolean)
                       .join(" · ")}
@@ -79,10 +95,10 @@ export function AccountList({ accounts, onAccountPress }: AccountListProps) {
                 <View className="flex-row items-center gap-1">
                   <Chip color="default" size="sm" variant="tertiary">
                     <Chip.Label className="font-manrope-semibold capitalize">
-                      {account.kind}
+                      {kindLabels[account.kind]}
                     </Chip.Label>
                   </Chip>
-                  <FilledIcon color="#8e8e8e" name="chevron-right" size={18} />
+                  <FilledIcon name="chevron-right" size={18} tone="muted" />
                 </View>
               </View>
             </Pressable>
@@ -90,8 +106,7 @@ export function AccountList({ accounts, onAccountPress }: AccountListProps) {
         })}
         {!accounts.length && (
           <Text className="py-6 font-sans text-sm text-muted">
-            No accounts yet. Tap the add account button below to create your
-            first account.
+            {t("accounts.common.empty")}
           </Text>
         )}
       </Card.Body>

@@ -1,8 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Card } from "heroui-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, View } from "react-native";
 
-import { formatCurrency } from "@/shared/lib/currency";
+import { Text } from "@/shared/ui/app-text";
+
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
 import type { PaymentCardDetails } from "../types";
@@ -22,12 +25,18 @@ export function PaymentCard({
   isBalanceVisible,
   onToggleBalance,
 }: PaymentCardProps) {
+  const { formatCurrency } = useCurrencyFormat();
+  const { t } = useTranslation();
   const visibilityIcon = isBalanceVisible ? "eye" : "eye-off";
   const numberGroups = ["••••", "••••", "••••", card.lastFour];
+  const formattedBalance = formatCurrency(card.balance, currencyCode);
 
   return (
     <Card
-      accessibilityLabel={`${card.brand} card ending in ${card.lastFour}`}
+      accessibilityLabel={t("home.paymentCard.accessibility", {
+        brand: card.brand,
+        lastFour: card.lastFour,
+      })}
       className="overflow-hidden border border-white/10 bg-[#0f2a34] p-0"
       style={{ aspectRatio: 1.6 }}
     >
@@ -69,11 +78,13 @@ export function PaymentCard({
           <View className="items-end">
             <View className="flex-row items-center gap-2">
               <Text className="font-sans text-[9px] uppercase tracking-[2px] text-white/50">
-                Balance
+                {t("home.paymentCard.balance")}
               </Text>
               <Pressable
                 accessibilityLabel={
-                  isBalanceVisible ? "Hide card balance" : "Show card balance"
+                  isBalanceVisible
+                    ? t("home.paymentCard.hideBalance")
+                    : t("home.paymentCard.showBalance")
                 }
                 accessibilityRole="button"
                 hitSlop={10}
@@ -86,14 +97,19 @@ export function PaymentCard({
             <Text
               accessibilityLabel={
                 isBalanceVisible
-                  ? `Available balance ${card.balance < 0 ? "minus " : ""}${formatCurrency(card.balance, currencyCode)}`
-                  : "Available balance hidden"
+                  ? t(
+                      card.balance < 0
+                        ? "home.paymentCard.availableBalanceNegative"
+                        : "home.paymentCard.availableBalance",
+                      { amount: formattedBalance },
+                    )
+                  : t("home.paymentCard.availableBalanceHidden")
               }
               className="mt-0.5 font-manrope-bold text-[26px] text-white"
               style={{ lineHeight: 31 }}
             >
               {isBalanceVisible
-                ? `${card.balance < 0 ? "−" : ""}${formatCurrency(card.balance, currencyCode)}`
+                ? `${card.balance < 0 ? "−" : ""}${formattedBalance}`
                 : "••••••"}
             </Text>
           </View>
@@ -114,7 +130,7 @@ export function PaymentCard({
           <View className="flex-row items-end justify-between">
             <View className="flex-1 pr-4">
               <Text className="font-sans text-[8px] uppercase tracking-[2px] text-white/45">
-                Cardholder
+                {t("home.paymentCard.cardholder")}
               </Text>
               <Text
                 className="mt-1 font-manrope-semibold text-[12px] uppercase tracking-[1.5px] text-white"
@@ -126,7 +142,7 @@ export function PaymentCard({
 
             <View className="items-end">
               <Text className="font-sans text-[8px] uppercase tracking-[2px] text-white/45">
-                Valid thru
+                {t("home.paymentCard.validThru")}
               </Text>
               <Text className="mt-1 font-manrope-semibold text-[12px] tracking-[1.5px] text-white">
                 {card.expiresAt}

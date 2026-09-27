@@ -1,6 +1,11 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { Button } from "heroui-native";
+import type { TFunction } from "i18next";
 import { useState } from "react";
-import { Alert, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Pressable, View } from "react-native";
+
+import { Text } from "@/shared/ui/app-text";
 
 import {
     commitStagedAttachments,
@@ -8,64 +13,92 @@ import {
     stageAttachments,
 } from "@/data/attachments/attachment-store";
 import {
-    exportBackup,
-    pickAndImportBackup,
-    type BackupFormat,
-    type ImportedBackup,
+  pickAndImportBackup,
+  saveBackup,
+  shareBackup,
+  type BackupFormat,
+  type ImportedBackup,
 } from "@/data/backup/backup-service";
 import { useLocalData } from "@/data/local-data-provider";
 import { BACKUP_COLLECTION_KEYS } from "@/data/model/backup-document";
 import { cloneBackupDocument } from "@/data/model/normalize-backup";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
-type BackupActionProps = {
+type FormatOptionProps = {
+  format: BackupFormat;
   icon: FilledIconName;
   label: string;
   description: string;
   isDisabled: boolean;
-  onPress: () => void;
+  isSelected: boolean;
+  onSelect: (format: BackupFormat) => void;
 };
 
-function BackupAction({
+function FormatOption({
+  format,
   icon,
   label,
   description,
   isDisabled,
-  onPress,
-}: BackupActionProps) {
+  isSelected,
+  onSelect,
+}: FormatOptionProps) {
   return (
-    <Button
-      isDisabled={isDisabled}
-      variant="ghost"
-      className="h-auto w-full justify-start rounded-none px-1 py-3"
-      onPress={onPress}
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ checked: isSelected, disabled: isDisabled }}
+      disabled={isDisabled}
+      className={`min-h-[82px] flex-row items-center rounded-lg border px-4 py-3 ${
+        isSelected
+          ? "border-accent bg-accent/10"
+          : "border-border bg-surface-secondary"
+      }`}
+      onPress={() => onSelect(format)}
+      style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
     >
-      <FilledIcon color="#70d2eb" name={icon} size={21} />
-      <View className="ml-3 flex-1 items-start">
-        <Button.Label className="font-manrope-semibold text-sm text-foreground">
+      <FilledIcon name={icon} size={21} tone="accent" />
+      <View className="ms-3 flex-1 items-start">
+        <Text className="font-manrope-semibold text-sm text-foreground">
           {label}
-        </Button.Label>
+        </Text>
         <Text className="mt-0.5 font-sans text-[11px] text-muted">
           {description}
         </Text>
       </View>
-    </Button>
+      <View
+        className={`size-5 items-center justify-center rounded-full border ${
+          isSelected ? "border-accent bg-accent" : "border-muted"
+        }`}
+      >
+        {isSelected ? (
+          <FilledIcon name="check" size={14} tone="accent-foreground" />
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
-function confirmRestore(imported: ImportedBackup) {
+function confirmRestore(imported: ImportedBackup, t: TFunction) {
   return new Promise<boolean>((resolve) => {
     if (imported.format === "csv") {
       resolve(true);
       return;
     }
 
-    Alert.alert(
-      "Restore backup?",
-      "Current local records will be replaced by this backup. This cannot be undone unless you export a backup first.",
+    AppAlert.alert(
+      t("backup.restoreTitle"),
+      t("backup.restoreDescription"),
       [
-        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-        { text: "Restore", style: "destructive", onPress: () => resolve(true) },
+        {
+          text: t("backup.cancel"),
+          style: "cancel",
+          onPress: () => resolve(false),
+        },
+        {
+          text: t("backup.restore"),
+          style: "destructive",
+          onPress: () => resolve(true),
+        },
       ],
       { cancelable: true, onDismiss: () => resolve(false) },
     );
@@ -73,29 +106,48 @@ function confirmRestore(imported: ImportedBackup) {
 }
 
 export function BackupManagement() {
+  const { t, i18n } = useTranslation();
   const { document, replaceDocument } = useLocalData();
-  const [isBusy, setIsBusy] = useState(false);
+  const [selectedFormat, setSelectedFormat] =
+    useState<BackupFormat>("zip");
+  const [busyAction, setBusyAction] = useState<
+    "save" | "share" | "restore" | null
+  >(null);
+  const isBusy = busyAction !== null;
   const recordCount = BACKUP_COLLECTION_KEYS.reduce(
     (total, collection) => total + document[collection].length,
     0,
   );
+  const numberFormatter = new Intl.NumberFormat(
+    i18n.resolvedLanguage ?? i18n.language,
+  );
 
-  async function handleExport(format: BackupFormat) {
+  async function handleExport(destination: "save" | "share") {
     try {
-      setIsBusy(true);
-      await exportBackup(document, format);
+      setBusyAction(destination);
+      if (destination === "save") {
+        const saved = await saveBackup(document, selectedFormat);
+        if (saved) {
+          AppAlert.alert(t("backup.savedTitle"), t("backup.savedDescription"));
+        }
+      } else {
+        await shareBackup(document, selectedFormat);
+      }
     } catch (error) {
-      Alert.alert("Export failed", getErrorMessage(error));
+      AppAlert.alert(
+        t("backup.exportFailed"),
+        getErrorMessage(error, t("backup.unexpectedError")),
+      );
     } finally {
-      setIsBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function handleImport() {
     try {
-      setIsBusy(true);
+      setBusyAction("restore");
       const imported = await pickAndImportBackup(document);
-      if (!imported || !(await confirmRestore(imported))) return;
+      if (!imported || !(await confirmRestore(imported, t))) return;
 
       if (imported.format !== "csv") {
         const previousDocument = cloneBackupDocument(document);
@@ -111,67 +163,126 @@ export function BackupManagement() {
       } else {
         await replaceDocument(imported.document);
       }
-      Alert.alert(
-        "Import complete",
+      AppAlert.alert(
+        t("backup.importComplete"),
         imported.format === "csv"
-          ? "Transactions were merged into local storage."
-          : "The local backup was restored successfully.",
+          ? t("backup.csvImportComplete")
+          : t("backup.restoreComplete"),
       );
     } catch (error) {
-      Alert.alert("Import failed", getErrorMessage(error));
+      AppAlert.alert(
+        t("backup.importFailed"),
+        getErrorMessage(error, t("backup.unexpectedError")),
+      );
     } finally {
-      setIsBusy(false);
+      setBusyAction(null);
     }
   }
 
   return (
-    <View className="gap-1 rounded-lg border border-border bg-[#202020] px-3">
-      <View className="flex-row items-center justify-between px-1 py-2">
+    <View className="gap-4">
+      <View className="flex-row items-center justify-between rounded-lg border border-border bg-surface-secondary px-4 py-3">
         <Text className="font-sans text-[11px] text-muted">
-          {recordCount} local records
+          {t("backup.localRecords", {
+            count: recordCount,
+            formattedCount: numberFormatter.format(recordCount),
+          })}
         </Text>
         <Text className="font-sans text-[11px] text-muted">
-          {document._local.attachments.length} attachments
+          {t("backup.attachments", {
+            count: document._local.attachments.length,
+            formattedCount: numberFormatter.format(
+              document._local.attachments.length,
+            ),
+          })}
         </Text>
       </View>
+
+      <View accessibilityRole="radiogroup" className="gap-2">
+        <FormatOption
+          description={t("backup.actions.exportZipDescription")}
+          format="zip"
+          icon="folder-zip"
+          isDisabled={isBusy}
+          isSelected={selectedFormat === "zip"}
+          label={t("backup.formats.zip")}
+          onSelect={setSelectedFormat}
+        />
+        <FormatOption
+          description={t("backup.actions.exportJsonDescription")}
+          format="json"
+          icon="code-json"
+          isDisabled={isBusy}
+          isSelected={selectedFormat === "json"}
+          label={t("backup.formats.json")}
+          onSelect={setSelectedFormat}
+        />
+        <FormatOption
+          description={t("backup.actions.exportCsvDescription")}
+          format="csv"
+          icon="file-delimited"
+          isDisabled={isBusy}
+          isSelected={selectedFormat === "csv"}
+          label={t("backup.formats.csv")}
+          onSelect={setSelectedFormat}
+        />
+      </View>
+
+      <View className="flex-row gap-3">
+        <Button
+          className="flex-1"
+          isDisabled={isBusy}
+          onPress={() => void handleExport("save")}
+          variant="primary"
+        >
+          <FilledIcon name="save" size={19} tone="accent-foreground" />
+          <Button.Label>
+            {busyAction === "save"
+              ? t("backup.actions.saving")
+              : t("backup.actions.save")}
+          </Button.Label>
+        </Button>
+        <Button
+          className="flex-1"
+          isDisabled={isBusy}
+          onPress={() => void handleExport("share")}
+          variant="secondary"
+        >
+          <FilledIcon name="arrow-top-right" size={19} />
+          <Button.Label>
+            {busyAction === "share"
+              ? t("backup.actions.sharing")
+              : t("backup.actions.share")}
+          </Button.Label>
+        </Button>
+      </View>
+
       <View className="h-px bg-border" />
-      <BackupAction
-        description="Full restorable backup with images and attachments"
-        icon="folder-zip"
-        isDisabled={isBusy}
-        label="Export ZIP backup"
-        onPress={() => handleExport("zip")}
-      />
-      <View className="h-px bg-border" />
-      <BackupAction
-        description="Restorable records without media files"
-        icon="code-json"
-        isDisabled={isBusy}
-        label="Export JSON backup"
-        onPress={() => handleExport("json")}
-      />
-      <View className="h-px bg-border" />
-      <BackupAction
-        description="Spreadsheet-friendly transaction export"
-        icon="file-delimited"
-        isDisabled={isBusy}
-        label="Export transactions CSV"
-        onPress={() => handleExport("csv")}
-      />
-      <View className="h-px bg-border" />
-      <BackupAction
-        description="Restore ZIP/JSON or merge a transaction CSV"
-        icon="database-import"
-        isDisabled={isBusy}
-        label="Import data"
-        onPress={handleImport}
-      />
+
+      <View className="gap-2">
+        <Text className="font-manrope-bold text-base text-foreground">
+          {t("backup.restoreSection")}
+        </Text>
+        <Text className="font-sans text-xs leading-5 text-muted">
+          {t("backup.actions.importDescription")}
+        </Text>
+        <Button
+          isDisabled={isBusy}
+          onPress={() => void handleImport()}
+          variant="outline"
+        >
+          <FilledIcon name="database-import" size={20} tone="accent" />
+          <Button.Label>
+            {busyAction === "restore"
+              ? t("backup.actions.restoring")
+              : t("backup.actions.import")}
+          </Button.Label>
+        </Button>
+      </View>
     </View>
   );
 }
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "An unexpected error occurred.";
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }

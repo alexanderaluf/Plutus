@@ -1,3 +1,5 @@
+import { i18n } from "@/localization/i18n";
+
 import { currencyCode, parseExchangeRates, type ExchangeRateSnapshot } from "../model/exchange-rate";
 
 /** Only a public currency code is sent; no balances or user records leave the device. */
@@ -18,5 +20,5 @@ export async function getExchangeRates(base: string, fetcher: typeof fetch = fet
       // Network, timeout, and invalid payload failures all try the next source.
     } finally { clearTimeout(timeout); }
   }
-  throw new Error("Unable to retrieve exchange rates. Check your connection and try again.");
+  throw new Error(i18n.t("errors.exchangeRates.unavailable"));
 }

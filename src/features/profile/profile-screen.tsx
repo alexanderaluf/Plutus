@@ -1,52 +1,108 @@
+import {
+  EdgeToEdgeLayout,
+  EdgeToEdgeScrollView,
+} from "@/shared/ui/edge-to-edge-layout";
+import { Text } from "@/shared/ui/app-text";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useState } from "react";
-import { BackHandler, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { BackHandler } from "react-native";
 import Animated, { Easing, FadeInDown } from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
 
+import { CurrencyConverterPage } from "./components/currency-converter-page";
+import { DataBackupPage } from "./components/data-backup-page";
+import { LanguageSettingsPage } from "./components/language-settings-page";
 import { ProfileAvatar } from "./components/profile-avatar";
 import { ProfileHubActions } from "./components/profile-hub-actions";
 import { ProfileScreenHeader } from "./components/profile-screen-header";
 import { ProfileSettingsPage } from "./components/profile-settings-page";
+import { ThemeSettingsPage } from "./components/theme-settings-page";
 import { useProfiles } from "./profile-provider";
 
+type ProfilePage =
+  "profile" | "settings" | "theme" | "language" | "backup" | "converter";
+
 export function ProfileScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const { activeProfile } = useProfiles();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [page, setPage] = useState<ProfilePage>("profile");
   const firstName = activeProfile.name.split(" ")[0];
 
   useEffect(() => {
-    if (!isSettingsOpen) return;
+    if (page === "profile") return;
 
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
       () => {
-        setIsSettingsOpen(false);
+        setPage((current) =>
+          current === "theme" ||
+          current === "language" ||
+          current === "backup" ||
+          current === "converter"
+            ? "settings"
+            : "profile",
+        );
         return true;
       },
     );
 
     return () => subscription.remove();
-  }, [isSettingsOpen]);
+  }, [page]);
+
+  const title =
+    page === "theme"
+      ? t("settings.items.theme.title")
+      : page === "language"
+        ? t("language.title")
+        : page === "backup"
+          ? t("settings.items.backup.title")
+          : page === "converter"
+            ? t("settings.items.converter.title")
+            : page === "settings"
+              ? t("settings.title")
+              : t("profile.accountsTitle");
 
   return (
-    <SafeAreaView
-      edges={["top", "bottom"]}
-      style={{ flex: 1, backgroundColor: "#000000" }}
+    <EdgeToEdgeLayout
+      header={
+        <ProfileScreenHeader
+          onBack={
+            page === "theme" ||
+            page === "language" ||
+            page === "backup" ||
+            page === "converter"
+              ? () => setPage("settings")
+              : page === "settings"
+                ? () => setPage("profile")
+                : undefined
+          }
+          title={title}
+        />
+      }
     >
-      <ProfileScreenHeader
-        onBack={
-          isSettingsOpen ? () => setIsSettingsOpen(false) : undefined
-        }
-        title={isSettingsOpen ? "Settings" : "Accounts"}
-      />
-
-      {isSettingsOpen ? (
-        <ProfileSettingsPage />
+      {page === "settings" ? (
+        <ProfileSettingsPage
+          onOpenBackup={() => setPage("backup")}
+          onOpenConverter={() => setPage("converter")}
+          onOpenLanguage={() => setPage("language")}
+          onOpenTheme={() => setPage("theme")}
+        />
+      ) : page === "theme" ? (
+        <ThemeSettingsPage />
+      ) : page === "language" ? (
+        <LanguageSettingsPage />
+      ) : page === "backup" ? (
+        <DataBackupPage />
+      ) : page === "converter" ? (
+        <CurrencyConverterPage />
       ) : (
-        <View className="flex-1 px-5 pt-10">
+        <EdgeToEdgeScrollView
+          className="flex-1"
+          contentContainerClassName="px-5"
+          contentContainerStyle={{ paddingTop: 40 }}
+        >
           <Animated.View
             entering={FadeInDown.duration(380).easing(
               Easing.bezier(0.22, 1, 0.36, 1),
@@ -54,14 +110,15 @@ export function ProfileScreen() {
             className="items-center"
           >
             <ProfileAvatar
-              color={activeProfile.imageUri ? "#242424" : activeProfile.color}
+              // Left undefined so the avatar follows the theme accent color.
+              color={activeProfile.imageUri ? "#242424" : undefined}
               dimension={84}
               imageUri={activeProfile.imageUri}
               initials={activeProfile.initials}
               size="lg"
             />
             <Text className="mt-6 font-manrope-bold text-[26px] text-foreground">
-              Hi, {firstName}!
+              {t("profile.greeting", { name: firstName })}
             </Text>
             <Button
               size="md"
@@ -74,8 +131,8 @@ export function ProfileScreen() {
                 })
               }
             >
-              <Button.Label className="font-manrope-bold text-[#70d2eb]">
-                Manage your profile
+              <Button.Label className="font-manrope-bold text-accent">
+                {t("profile.manageProfile")}
               </Button.Label>
             </Button>
           </Animated.View>
@@ -94,11 +151,11 @@ export function ProfileScreen() {
                 })
               }
               onManageProfiles={() => router.push("/profile/manage")}
-              onSettings={() => setIsSettingsOpen(true)}
+              onSettings={() => setPage("settings")}
             />
           </Animated.View>
-        </View>
+        </EdgeToEdgeScrollView>
       )}
-    </SafeAreaView>
+    </EdgeToEdgeLayout>
   );
 }

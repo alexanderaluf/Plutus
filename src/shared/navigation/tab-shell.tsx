@@ -1,22 +1,19 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import { BlurTargetView } from "expo-blur";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { useRef } from "react";
-import { Alert, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
+import { View } from "react-native";
 
 import { BottomNavigation } from "./bottom-navigation";
 import { getTabFromPathname, navigationItems } from "./navigation-config";
 import type { TabId } from "./types";
-
-const actionLabels: Record<TabId, string> = {
-  home: "Add transaction",
-  accounts: "Add account",
-  reports: "Filter reports",
-  search: "Search transactions",
-};
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 
 export function TabShell() {
+  const { t } = useTranslation();
   const blurTargetRef = useRef<View | null>(null);
+  const theme = useAppThemeColors();
   const pathname = usePathname();
   const router = useRouter();
   const activeItem = getTabFromPathname(pathname);
@@ -30,19 +27,23 @@ export function TabShell() {
   }
 
   function handleActionPress(tabId: TabId) {
+    if (tabId === "home") {
+      router.push("/transactions/create");
+      return;
+    }
     if (tabId === "accounts") {
       router.push("/accounts/create");
       return;
     }
-    const action = actionLabels[tabId];
-    Alert.alert(action, `${action} is ready for its dedicated flow.`);
+    const action =
+      tabId === "reports"
+        ? t("navigation.actions.filterReports")
+        : t("navigation.actions.searchTransactions");
+    AppAlert.alert(action, t("navigation.actions.unavailable", { action }));
   }
 
   return (
-    <SafeAreaView
-      edges={["top"]}
-      style={{ flex: 1, backgroundColor: "#000000" }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={{ flex: 1 }}>
         <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
           <Slot />
@@ -55,6 +56,6 @@ export function TabShell() {
           onChange={handleTabChange}
         />
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

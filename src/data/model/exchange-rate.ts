@@ -1,3 +1,5 @@
+import { i18n } from "@/localization/i18n";
+
 import type { BackupDocument } from "./backup-document";
 import { isJsonObject, type JsonObject } from "./json";
 
@@ -15,7 +17,8 @@ export interface ExchangeRateSnapshot extends JsonObject {
 
 export function currencyCode(value: string) {
   const code = value.toUpperCase();
-  if (!/^[A-Z]{3}$/.test(code)) throw new Error("Invalid currency code.");
+  if (!/^[A-Z]{3}$/.test(code))
+    throw new Error(i18n.t("errors.exchangeRates.invalidCurrency"));
   return code;
 }
 
@@ -26,18 +29,19 @@ export function parseExchangeRates(value: unknown, base: string, now: Date): Exc
       !Number.isFinite(Date.parse(value.date)) ||
       new Date(value.date).toISOString().slice(0, 10) !== value.date ||
       value.date > now.toISOString().slice(0, 10))
-    throw new Error("The exchange-rate response has an invalid date.");
+    throw new Error(i18n.t("errors.exchangeRates.invalidDate"));
   const table = value[code.toLowerCase()];
-  if (!isJsonObject(table)) throw new Error("The exchange-rate response is missing its base currency.");
+  if (!isJsonObject(table))
+    throw new Error(i18n.t("errors.exchangeRates.missingBase"));
   const rates: Record<string, number> = {};
   for (const [key, rate] of Object.entries(table)) {
     if (!/^[a-z]{3}$/i.test(key)) continue;
     if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0)
-      throw new Error("The exchange-rate response contains an invalid rate.");
+      throw new Error(i18n.t("errors.exchangeRates.invalidRate"));
     rates[key.toUpperCase()] = rate;
   }
   if (rates[code] !== 1 || Object.keys(rates).length < 2)
-    throw new Error("The exchange-rate response is incomplete.");
+    throw new Error(i18n.t("errors.exchangeRates.incomplete"));
   const timestamp = now.toISOString();
   return { uuid: `daily-rates:${code}:${value.date}`, source: RATE_SOURCE, base: code,
     date: value.date, rates, fetchedAt: timestamp, createdAt: timestamp, updatedAt: timestamp };
@@ -54,13 +58,13 @@ export function readRateSnapshot(record: JsonObject): ExchangeRateSnapshot | nul
 /** Currency-aware rounding retains negative balances and zero-decimal currencies. */
 export function convertCurrency(amount: number, rate: number, target: string): number {
   if (!Number.isFinite(amount) || !Number.isFinite(rate) || rate <= 0)
-    throw new Error("Cannot convert an invalid amount or exchange rate.");
+    throw new Error(i18n.t("errors.exchangeRates.invalidConversion"));
   const digits = new Intl.NumberFormat("en", { style: "currency", currency: currencyCode(target) })
     .resolvedOptions().maximumFractionDigits ?? 2;
   const factor = 10 ** digits;
   const scaled = Math.abs(amount * rate) * factor;
   if (!Number.isFinite(scaled) || scaled > Number.MAX_SAFE_INTEGER || Math.abs(amount * rate) > Number.MAX_SAFE_INTEGER / 1000)
-    throw new Error("The converted balance is too large to store accurately.");
+    throw new Error(i18n.t("errors.exchangeRates.convertedTooLarge"));
   return Math.sign(amount) * Math.round(scaled + Number.EPSILON * scaled) / factor;
 }
 

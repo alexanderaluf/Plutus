@@ -1,6 +1,9 @@
+import { AppAlert } from "@/shared/ui/app-alert";
 import * as ImagePicker from "expo-image-picker";
-import { Alert, Pressable, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Pressable, View } from "react-native";
 
+import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
 import { ProfileAvatar } from "./profile-avatar";
@@ -18,13 +21,15 @@ export function ProfilePhotoPicker({
   initials,
   onChange,
 }: ProfilePhotoPickerProps) {
+  const { t } = useTranslation();
+
   async function pickPhoto() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
-        "Photo access required",
-        "Allow photo access to choose a profile picture.",
+      AppAlert.alert(
+        t("profile.photo.permissionTitle"),
+        t("profile.photo.permissionMessage"),
       );
       return;
     }
@@ -44,7 +49,7 @@ export function ProfilePhotoPicker({
   return (
     <View className="items-center">
       <Pressable
-        accessibilityLabel="Choose profile photo"
+        accessibilityLabel={t("profile.photo.accessibilityLabel")}
         accessibilityRole="button"
         onPress={pickPhoto}
         style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
@@ -56,12 +61,15 @@ export function ProfilePhotoPicker({
           initials={initials}
           size="lg"
         />
-        <View className="absolute bottom-0 right-0 size-9 items-center justify-center rounded-full border-4 border-black bg-[#70d2eb]">
-          <FilledIcon color="#073442" name="camera" size={19} />
+        <View
+          className="absolute bottom-0 size-9 items-center justify-center rounded-full border-4 border-background bg-accent"
+          style={{ end: 0 }}
+        >
+          <FilledIcon name="camera" size={19} tone="accent-foreground" />
         </View>
       </Pressable>
       <Text className="mt-4 font-sans text-sm text-muted">
-        Profile photo (optional)
+        {t("profile.photo.optional")}
       </Text>
     </View>
   );

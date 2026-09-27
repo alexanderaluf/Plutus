@@ -1,7 +1,11 @@
 import { Button, Dialog } from "heroui-native";
-import { ScrollView, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { ScrollView, View } from "react-native";
+
+import { Text } from "@/shared/ui/app-text";
 
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import { useLocalData } from "@/data/local-data-provider";
 
 import { BackupManagement } from "./backup-management";
 
@@ -10,34 +14,50 @@ type ProfileSettingsDialogProps = {
   onOpenChange: (isOpen: boolean) => void;
 };
 
-const settings = [
-  { label: "Appearance", value: "Dark", icon: "weather-night" },
-  { label: "Default currency", value: "USD", icon: "currency-usd" },
-  { label: "Notifications", value: "Enabled", icon: "bell" },
-] satisfies Array<{ label: string; value: string; icon: FilledIconName }>;
-
 export function ProfileSettingsDialog({
   isOpen,
   onOpenChange,
 }: ProfileSettingsDialogProps) {
+  const { t } = useTranslation();
+  const { document } = useLocalData();
+  const settings = [
+    {
+      label: t("theme.appearance"),
+      value: t(`theme.modes.${document._local.themeMode}`),
+      icon: "weather-night",
+    },
+    {
+      label: t("settings.dialog.defaultCurrency"),
+      value: "USD",
+      icon: "currency-usd",
+    },
+    {
+      label: t("settings.dialog.notifications"),
+      value: t("settings.dialog.enabled"),
+      icon: "bell",
+    },
+  ] satisfies Array<{ label: string; value: string; icon: FilledIconName }>;
+
   return (
     <Dialog isOpen={isOpen} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay />
-        <Dialog.Content className="max-h-[85%] gap-5 border border-border bg-[#171717]">
+        <Dialog.Content className="max-h-[85%] gap-5 border border-border bg-overlay">
           <Dialog.Close variant="ghost">
-            <FilledIcon color="#f2f2f2" name="close" size={19} />
+            <FilledIcon name="close" size={19} />
           </Dialog.Close>
-          <View className="gap-1.5 pr-8">
-            <Dialog.Title className="font-manrope-bold">Settings</Dialog.Title>
+          <View className="gap-1.5 pe-8">
+            <Dialog.Title className="font-manrope-bold">
+              {t("settings.title")}
+            </Dialog.Title>
             <Dialog.Description>
-              Preferences for the active profile.
+              {t("settings.dialog.description")}
             </Dialog.Description>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false}>
             <View className="gap-5 pb-1">
-              <View className="overflow-hidden rounded-lg border border-border bg-[#202020]">
+              <View className="overflow-hidden rounded-lg border border-border bg-surface-secondary">
                 {settings.map((setting, index) => {
                   return (
                     <View
@@ -49,11 +69,11 @@ export function ProfileSettingsDialog({
                       }`}
                     >
                       <FilledIcon
-                        color="#70d2eb"
                         name={setting.icon}
                         size={20}
+                        tone="accent"
                       />
-                      <Text className="ml-3 flex-1 font-manrope-semibold text-sm text-foreground">
+                      <Text className="ms-3 flex-1 font-manrope-semibold text-sm text-foreground">
                         {setting.label}
                       </Text>
                       <Text className="font-sans text-xs text-muted">
@@ -66,11 +86,10 @@ export function ProfileSettingsDialog({
 
               <View className="gap-2">
                 <Text className="font-manrope-bold text-sm text-foreground">
-                  Data & backup
+                  {t("settings.items.backup.title")}
                 </Text>
                 <Text className="font-sans text-xs leading-4 text-muted">
-                  Records remain on this device. Export backups whenever you
-                  want a portable copy.
+                  {t("settings.dialog.backupDescription")}
                 </Text>
                 <BackupManagement />
               </View>
@@ -78,7 +97,7 @@ export function ProfileSettingsDialog({
           </ScrollView>
 
           <Button onPress={() => onOpenChange(false)}>
-            <Button.Label>Done</Button.Label>
+            <Button.Label>{t("settings.dialog.done")}</Button.Label>
           </Button>
         </Dialog.Content>
       </Dialog.Portal>

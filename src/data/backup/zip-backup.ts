@@ -1,5 +1,7 @@
 import { strToU8, zipSync } from "fflate";
 
+import { i18n } from "@/localization/i18n";
+
 import { getAttachmentFile } from "../attachments/attachment-store";
 import type { BackupDocument } from "../model/backup-document";
 import { createFullBackupDocument } from "./document-export";
@@ -16,7 +18,9 @@ export async function createZipBackup(document: BackupDocument) {
     const file = getAttachmentFile(attachment.relativePath);
     if (!file.exists) {
       throw new Error(
-        `Attachment ${attachment.fileName} is missing from local storage.`,
+        i18n.t("errors.backup.missingLocalAttachment", {
+          fileName: attachment.fileName,
+        }),
       );
     }
     files[`attachments/${attachment.relativePath}`] = await file.bytes();

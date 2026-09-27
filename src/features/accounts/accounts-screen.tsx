@@ -1,13 +1,22 @@
 import { useLocalData } from "@/data/local-data-provider";
 import { selectAccounts } from "@/data/selectors/document-selectors";
+import { useLocalDayClock } from "@/shared/lib/use-local-day-clock";
 import { useRouter } from "expo-router";
-import { FlatList, Pressable, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Animated as NativeAnimated, Pressable, View } from "react-native";
 import Animated, {
-    Easing,
-    FadeInDown,
-    ReduceMotion,
+  Easing,
+  FadeInDown,
+  ReduceMotion,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Text } from "@/shared/ui/app-text";
+import {
+  CollapsingHeader,
+  CollapsingHeaderSpacer,
+  useCollapsingHeader,
+} from "@/shared/ui/collapsing-header";
+import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 import { AccountCard } from "./components/account-card";
 
 const INITIAL_DELAY = 45;
@@ -22,83 +31,88 @@ function reveal(index: number) {
 }
 
 export function AccountsScreen() {
+  const { t } = useTranslation();
   const { document, paymentError, reconcileCardPayments } = useLocalData();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const accounts = selectAccounts(document);
+  const now = useLocalDayClock();
+  const accounts = selectAccounts(document, now);
+  const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
-    <FlatList
-      data={accounts}
-      keyExtractor={(item) => item.id}
-      contentContainerStyle={{
-        paddingHorizontal: 16,
-        paddingBottom: 110 + insets.bottom,
-        gap: 14,
-      }}
-      showsVerticalScrollIndicator={false}
-      ListHeaderComponent={
-        <View>
-          <Animated.View
-            entering={reveal(0)}
-            className="flex-row items-center justify-between px-1 py-4"
-          >
-            <Text
-              accessibilityRole="header"
-              className="font-manrope-bold text-2xl text-foreground"
+    <View style={{ flex: 1 }}>
+      <NativeAnimated.FlatList
+        data={accounts}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingBottom: 110 + insets.bottom,
+          gap: 14,
+        }}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View>
+            <CollapsingHeaderSpacer height={TAB_HEADER_HEIGHT} />
+            {/* With the list gap, 28pt below the header like Home. */}
+            <View className="h-3.5" />
+            {!!paymentError && (
+              <Animated.View
+                entering={reveal(1)}
+                className="mb-3 gap-3 rounded-2xl bg-surface p-4"
+              >
+                <Text accessibilityRole="alert" className="text-danger">
+                  {paymentError}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    void reconcileCardPayments();
+                  }}
+                >
+                  <Text className="font-manrope-bold text-accent">
+                    {t("accounts.list.retryCardPayments")}
+                  </Text>
+                </Pressable>
+              </Animated.View>
+            )}
+          </View>
+        }
+        renderItem={({ item, index }) => (
+          <Animated.View entering={reveal(index + (paymentError ? 2 : 1))}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("accounts.list.viewDetails", {
+                name: item.name,
+              })}
+              onPress={() =>
+                router.push({
+                  pathname: "/accounts/[id]",
+                  params: { id: item.id },
+                })
+              }
+              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
             >
-              Accounts
-            </Text>
-            <Text className="font-sans text-sm text-muted">
-              {accounts.length} accounts
+              <AccountCard account={item} showDetails={false} />
+            </Pressable>
+          </Animated.View>
+        )}
+        ListEmptyComponent={
+          <Animated.View entering={reveal(1)}>
+            <Text className="px-4 py-12 text-center font-sans text-base text-muted">
+              {t("accounts.common.empty")}
             </Text>
           </Animated.View>
-          {!!paymentError && (
-            <Animated.View
-              entering={reveal(1)}
-              className="mb-3 gap-3 rounded-2xl bg-surface p-4"
-            >
-              <Text accessibilityRole="alert" className="text-danger">
-                {paymentError}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  void reconcileCardPayments();
-                }}
-              >
-                <Text className="font-manrope-bold text-accent">
-                  Retry card payments
-                </Text>
-              </Pressable>
-            </Animated.View>
-          )}
-        </View>
-      }
-      renderItem={({ item, index }) => (
-        <Animated.View entering={reveal(index + (paymentError ? 2 : 1))}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`View ${item.name} account details`}
-            onPress={() =>
-              router.push({
-                pathname: "/accounts/[id]",
-                params: { id: item.id },
-              })
-            }
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-          >
-            <AccountCard account={item} />
-          </Pressable>
-        </Animated.View>
-      )}
-      ListEmptyComponent={
-        <Animated.View entering={reveal(1)}>
-          <Text className="px-4 py-12 text-center font-sans text-base text-muted">
-            No accounts yet. Tap the add account button below to create your
-            first account.
-          </Text>
-        </Animated.View>
-      }
-    />
+        }
+      />
+      <CollapsingHeader
+        height={TAB_HEADER_HEIGHT}
+        horizontalInset={20}
+        headerHidden={headerHidden}
+        scrollY={scrollY}
+      >
+        <TabHeader />
+      </CollapsingHeader>
+    </View>
   );
 }

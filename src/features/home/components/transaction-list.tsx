@@ -1,72 +1,97 @@
-import { Text, View } from "react-native";
+import { memo, useMemo } from "react";
+import type {
+  createTransactionProjector,
+  TransactionIndexEntry,
+} from "@/data/selectors/transaction-selectors";
+import { Pressable, View } from "react-native";
 
-import { formatSignedCurrency } from "@/shared/lib/currency";
+import { Text } from "@/shared/ui/app-text";
+import { useTranslation } from "react-i18next";
+
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { colorWithAlpha } from "@/shared/theme/app-theme";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import { RecordIcon } from "@/shared/ui/record-icon";
 
-import type { Transaction, TransactionTone } from "../types";
+import type { Transaction } from "../types";
 
-const toneStyles: Record<
-  TransactionTone,
-  { backgroundColor: string; foregroundColor: string }
-> = {
-  emerald: { backgroundColor: "#17343c", foregroundColor: "#70d2eb" },
-  blue: { backgroundColor: "#1b2e45", foregroundColor: "#82b8ee" },
-  amber: { backgroundColor: "#3b3020", foregroundColor: "#f2c66d" },
-  rose: { backgroundColor: "#402523", foregroundColor: "#ef8175" },
+type TransactionRowProps = {
+  transaction: Transaction;
+  showBorder: boolean;
+  onPress: (transaction: Transaction) => void;
 };
 
-type TransactionListProps = {
-  transactions: Transaction[];
-};
-
-export function TransactionList({ transactions }: TransactionListProps) {
+export const TransactionRow = memo(function TransactionRow({
+  transaction,
+  showBorder,
+  onPress,
+}: TransactionRowProps) {
+  const { formatSignedCurrency } = useCurrencyFormat();
+  const { t } = useTranslation();
+  const directionIcon: FilledIconName =
+    transaction.amount >= 0 ? "arrow-bottom-left" : "arrow-top-right";
   return (
-    <View className="gap-1">
-      {transactions.map((transaction, index) => {
-        const directionIcon: FilledIconName =
-          transaction.amount >= 0 ? "arrow-bottom-left" : "arrow-top-right";
-        const tone = toneStyles[transaction.tone];
-
-        return (
-          <View
-            key={transaction.id}
-            className={`flex-row items-center py-3 ${
-              index < transactions.length - 1 ? "border-b border-border" : ""
-            }`}
-          >
-            <View
-              className="size-11 items-center justify-center rounded-xl"
-              style={{ backgroundColor: tone.backgroundColor }}
-            >
-              <FilledIcon
-                color={tone.foregroundColor}
-                name={transaction.icon}
-                size={21}
-              />
-            </View>
-
-            <View className="ml-3 flex-1 gap-0.5">
-              <Text className="font-manrope-semibold text-[14px] text-foreground">
-                {transaction.merchant}
-              </Text>
-              <Text className="font-sans text-xs text-muted">
-                {transaction.category} · {transaction.occurredAt}
-              </Text>
-            </View>
-
-            <View className="ml-2 items-end gap-1">
-              <Text
-                className={`font-manrope-bold text-[14px] ${
-                  transaction.amount >= 0 ? "text-[#70d2eb]" : "text-foreground"
-                }`}
-              >
-                {formatSignedCurrency(transaction.amount)}
-              </Text>
-              <FilledIcon color="#8e8e8e" name={directionIcon} size={15} />
-            </View>
-          </View>
-        );
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t("home.transactionAccessibility", {
+        merchant: transaction.merchant,
       })}
-    </View>
+      onPress={() => onPress(transaction)}
+      className={`flex-row items-center py-3 ${
+        showBorder ? "border-b border-border" : ""
+      }`}
+      style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
+    >
+      <View
+        className="size-11 items-center justify-center rounded-xl"
+        style={{
+          backgroundColor: colorWithAlpha(transaction.color, 0.18),
+        }}
+      >
+        <RecordIcon
+          color={transaction.color}
+          name={transaction.icon}
+          pathData={transaction.iconPath}
+          size={21}
+        />
+      </View>
+
+      <View className="ms-3 flex-1 gap-0.5">
+        <Text className="font-manrope-semibold text-[14px] text-foreground">
+          {transaction.merchant}
+        </Text>
+        <Text className="font-sans text-xs text-muted">
+          {transaction.category} · {transaction.occurredAt}
+        </Text>
+      </View>
+
+      <View className="ms-2 items-end gap-1">
+        <Text
+          className={`font-manrope-bold text-[14px] ${
+            transaction.amount >= 0 ? "text-accent" : "text-foreground"
+          }`}
+        >
+          {formatSignedCurrency(transaction.amount, transaction.currencyCode)}
+        </Text>
+        <FilledIcon name={directionIcon} size={15} tone="muted" />
+      </View>
+    </Pressable>
   );
-}
+});
+
+type IndexedTransactionRowProps = {
+  entry: TransactionIndexEntry;
+  project: ReturnType<typeof createTransactionProjector>;
+  showBorder: boolean;
+  onPress: (transaction: Transaction) => void;
+};
+
+// The view model lives only for the lifetime of a virtualized row.
+export const IndexedTransactionRow = memo(function IndexedTransactionRow({
+  entry,
+  project,
+  ...props
+}: IndexedTransactionRowProps) {
+  const transaction = useMemo(() => project(entry), [entry, project]);
+  return <TransactionRow transaction={transaction} {...props} />;
+});
