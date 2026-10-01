@@ -28,7 +28,7 @@ type CreditLink = {
 const developerLinks: CreditLink[] = [
   {
     accessibilityLabelKey: "credits.links.alexanderAluf.accessibilityLabel",
-    image: require("../../../../assets/icons-android/alexander-aluf.jpg"),
+    image: require("../../../../assets/alexander-aluf.jpg"),
     subtitleKey: "credits.links.alexanderAluf.subtitle",
     titleKey: "credits.links.alexanderAluf.title",
     url: "https://github.com/alexanderaluf",
@@ -45,7 +45,7 @@ const developerLinks: CreditLink[] = [
 
 const collaborationLink: CreditLink = {
   accessibilityLabelKey: "credits.links.projectAurora.accessibilityLabel",
-  image: require("../../../../assets/icons-android/project-aurora.jpg"),
+  image: require("../../../../assets/project-aurora.jpg"),
   subtitleKey: "credits.links.projectAurora.subtitle",
   titleKey: "credits.links.projectAurora.title",
   url: "https://github.com/ReWhite-io",

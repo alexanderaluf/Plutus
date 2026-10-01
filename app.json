@@ -2,6 +2,7 @@
   "expo": {
     "name": "Plutus",
     "slug": "plutus",
+    "owner": "project-aurora-ltd",
     "version": "1.0.0",
     "platforms": [
       "ios",
@@ -19,7 +20,13 @@
       },
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Plutus to record voice messages for private on-device AI chat.",
-        "NSSpeechRecognitionUsageDescription": "Allow Plutus to transcribe voice messages on this device for private AI chat."
+        "NSSpeechRecognitionUsageDescription": "Allow Plutus to transcribe voice messages on this device for private AI chat.",
+        "ExpoLocalization_supportsRTL": true,
+        "CFBundleLocalizations": [
+          "en",
+          "he",
+          "ru"
+        ]
       }
     },
     "android": {
@@ -29,7 +36,14 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons-android/adaptive-icon.png",
         "backgroundColor": "#DCE7E0"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -119,6 +133,17 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "expo-navigation-bar": {
+        "enforceContrast": false,
+        "style": "dark",
+        "hidden": false
+      },
+      "eas": {
+        "projectId": "af452427-6c13-41c5-b1c7-1e188d3ee54a"
+      }
     }
   }
 }
