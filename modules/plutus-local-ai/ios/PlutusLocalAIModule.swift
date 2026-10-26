@@ -5,6 +5,7 @@ import Speech
 import Darwin
 
 public class PlutusLocalAIModule: Module {
+  private let chatGPT = ChatGPTSecurity()
   private var recorder: AVAudioRecorder?
   private var recordingURL: URL?
   private var speechTask: SFSpeechRecognitionTask?
@@ -13,8 +14,25 @@ public class PlutusLocalAIModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PlutusLocalAI")
 
+    AsyncFunction("readChatGPTVaultAsync") { () throws -> String? in try self.chatGPT.read() }
+    AsyncFunction("writeChatGPTVaultAsync") { (value: String) throws in try self.chatGPT.write(value) }
+    AsyncFunction("chatGPTRandomAsync") { () throws -> String in try self.chatGPT.random() }
+    AsyncFunction("chatGPTDigestAsync") { (value: String) -> String in self.chatGPT.digest(value) }
+    AsyncFunction("startChatGPTCallbackAsync") { (state: String, returnUrl: String, title: String, message: String, action: String) throws -> String in
+      try self.chatGPT.start(state, returnUrl, title, message, action)
+    }
+    AsyncFunction("waitChatGPTCallbackAsync") { (promise: Promise) in
+      DispatchQueue.global(qos: .userInitiated).async {
+        do { promise.resolve(try self.chatGPT.waitForCallback()) } catch { promise.reject(error) }
+      }
+    }
+    AsyncFunction("cancelChatGPTCallbackAsync") { self.chatGPT.cancel() }
+    AsyncFunction("verifyChatGPTIdentityAsync") { (token: String, jwks: String, clientId: String, nonce: String) throws -> [String: String] in
+      try self.chatGPT.verify(token, jwks, clientId, nonce)
+    }
+
     OnCreate { self.store.activate() }
-    OnDestroy { self.speechTask?.cancel(); self.speechTask = nil }
+    OnDestroy { self.speechTask?.cancel(); self.speechTask = nil; self.chatGPT.cancel() }
 
     AsyncFunction("isInstalledAsync") { (modelKey: String) -> Bool in self.store.isInstalled(modelKey) }
 

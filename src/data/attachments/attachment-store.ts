@@ -93,7 +93,7 @@ export function stageAttachments(attachments: ArchivedAttachment[]) {
 
     const file = new File(staging, attachment.relativePath);
     file.create({ intermediates: true, overwrite: true });
-    file.write(attachment.data);
+    file.writeSync(attachment.data);
   }
 
   return staging;

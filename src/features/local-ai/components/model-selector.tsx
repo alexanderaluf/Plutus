@@ -9,14 +9,17 @@ import { BottomSheet, BottomSheetScrollView } from "@/shared/ui/app-bottom-sheet
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import { GeminiLogo } from "@/shared/ui/gemini-logo";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 
 import { LOCAL_AI_MODELS, type LocalAIModelKey } from "../model-compatibility-policy";
+import { ChatGPTConnectionCard } from "./chatgpt-connection-card";
+import { useChatGPT } from "../use-chatgpt";
 
 const KEYS: LocalAIModelKey[] = ["E2B", "E4B"];
 
 export function ModelSelector({
-  selected, states, busy, error, onClose, onSelect, onDownload, onDelete,
+  selected, states, busy, error, onClose, onSelect, onDownload, onDelete, onSelectChatGPT,
 }: {
   selected: LocalAIModelKey;
   states: Partial<Record<LocalAIModelKey, LocalAIDownloadState>>;
@@ -26,9 +29,11 @@ export function ModelSelector({
   onSelect: (key: LocalAIModelKey) => Promise<void>;
   onDownload: (key: LocalAIModelKey) => Promise<void>;
   onDelete: (key: LocalAIModelKey) => Promise<void>;
+  onSelectChatGPT: (slug: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const colors = useAppThemeColors();
+  const chatgpt = useChatGPT();
   const insets = useSafeAreaInsets();
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
   const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
@@ -139,7 +144,7 @@ export function ModelSelector({
                     <View className="flex-row items-center gap-3">
                       <View className="size-12 items-center justify-center rounded-2xl"
                         style={{ backgroundColor: colorWithAlpha(colors.accent, 0.13) }}>
-                        <FilledIcon name="smart-toy" size={24} color={colors.accent} />
+                        <GeminiLogo size={26} />
                       </View>
                       <View className="flex-1">
                         <Text className="font-manrope-bold text-lg text-foreground">{LOCAL_AI_MODELS[info].name}</Text>
@@ -162,13 +167,15 @@ export function ModelSelector({
                 </View>
               ) : (
                 <View className="gap-4">
+                  <ChatGPTConnectionCard compact busy={busy || pending} onSelect={(slug) => run(() => onSelectChatGPT(slug), true)} />
+                  <Text className="px-1 font-manrope-bold text-foreground">{t("localAI.settings.localModels")}</Text>
                   <Text className="px-1 leading-5 text-muted">{t("localAI.chooseModelHint")}</Text>
                   {KEYS.map((key) => {
                     const model = LOCAL_AI_MODELS[key];
                     const state = states[key];
                     const installed = state?.status === "installed";
                     const active = state?.status === "downloading" || state?.status === "paused" || state?.status === "verifying";
-                    const selectedInstalled = selected === key && installed;
+                    const selectedInstalled = !chatgpt.selectedModel && selected === key && installed;
                     const progress = Math.round(((state?.received ?? 0) / (state?.total || 1)) * 100);
                     return (
                       <View key={key} className="overflow-hidden rounded-3xl border bg-surface-secondary"
@@ -182,7 +189,7 @@ export function ModelSelector({
                             className="min-h-14 flex-1 flex-row items-center gap-3">
                             <View className="size-11 items-center justify-center rounded-2xl"
                               style={{ backgroundColor: colorWithAlpha(colors.accent, 0.12) }}>
-                              <FilledIcon name="smart-toy" size={22} color={colors.accent} />
+                              <GeminiLogo size={24} />
                             </View>
                             <View className="flex-1 gap-0.5">
                               <Text className="font-manrope-bold text-[16px] text-foreground">{model.name}</Text>

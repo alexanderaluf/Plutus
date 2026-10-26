@@ -66,8 +66,9 @@ The canonical collections are listed in `BACKUP_COLLECTION_KEYS` and include:
 
 `transactions`, `accounts`, `assets`, `budgets`, `billSplitters`,
 `billParticipants`, `categories`, `goals`, `loans`, `recurrings`, `labels`,
-`places`, `peoples`, `users`, `images`, `templates`, `achievements`, and
-`exchangeRates`.
+`places`, `peoples`, `users`, `images`, `templates`, `achievements`,
+`exchangeRates`, and `aiChats` (saved ChatGPT conversations; see
+`src/data/model/ai-chat-record.ts`).
 
 Imported backups may contain additional top-level fields. Preserve unknown
 fields and collections. Never rebuild an imported document by selecting only

@@ -30,7 +30,7 @@ import { IconPicker } from "@/shared/ui/icon-picker";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
-import { uuid } from "expo-modules-core";
+import { uuid } from "expo";
 import { useRouter } from "expo-router";
 import { Button, Switch as HeroSwitch } from "heroui-native";
 import { BottomSheet } from "@/shared/ui/app-bottom-sheet";

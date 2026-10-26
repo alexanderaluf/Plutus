@@ -7,7 +7,7 @@ import {
     tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useEffect, useRef, useState } from "react";
-import { View, useWindowDimensions } from "react-native";
+import { View, useWindowDimensions, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { DateTimePopoverProps } from "./date-time-popover.types";
@@ -38,7 +38,7 @@ export function DateTimePopover({
   onDismiss,
   onValueChange,
 }: DateTimePopoverProps) {
-  const anchorRef = useRef<View>(null);
+  const anchorRef = useRef<ViewInstance>(null);
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const pickerLayout = PICKER_LAYOUT[mode];

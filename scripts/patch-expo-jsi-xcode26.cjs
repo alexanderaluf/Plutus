@@ -2,7 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 // Expo SDK 57's JSI C++ header annotates constructors as retained return
-// values. Xcode 26.2 rejects that invalid Swift interop annotation.
+// values. Xcode 26.2 rejects that invalid Swift interop annotation. SDK 58
+// moved the annotation to static factories, so this is a no-op there.
 const header = path.join(
   __dirname,
   "../node_modules/expo-modules-jsi/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h",
@@ -50,15 +51,16 @@ const promise = path.join(
 );
 if (fs.existsSync(promise)) {
   const before = fs.readFileSync(promise, "utf8");
-  const after = before
-    .replace("private let longLivedState = LongLivedState()", "private let longLivedState: LongLivedState")
-    .replace(
-      "self.runtime = runtime\n    longLivedState.object.reset",
-      "self.runtime = runtime\n    self.longLivedState = LongLivedState()\n    longLivedState.object.reset",
-    )
-    .replace(
-      "self.runtime = runtime\n\n    // The promise",
-      "self.runtime = runtime\n    self.longLivedState = LongLivedState()\n\n    // The promise",
-    );
-  if (after !== before) fs.writeFileSync(promise, after);
+  // Move the default value into both designated initializers. Patch all or
+  // nothing: an uninitialized `let` would not compile.
+  const assignment = "self.scheduler = runtime.scheduler\n";
+  if (
+    before.includes("private let longLivedState = LongLivedState()") &&
+    before.split(assignment).length - 1 === 2
+  ) {
+    const after = before
+      .replace("private let longLivedState = LongLivedState()", "private let longLivedState: LongLivedState")
+      .replaceAll(assignment, `${assignment}    self.longLivedState = LongLivedState()\n`);
+    fs.writeFileSync(promise, after);
+  }
 }

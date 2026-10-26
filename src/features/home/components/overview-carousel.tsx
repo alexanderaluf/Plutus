@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { memo, useRef, useState, type PropsWithChildren } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, View, type ScrollViewInstance } from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -124,7 +124,7 @@ export const OverviewCarousel = memo(function OverviewCarousel({
   const { t } = useTranslation();
   const router = useRouter();
   const { background } = useAppThemeColors();
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   const [{ width, initialPage }, setViewport] = useState({
     width: 0,
     initialPage: 0,

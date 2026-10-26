@@ -31,6 +31,7 @@
     },
     "android": {
       "package": "com.plutus.budgettracker",
+      "versionCode": 6,
       "backgroundColor": "#DCE7E0",
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
@@ -125,7 +126,8 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "enableMinifyInReleaseBuilds": false
           }
         }
       ]

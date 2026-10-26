@@ -7,7 +7,7 @@ import { formatAppDate } from "@/data/model/onboarding";
 import { DateTimePicker } from "@expo/ui/community/datetime-picker";
 import { BlurTargetView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
-import { uuid } from "expo-modules-core";
+import { uuid } from "expo";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Input } from "heroui-native";
 import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
@@ -22,6 +22,7 @@ import {
   Pressable,
   StyleSheet,
   View,
+  type ViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -226,7 +227,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   const saving = useRef(false);
   const currencyRequest = useRef(0);
   const transactionId = useRef(editId ?? uuid.v4());
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const [scrollY] = useState(() => new Animated.Value(0));
   const occurredAt = new Date(draft.occurredAt);
   const safeOccurredAt = Number.isFinite(occurredAt.getTime())

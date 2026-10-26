@@ -21,7 +21,7 @@ export async function initializeLocalDatabase(database: SQLiteDatabase) {
       const file = new File(directory, `failed-open-${Date.now()}.sqlite`);
       const bytes = await database.serializeAsync();
       file.create();
-      file.write(bytes);
+      file.writeSync(bytes);
     } catch {
       /* Leave all existing checkpoints and the database intact. */
     }
@@ -63,7 +63,7 @@ async function initialize(database: SQLiteDatabase) {
       const bytes = await database.serializeAsync();
       const staged = new File(directory, `before-v${DATABASE_VERSION}.pending`);
       staged.create({ overwrite: true });
-      staged.write(bytes);
+      staged.writeSync(bytes);
       if (staged.size !== bytes.length)
         throw new Error(
           "The recovery copy could not be saved. Upgrade stopped.",
@@ -74,6 +74,6 @@ async function initialize(database: SQLiteDatabase) {
   await migrateLocalDatabase(database, marker.exists);
   if (!marker.exists) {
     marker.create();
-    marker.write("1");
+    marker.writeSync("1");
   }
 }

@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Animated, AppState, Pressable, View } from "react-native";
+import { Animated, AppState, Pressable, View, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { localDateKey } from "@/data/model/recurring-record";
@@ -67,7 +67,7 @@ export function RecurringScreen() {
     insets = useSafeAreaInsets(),
     router = useRouter(),
     { t, i18n } = useTranslation();
-  const target = useRef<View | null>(null),
+  const target = useRef<ViewInstance | null>(null),
     now = useRecurringClock(),
     actions = useRecurringActions();
   const { weekStartDay } = selectAppPreferences(document);

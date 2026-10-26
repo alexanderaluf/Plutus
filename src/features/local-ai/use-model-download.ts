@@ -24,6 +24,7 @@ export function useModelDownload(modelKey: LocalAIModelKey) {
         ),
       );
       setStates(Object.fromEntries(pairs));
+      setError("");
     } catch (cause) {
       setError(String(cause));
     }
@@ -45,12 +46,13 @@ export function useModelDownload(modelKey: LocalAIModelKey) {
   }, [states, refresh]);
   const start = useCallback(
     async (key: LocalAIModelKey) => {
-      if (!nativeAI) return;
+      if (!nativeAI) throw new Error("Local AI runtime is unavailable");
       setError("");
       try {
         await nativeAI.downloadAsync(key);
       } catch (cause) {
         setError(String(cause));
+        throw cause;
       }
       await refresh();
     },
@@ -58,7 +60,7 @@ export function useModelDownload(modelKey: LocalAIModelKey) {
   );
   const remove = useCallback(
     async (key: LocalAIModelKey) => {
-      if (!nativeAI) return;
+      if (!nativeAI) throw new Error("Local AI runtime is unavailable");
       setError("");
       try {
         await nativeAI.deleteModelAsync(key);

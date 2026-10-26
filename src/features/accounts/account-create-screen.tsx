@@ -6,22 +6,23 @@ import {
     TopSafeAreaGradient,
 } from "@/shared/ui/safe-area-gradients";
 import { BlurTargetView } from "expo-blur";
-import { uuid } from "expo-modules-core";
+import { uuid } from "expo";
 import { useRouter } from "expo-router";
 import { Button, Switch as HeroSwitch, Input } from "heroui-native";
 import { useRef, useState, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
-      Animated,
-    I18nManager,
-    Keyboard,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    View,
+  Animated,
+  I18nManager,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  View,
+  type ViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -81,7 +82,7 @@ function AccountTypeSelector({
   selected,
   onChange,
 }: {
-  blurTarget: RefObject<View | null>;
+  blurTarget: RefObject<ViewInstance | null>;
   selected: AccountType;
   onChange: (type: AccountType) => void;
 }) {
@@ -226,7 +227,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const saving = useRef(false);
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const { scrollY, headerHidden } = useCollapsingHeader();
   const accountId = useRef<string | null>(null);
   const iconChosen = useRef(!!editId);

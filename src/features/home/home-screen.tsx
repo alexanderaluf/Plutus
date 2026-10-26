@@ -13,7 +13,8 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
-  type ViewToken,
+  type ViewInstance,
+  type ListViewToken,
 } from "react-native";
 import Reanimated, {
   Easing,
@@ -110,7 +111,7 @@ export function HomeScreen() {
   >(null);
   const [selectorTop, setSelectorTop] = useState<number | null>(null);
   const [isSelectorSticky, setIsSelectorSticky] = useState(false);
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   const sectionOpacity = useSharedValue(1);
   const sectionStyle = useAnimatedStyle(() => ({
@@ -150,7 +151,7 @@ export function HomeScreen() {
     [section, revealScope],
   );
   const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken<HomeRow>[] }) => {
+    ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
       rowFade.update(viewableItems);
     },
     [rowFade],

@@ -3,7 +3,7 @@ import { BlurTargetView } from "expo-blur";
 import { Slot, usePathname, useRouter } from "expo-router";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { View } from "react-native";
+import { View, type ViewInstance } from "react-native";
 
 import { BottomNavigation } from "./bottom-navigation";
 import { getTabFromPathname, navigationItems } from "./navigation-config";
@@ -12,7 +12,7 @@ import { useAppThemeColors } from "@/shared/theme/app-theme";
 
 export function TabShell() {
   const { t } = useTranslation();
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const theme = useAppThemeColors();
   const pathname = usePathname();
   const router = useRouter();

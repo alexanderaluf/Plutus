@@ -36,6 +36,7 @@ import {
 
 import type { BackupDocument } from "../model/backup-document";
 import type { JsonObject, JsonValue } from "../model/json";
+import { readAIChat, type AIChat } from "../model/ai-chat-record";
 
 export { selectTransactions } from "./transaction-selectors";
 export { selectBudgets, selectBudgetCurrency } from "./budget-selectors";
@@ -114,6 +115,17 @@ export function selectProfileRecordCounts(
     accounts: document.accounts.filter(owns).length,
     transactions: document.transactions.filter(owns).length,
   };
+}
+
+/** The profile's saved ChatGPT chats: pinned first, then most recent activity. */
+export function selectAIChats(document: BackupDocument, profileId: string): AIChat[] {
+  const owner = document.users.find((user) => String(user.uuid ?? user.id) === profileId);
+  const aliases = new Set([profileId, ...(owner?.id != null ? [String(owner.id)] : [])]);
+  return document.aiChats
+    .filter((record) => record.user != null && aliases.has(String(record.user)))
+    .map(readAIChat)
+    .filter((chat) => chat !== null)
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.lastMessageAt.localeCompare(a.lastMessageAt));
 }
 
 function accountBalance(record: JsonObject, index: number) {

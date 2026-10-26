@@ -153,6 +153,14 @@ never included in backups. Switching models does not alter financial records.
 The version 17 document is checkpointed before normalization, and the independent
 storage identity guard remains required.
 
+Schema 23 adds the `aiChats` collection for saved ChatGPT conversations. Older
+documents and backups default to an empty collection. Each chat belongs to a
+profile through `user` (deleting the profile deletes its chats) and stores its
+title, `pinned`, model, `createdAt`/`updatedAt`/`lastMessageAt` and messages
+(text, the history text the model sees, and record cards by ID). Pending change
+proposals are never saved. Chats are included in JSON and ZIP backups with their
+pinned state. On-device model chats remain unsaved.
+
 Expo SDK references used for this implementation:
 [SQLite v57](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/) and
 [SDK v57](https://docs.expo.dev/versions/v57.0.0/).

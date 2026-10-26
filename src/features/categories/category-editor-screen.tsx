@@ -8,7 +8,7 @@ import {
   CategoryFormSections,
   categoryEntrance,
 } from "./components/category-motion";
-import { uuid } from "expo-modules-core";
+import { uuid } from "expo";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Input, Switch as HeroSwitch } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -21,6 +21,7 @@ import {
   Pressable,
   StyleSheet,
   View,
+  type ViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
@@ -93,7 +94,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
   };
   const saving = useRef(false);
   const id = useRef(editId ?? uuid.v4());
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const [scrollY] = useState(() => new Animated.Value(0));
   const topControlsTranslateY = scrollY.interpolate({
     inputRange: [0, 56],

@@ -42,7 +42,7 @@ function SettingsRow({
 
   function handlePress() {
     if (item.id === "local-ai") {
-      router.push("/ai");
+      router.push("/settings/ai");
       return;
     }
     if (onPress) {
@@ -141,8 +141,8 @@ export function ProfileSettingsPage({
   const primarySettings: SettingsItem[] = [
     {
       id: "local-ai",
-      title: t("localAI.title"),
-      description: t("localAI.privacyTitle"),
+      title: t("localAI.settings.title"),
+      description: t("localAI.settings.description"),
       icon: "smart-toy",
       iconBackground: "#a8b6f3",
     },

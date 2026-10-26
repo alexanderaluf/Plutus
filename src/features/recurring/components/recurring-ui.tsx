@@ -17,6 +17,7 @@ import {
   Platform,
   Pressable,
   View,
+  type ViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
@@ -108,7 +109,7 @@ export function RecurringEditorShell({
 }>) {
   const c = useAppThemeColors(),
     insets = useSafeAreaInsets(),
-    target = useRef<View | null>(null);
+    target = useRef<ViewInstance | null>(null);
   const [scrollY] = useState(() => new Animated.Value(0));
   const [hidden, setHidden] = useState(false);
   useEffect(() => {

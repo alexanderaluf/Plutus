@@ -32,7 +32,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Animated, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Animated, Platform, Pressable, StyleSheet, View, type ViewInstance } from "react-native";
 import { Easing } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccountCard } from "./components/account-card";
@@ -63,7 +63,7 @@ export function AccountDetailsScreen() {
   const menuInitialPositionFix = useBottomSheetInitialPositionFix(isMenuOpen);
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const account = useMemo(
     () => selectAccounts(document, now).find((item) => item.id === id),

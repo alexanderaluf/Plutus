@@ -2,7 +2,7 @@ import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View, type ViewInstance } from "react-native";
 import Animated, {
   Easing,
   runOnJS,
@@ -25,7 +25,7 @@ import type { TabId } from "./types";
 
 type BottomNavigationProps = {
   activeItem: TabId;
-  blurTarget: RefObject<View | null>;
+  blurTarget: RefObject<ViewInstance | null>;
   onChange: (item: TabId) => void;
   onActionPress: (item: TabId) => void;
 };

@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { BlurTargetView } from "expo-blur";
 import { Button } from "heroui-native";
 import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
-import { Animated, I18nManager, View } from "react-native";
+import { Animated, I18nManager, View, type ViewInstance } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
@@ -113,7 +113,7 @@ export function BudgetsScreen() {
   const router = useRouter(),
     insets = useSafeAreaInsets(),
     c = useAppThemeColors();
-  const target = useRef<View | null>(null);
+  const target = useRef<ViewInstance | null>(null);
   const [type, setType] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<BudgetSort>("newest"),

@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from "./json";
 
 export const BACKUP_VERSION = 3;
-export const LOCAL_SCHEMA_VERSION = 22;
+export const LOCAL_SCHEMA_VERSION = 23;
 export const DEFAULT_CATEGORIES_REVISION = 1;
 
 export const APP_LANGUAGES = ["en", "he", "ru"] as const;
@@ -53,6 +53,8 @@ export const BACKUP_COLLECTION_KEYS = [
   "templates",
   "achievements",
   "exchangeRates",
+  // Saved ChatGPT conversations (schema 23); see ai-chat-record.ts.
+  "aiChats",
 ] as const;
 
 export type BackupCollectionKey = (typeof BACKUP_COLLECTION_KEYS)[number];
@@ -83,7 +85,7 @@ export interface LocalBackupMetadata extends JsonObject {
   weekStartDay: number;
   /** Masks every monetary amount in the UI until the user reveals them again. */
   amountsHidden: boolean;
-  /** UI preference only; no chat messages are persisted. */
+  /** UI preference only. On-device chats are never persisted; ChatGPT chats live in `aiChats`. */
   aiExitWarningDismissed: boolean;
   /** When the user first sent a message to the local AI; hides the intro card. */
   aiFirstChatAt: string | null;
@@ -111,6 +113,7 @@ export interface BackupDocument extends JsonObject {
   templates: JsonObject[];
   achievements: JsonObject[];
   exchangeRates: JsonObject[];
+  aiChats: JsonObject[];
   _local: LocalBackupMetadata;
   [key: string]: JsonValue;
 }

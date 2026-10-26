@@ -1,8 +1,10 @@
 # Plutus Local AI — Architecture, Tools, Proposals & Voice
 
 Audience: engineers working on `src/features/local-ai` and `modules/plutus-local-ai`.
-Everything below runs on the device. Nothing in this pipeline makes a network
-request after the model download.
+This document describes the on-device provider. Nothing in its pipeline makes a
+network request after model download. The optional ChatGPT provider shares the
+trusted tools and proposal review but uses remote inference after explicit
+connection; see [ChatGPT integration](chatgpt-integration.md).
 
 ```text
 USER (typed text or voice)
@@ -217,7 +219,7 @@ inside the library's GPU chain cannot be detected from JS; it surfaces as
 
 ## 11. Privacy guarantees
 
-No audio, transcript, prompt, answer or tool result leaves the device. There is
+When an on-device model is selected, no audio, transcript, prompt, answer or tool result leaves the device. There is
 no cloud speech recognition and no cloud model fallback. Recordings live in the
 app cache and are deleted after transcription or cancellation. Chat history and
 proposals stay in memory and are cleared when the chat closes. People tools

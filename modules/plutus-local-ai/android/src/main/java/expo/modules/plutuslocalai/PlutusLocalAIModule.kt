@@ -21,6 +21,8 @@ import kotlinx.coroutines.withContext
 
 /** The model stays in app-private storage. Chat content is never uploaded. */
 class PlutusLocalAIModule : Module() {
+  private val chatGPTSecurity = lazy { ChatGPTSecurity(context) }
+  private val chatGPT by chatGPTSecurity
   private var audioRecord: AudioRecord? = null
   private var recordingThread: Thread? = null
   private var recordingFile: File? = null
@@ -32,6 +34,19 @@ class PlutusLocalAIModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("PlutusLocalAI")
+
+    AsyncFunction("readChatGPTVaultAsync") { chatGPT.read() }
+    AsyncFunction("writeChatGPTVaultAsync") { value: String -> chatGPT.write(value) }
+    AsyncFunction("chatGPTRandomAsync") { chatGPT.random() }
+    AsyncFunction("chatGPTDigestAsync") { value: String -> chatGPT.digest(value) }
+    AsyncFunction("startChatGPTCallbackAsync") { state: String, returnUrl: String, title: String, message: String, action: String ->
+      chatGPT.start(state, ReturnPage(returnUrl, title, message, action))
+    }
+    AsyncFunction("waitChatGPTCallbackAsync") Coroutine { -> withContext(Dispatchers.IO) { chatGPT.waitForCallback() } }
+    AsyncFunction("cancelChatGPTCallbackAsync") { chatGPT.cancel() }
+    AsyncFunction("verifyChatGPTIdentityAsync") { token: String, jwks: String, clientId: String, nonce: String ->
+      chatGPT.verify(token, jwks, clientId, nonce)
+    }
 
     OnCreate {
       val context = appContext.reactContext?.applicationContext ?: return@OnCreate
@@ -49,6 +64,7 @@ class PlutusLocalAIModule : Module() {
     }
 
     OnDestroy {
+      if (chatGPTSecurity.isInitialized()) chatGPT.cancel()
       downloadReceiver?.let { receiver -> runCatching { appContext.reactContext?.applicationContext?.unregisterReceiver(receiver) } }
       downloadReceiver = null
       recording = false

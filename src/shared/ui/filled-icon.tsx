@@ -52,6 +52,10 @@ import { PersonFill } from "@material-symbols-svg/react-native/rounded/icons/per
 import { PhotoLibraryFill } from "@material-symbols-svg/react-native/rounded/icons/photo-library";
 import { RestaurantFill } from "@material-symbols-svg/react-native/rounded/icons/restaurant";
 import { SaveFill } from "@material-symbols-svg/react-native/rounded/icons/save";
+import { HistoryFill } from "@material-symbols-svg/react-native/rounded/icons/history";
+import { KeepFill } from "@material-symbols-svg/react-native/rounded/icons/keep";
+import { KeepOffFill } from "@material-symbols-svg/react-native/rounded/icons/keep-off";
+import { MoreVertFill } from "@material-symbols-svg/react-native/rounded/icons/more-vert";
 import { SendFill } from "@material-symbols-svg/react-native/rounded/icons/send";
 import { SavingsFill } from "@material-symbols-svg/react-native/rounded/icons/savings";
 import { ScheduleFill } from "@material-symbols-svg/react-native/rounded/icons/schedule";
@@ -130,6 +134,10 @@ const icons = {
   food: RestaurantFill,
   "format-paint": FormatPaintFill,
   help: HelpFill,
+  history: HistoryFill,
+  "more-vert": MoreVertFill,
+  pin: KeepFill,
+  "pin-off": KeepOffFill,
   home: HomeFill,
   "home-variant": HomeFill,
   magnify: SearchFill,

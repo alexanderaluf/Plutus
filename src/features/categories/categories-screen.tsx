@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlatList, I18nManager, Pressable, View } from "react-native";
+import { FlatList, I18nManager, Pressable, View, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import type { CategoryType } from "@/data/model/category-record";
@@ -40,7 +40,7 @@ export function CategoriesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const { document } = useLocalData();
   const { activeProfile } = useProfiles();
   const now = useCategoryClock();

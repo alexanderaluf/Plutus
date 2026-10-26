@@ -9,7 +9,7 @@ import {
 } from "@/shared/ui/app-bottom-sheet";
 import { useRef, useState, type PropsWithChildren } from "react";
 import { useRouter } from "expo-router";
-import { uuid } from "expo-modules-core";
+import { uuid } from "expo";
 import { Button } from "heroui-native";
 
 import { useTranslation } from "react-i18next";

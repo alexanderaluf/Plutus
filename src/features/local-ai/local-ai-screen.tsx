@@ -1,19 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigation, useRouter } from "expo-router";
-import { uuid } from "expo-modules-core";
+import { usePreventRemove, useRouter } from "expo-router";
+import { uuid } from "expo";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
+  AppState,
   BackHandler,
   Keyboard,
   Platform,
   Pressable,
   ScrollView,
-  TextInput,
   View,
+  type ScrollViewInstance,
+  type TextInputInstance,
 } from "react-native";
 
 import { useLocalData } from "@/data/local-data-provider";
+import {
+  renameAIChat,
+  saveAIChatMessages,
+  setAIChatPinned,
+  type AIChat,
+  type AIChatMessage,
+} from "@/data/model/ai-chat-record";
+import { selectAIChats } from "@/data/selectors/document-selectors";
 import { profileCurrency } from "@/data/model/transaction-conversion";
 import type { Transaction } from "@/features/home/types";
 import { useProfiles } from "@/features/profile/profile-provider";
@@ -56,7 +66,11 @@ import {
   useChatKeyboard,
 } from "./components/chat-composer";
 import { LeaveChatDialog } from "./components/leave-chat-dialog";
+import { ChatHistorySheet } from "./components/chat-history-sheet";
 import { ModelSelector } from "./components/model-selector";
+import { ChatGPTConnectionCard } from "./components/chatgpt-connection-card";
+import { createChatGPTModel, chatGPTErrorCode } from "./chatgpt-service";
+import { useChatGPT, chatGPTErrorMessage } from "./use-chatgpt";
 import { DirectionalText } from "./components/markdown-message";
 import { TypewriterMarkdown } from "./components/typewriter-markdown";
 import type { EvidenceAudit } from "./evidence";
@@ -168,15 +182,40 @@ function AssistantMessage({
   );
 }
 
-/** Recent turns replayed into a fresh engine conversation for each question. */
-function transcript(messages: ChatMessage[]): HistoryTurn[] {
-  return messages
-    .filter((message) => (message.history ?? message.text).trim())
-    .slice(-6)
-    .map((message) => ({
-      role: message.role === "user" ? "user" : "model",
-      content: (message.history ?? message.text).slice(0, 600),
-    }));
+/**
+ * Recent turns replayed into a fresh conversation for each question. The
+ * on-device model has a small context window; ChatGPT receives the earlier
+ * questions and answers of the chat within a larger budget.
+ */
+function transcript(messages: ChatMessage[], cloud: boolean): HistoryTurn[] {
+  const limit = cloud
+    ? { messages: 40, chars: 4_000, total: 32_000 }
+    : { messages: 6, chars: 600, total: Infinity };
+  const turns: HistoryTurn[] = [];
+  let total = 0;
+  for (const message of [...messages].reverse()) {
+    const content = (message.history ?? message.text).trim().slice(0, limit.chars);
+    if (!content) continue;
+    if (turns.length === limit.messages || total + content.length > limit.total) break;
+    total += content.length;
+    turns.unshift({ role: message.role === "user" ? "user" : "model", content });
+  }
+  return turns;
+}
+
+/** Saved form of a chat message; pending change proposals are not persisted. */
+function storedMessage(message: ChatMessage): AIChatMessage {
+  const records = message.cards.filter((card) => card.kind !== "change_proposal");
+  const mentions = message.mentions && Object.fromEntries(
+    Object.entries(message.mentions).filter(([, card]) => card.kind !== "change_proposal"),
+  );
+  return {
+    role: message.role,
+    text: message.text,
+    ...(message.history !== undefined ? { history: message.history } : {}),
+    ...(records.length ? { cards: records as AIChatMessage["cards"] } : {}),
+    ...(mentions ? { mentions: mentions as AIChatMessage["mentions"] } : {}),
+  };
 }
 
 const SUGGESTIONS = [
@@ -207,19 +246,35 @@ const RESULT_CARD: Partial<
 const AUDIT_ANSWERS = typeof __DEV__ !== "undefined" && __DEV__;
 
 export function LocalAIScreen() {
+  const { document } = useLocalData();
+  const { activeProfile } = useProfiles();
+  const chatgpt = useChatGPT();
+  // Account/provider/profile changes remount transient chat state, so an offline
+  // transcript is never replayed to a remote provider after a connection change.
+  const session = [activeProfile?.id, document._local.aiModelKey, chatgpt.activeClientId, chatgpt.selectedModel].join(":");
+  return <LocalAIChatScreen key={session} />;
+}
+
+function LocalAIChatScreen() {
   const { t, i18n } = useTranslation();
   const router = useRouter();
-  const navigation = useNavigation();
-  const { document, updateDocument } = useLocalData();
+  const { document, updateDocument, removeRecord } = useLocalData();
   const [compatibility, setCompatibility] =
     useState<LocalAICompatibility | null>(null);
   const modelKey: LocalAIModelKey = document._local.aiModelKey;
   const model = LOCAL_AI_MODELS[modelKey];
   const download = useModelDownload(modelKey);
   const installed = download.installed;
-  const engine = useLocalAIEngine(installed, modelKey);
-  const { ready } = engine;
-  const llm = engine.engine;
+  const chatgpt = useChatGPT();
+  const cloudSelected = !!chatgpt.selectedModel;
+  const engine = useLocalAIEngine(installed && chatgpt.hydrated && !cloudSelected, modelKey);
+  const cloudModel = useMemo(() => chatgpt.selectedModel ? createChatGPTModel(chatgpt.selectedModel, chatgpt.activeClientId) : null, [chatgpt.selectedModel, chatgpt.activeClientId]);
+  const ready = cloudSelected ? chatgpt.planEnabled && chatgpt.models.some((item) => item.slug === chatgpt.selectedModel) : engine.ready;
+  const contextTokens = cloudSelected ? 8192 : engine.contextTokens;
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => { if (state !== "active") cloudModel?.cancel(); });
+    return () => { subscription.remove(); cloudModel?.cancel(); };
+  }, [cloudModel]);
   const { activeProfile } = useProfiles();
   const [phase, setPhase] = useState<ChatPhase>("idle");
   const keyboard = useChatKeyboard();
@@ -239,14 +294,39 @@ export function LocalAIScreen() {
     null,
   );
   const [modelSelectorOpen, setModelSelectorOpen] = useState(false);
-  const composerInput = useRef<TextInput>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  // ChatGPT chats are saved from their first message. `saved` is the transcript
+  // last written, so opening or re-rendering a chat never rewrites or reorders it.
+  const chat = useRef<{ id: string | null; saved: string }>({ id: null, saved: "" });
+  const [chatId, setChatId] = useState<string | null>(null);
+  const profileId = activeProfile?.id ?? "";
+  const savedChats = useMemo(
+    () => (cloudSelected && profileId ? selectAIChats(document, profileId) : []),
+    [document, profileId, cloudSelected],
+  );
+  useEffect(() => {
+    const id = chat.current.id;
+    if (!cloudSelected || !id || !profileId || !messages.length || messages.some((message) => !message.final)) return;
+    const stored = messages.map(storedMessage);
+    const signature = JSON.stringify(stored);
+    if (signature === chat.current.saved) return;
+    chat.current.saved = signature;
+    const model = chatgpt.selectedModel;
+    updateDocument((current) =>
+      saveAIChatMessages(current, { id, user: profileId, model, messages: stored, now: new Date().toISOString() }),
+    ).catch(() => {
+      if (chat.current.id === id) chat.current.saved = "";
+      setError(t("localAI.history.saveFailed"));
+    });
+  }, [messages, cloudSelected, profileId, chatgpt.selectedModel, updateDocument, t]);
+  const composerInput = useRef<TextInputInstance>(null);
   const entityData = useEntityData();
   // Auto-scroll follows a streaming answer only while the user is at the end.
   const following = useRef(true);
   const userScrolling = useRef(false);
   const allowExit = useRef(false);
   const messageId = useRef(0);
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   // Proposals live only in memory for this chat; an app restart drops them.
   const [proposals] = useState(() => new ProposalStore(() => uuid.v4()));
   // Bumped when the store changes so cards re-read its status.
@@ -261,7 +341,7 @@ export function LocalAIScreen() {
     async () => undefined,
   );
   const voice = useVoiceInput({
-    model: llm,
+    model: engine.engine,
     language: voiceLanguage,
     onTranscript: (text) => void sendRef.current(text),
     onError: (code) =>
@@ -292,13 +372,15 @@ export function LocalAIScreen() {
         (reason !== "storage-low" && reason !== "storage-unknown"),
     ) ?? [];
 
+  // ChatGPT chats are saved, so only an on-device chat is lost by leaving.
+  const warnOnExit = !document._local.aiExitWarningDismissed && !cloudSelected;
   const requestExit = useCallback(() => {
-    if (document._local.aiExitWarningDismissed || allowExit.current) {
+    if (!warnOnExit || allowExit.current) {
       router.back();
       return;
     }
     setExitWarning(true);
-  }, [document._local.aiExitWarningDismissed, router]);
+  }, [warnOnExit, router]);
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       requestExit();
@@ -306,14 +388,8 @@ export function LocalAIScreen() {
     });
     return () => sub.remove();
   }, [requestExit]);
-  useEffect(() => {
-    const sub = navigation.addListener("beforeRemove", (event) => {
-      if (allowExit.current || document._local.aiExitWarningDismissed) return;
-      event.preventDefault();
-      setExitWarning(true);
-    });
-    return sub;
-  }, [navigation, document._local.aiExitWarningDismissed]);
+  // confirmExit lifts the prevention with disableExitPrevention().
+  const disableExitPrevention = usePreventRemove(warnOnExit, () => setExitWarning(true));
 
   const confirmExit = async () => {
     if (doNotShowAgain) {
@@ -332,7 +408,9 @@ export function LocalAIScreen() {
     proposals.clear();
     setExitWarning(false);
     await voice.cancel();
+    cloudModel?.cancel();
     engine.release();
+    disableExitPrevention();
     router.back();
   };
 
@@ -355,13 +433,17 @@ export function LocalAIScreen() {
 
   const send = async (value: string, forcedCalls?: ChatToolCall[]) => {
     const question = value.trim();
-    const model = llm.current;
+    const model = cloudSelected ? cloudModel : engine.engine.current;
     if (!model || !ready || phase !== "idle" || !question) return;
     setError("");
     setPhase("thinking");
     following.current = true;
     setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50);
-    const history = transcript(messagesRef.current);
+    const history = transcript(messagesRef.current, cloudSelected);
+    if (cloudSelected && !chat.current.id) {
+      chat.current = { id: uuid.v4(), saved: "" };
+      setChatId(chat.current.id);
+    }
     append({
       role: "user",
       text: question,
@@ -411,7 +493,7 @@ export function LocalAIScreen() {
         question,
         history,
         prompt: promptContext(),
-        contextTokens: engine.contextTokens,
+        contextTokens,
         proposals,
         t: translate,
         structuredOutput: structuredOutput.current,
@@ -439,11 +521,11 @@ export function LocalAIScreen() {
           audit: result.audit,
           mentions: result.mentions ?? {},
         });
-    } catch {
+    } catch (cause) {
       setMessages((current) =>
         current.filter((message) => message.id !== answerId),
       );
-      setError(t("localAI.generationFailed"));
+      setError(cloudSelected ? chatGPTErrorMessage(t, chatGPTErrorCode(cause)) : t("localAI.generationFailed"));
     } finally {
       setPhase("idle");
     }
@@ -466,10 +548,10 @@ export function LocalAIScreen() {
     setProposalState((current) => ({ ...current, [proposalId]: { result } }));
     setProposalVersion((value) => value + 1);
     const history = [
-      ...transcript(messagesRef.current),
+      ...transcript(messagesRef.current, cloudSelected),
       mutationHistoryEntry(result),
     ];
-    const model = llm.current;
+    const model = cloudSelected ? cloudModel : engine.engine.current;
     const card =
       result.status === "completed" &&
       proposal.operation !== "delete" &&
@@ -574,7 +656,7 @@ export function LocalAIScreen() {
   };
 
   const selectModel = async (key: LocalAIModelKey) => {
-    if (key === modelKey) return;
+    if (key === modelKey && !cloudSelected) return;
     await voice.cancel();
     // Release the old LiteRT instance before persisting the new selection.
     // The engine hook also serializes any load still in flight.
@@ -584,10 +666,21 @@ export function LocalAIScreen() {
         ...current,
         _local: { ...current._local, aiModelKey: key },
       }));
+      await chatgpt.selectModel(null);
+      // Keep an offline conversation from being sent to a remote provider later.
+      await newChat();
     } catch (cause) {
       engine.retry();
       throw cause;
     }
+  };
+
+  const selectChatGPT = async (slug: string) => {
+    if (busy) return;
+    await voice.cancel();
+    await chatgpt.selectModel(slug);
+    engine.release();
+    await newChat();
   };
 
   const startModelDownload = async (key: LocalAIModelKey) => {
@@ -613,6 +706,8 @@ export function LocalAIScreen() {
   const newChat = async () => {
     if (busy) return;
     await voice.cancel();
+    chat.current = { id: null, saved: "" };
+    setChatId(null);
     setMessages([]);
     messagesRef.current = [];
     setDraft("");
@@ -623,6 +718,40 @@ export function LocalAIScreen() {
     following.current = true;
     scroll.current?.scrollTo({ y: 0, animated: false });
   };
+
+  /** Continues a saved chat; its earlier turns become ChatGPT's context again. */
+  const openChat = async (saved: AIChat) => {
+    if (busy) return;
+    setHistoryOpen(false);
+    if (saved.id === chat.current.id) return;
+    await newChat();
+    const restored: ChatMessage[] = saved.messages.map((message) => ({
+      id: ++messageId.current,
+      role: message.role,
+      text: message.text,
+      cards: (message.cards ?? []) as ChatCard[],
+      final: true,
+      typing: false,
+      ...(message.history !== undefined ? { history: message.history } : {}),
+      ...(message.mentions ? { mentions: message.mentions as Record<string, ChatCard> } : {}),
+    }));
+    chat.current = { id: saved.id, saved: JSON.stringify(restored.map(storedMessage)) };
+    setChatId(saved.id);
+    setMessages(restored);
+    messagesRef.current = restored;
+    setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80);
+  };
+
+  const deleteChat = async (saved: AIChat) => {
+    await removeRecord("aiChats", saved.id);
+    if (chat.current.id === saved.id) await newChat();
+  };
+
+  const renameChat = (saved: AIChat, title: string) =>
+    updateDocument((current) => renameAIChat(current, saved.id, title, new Date().toISOString()));
+
+  const togglePinnedChat = (saved: AIChat) =>
+    updateDocument((current) => setAIChatPinned(current, saved.id, !saved.pinned, new Date().toISOString()));
 
   const thinkingStage: ThinkingStage | null =
     voice.state.type === "transcribing" ||
@@ -675,6 +804,21 @@ export function LocalAIScreen() {
             {t("localAI.title")}
           </Text>
           <View className="flex-1" />
+          {cloudSelected && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("localAI.history.title")}
+              disabled={busy}
+              onPress={() => {
+                Keyboard.dismiss();
+                setHistoryOpen(true);
+              }}
+              className="size-10 items-center justify-center rounded-full bg-surface-secondary"
+              style={{ opacity: busy ? 0.45 : 1 }}
+            >
+              <FilledIcon name="history" size={22} />
+            </Pressable>
+          )}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t("localAI.newChat")}
@@ -731,7 +875,7 @@ export function LocalAIScreen() {
               }}
             >
               {/* Introduces the private model only until the first chat message. */}
-              {!document._local.aiFirstChatAt && (
+              {!cloudSelected && !document._local.aiFirstChatAt && (
                 <View className="rounded-3xl bg-surface p-4">
                   <Text className="font-manrope-semibold text-base text-foreground">
                     {t("localAI.privacyTitle")}
@@ -741,9 +885,20 @@ export function LocalAIScreen() {
                   </Text>
                 </View>
               )}
-              {compatibility === null ? (
+              {chatgpt.hydrated && !cloudSelected && (!chatgpt.connected || !installed) && (
+                <View className="gap-3">
+                  {!Object.values(download.states).some((state) => state?.status === "installed") && (
+                    <View className="gap-1 px-1">
+                      <Text className="font-manrope-bold text-lg text-foreground">{t("localAI.settings.choose")}</Text>
+                      <Text className="leading-5 text-muted">{t("localAI.settings.chooseDescription")}</Text>
+                    </View>
+                  )}
+                  <ChatGPTConnectionCard busy={busy} onSelect={selectChatGPT} />
+                </View>
+              )}
+              {!chatgpt.hydrated || (!cloudSelected && compatibility === null) ? (
                 <ActivityIndicator />
-              ) : incompatibilityReasons.length > 0 ? (
+              ) : !cloudSelected && incompatibilityReasons.length > 0 ? (
                 <View className="rounded-3xl bg-surface p-5">
                   <Text className="font-manrope-semibold text-foreground">
                     {t("localAI.deviceUnsupported")}
@@ -754,7 +909,7 @@ export function LocalAIScreen() {
                     </Text>
                   ))}
                 </View>
-              ) : !nativeAI || compatibility.isExpoGo ? (
+              ) : !cloudSelected && (!nativeAI || compatibility?.isExpoGo) ? (
                 <View className="rounded-3xl bg-surface p-5">
                   <Text className="font-manrope-semibold text-foreground">
                     {t("localAI.deviceSupported")}
@@ -763,7 +918,7 @@ export function LocalAIScreen() {
                     {t("localAI.expoGoUnavailable")}
                   </Text>
                 </View>
-              ) : !installed ? (
+              ) : !cloudSelected && !installed ? (
                 <View className="gap-3 rounded-3xl bg-surface p-5">
                   <Text className="font-manrope-semibold text-foreground">
                     {t("localAI.deviceSupported")}
@@ -808,12 +963,12 @@ export function LocalAIScreen() {
                 </View>
               ) : (
                 <>
-                  {engine.status === "loading" && (
+                  {!cloudSelected && engine.status === "loading" && (
                     <ActivityIndicator
                       accessibilityLabel={t("localAI.loadingModel")}
                     />
                   )}
-                  {engine.status === "failed" && (
+                  {!cloudSelected && engine.status === "failed" && (
                     <Pressable
                       accessibilityRole="button"
                       onPress={engine.retry}
@@ -911,6 +1066,10 @@ export function LocalAIScreen() {
                       : engine.error)}
                 </Text>
               )}
+              {cloudSelected && !!chatgpt.errorMessage && <Text accessibilityRole="alert" className="rounded-2xl bg-surface p-3 text-danger">{chatgpt.errorMessage}</Text>}
+              {cloudSelected && /usage_limit_exceeded/.test(chatgpt.error) && <Pressable accessibilityRole="link" onPress={chatgpt.manageUsage} className="min-h-12 items-center justify-center rounded-2xl bg-accent">
+                <Text className="font-manrope-bold text-background">{t("localAI.chatgpt.manageUsage")}</Text>
+              </Pressable>}
               {!!nativeAI && (
                 <KeyboardSpacer
                   keyboard={keyboard}
@@ -933,7 +1092,8 @@ export function LocalAIScreen() {
                   Keyboard.dismiss();
                   setCommandSheet({ query: "" });
                 }}
-                modelName={model.name}
+                modelName={cloudSelected ? chatgpt.models.find((item) => item.slug === chatgpt.selectedModel)?.display_name ?? chatgpt.selectedModel ?? "" : model.name}
+                provider={cloudSelected ? "chatgpt" : "gemma"}
                 onOpenModels={() => {
                   Keyboard.dismiss();
                   setModelSelectorOpen(true);
@@ -942,7 +1102,7 @@ export function LocalAIScreen() {
                 voice={voice.state}
                 levels={voice.levels}
                 maxSeconds={VOICE_LIMITS.maxDurationMs / 1000}
-                voiceAvailable={engine.audioCapable}
+                voiceAvailable={!cloudSelected && engine.audioCapable}
                 onStartRecording={() => {
                   setError("");
                   void voice.start();
@@ -970,8 +1130,25 @@ export function LocalAIScreen() {
               error={download.error || error}
               onClose={() => setModelSelectorOpen(false)}
               onSelect={selectModel}
+              onSelectChatGPT={selectChatGPT}
               onDownload={startModelDownload}
               onDelete={deleteModel}
+            />
+          )}
+          {cloudSelected && (
+            <ChatHistorySheet
+              open={historyOpen}
+              chats={savedChats}
+              activeId={chatId}
+              onClose={() => setHistoryOpen(false)}
+              onOpenChat={(saved) => void openChat(saved)}
+              onNewChat={() => {
+                setHistoryOpen(false);
+                void newChat();
+              }}
+              onRename={renameChat}
+              onTogglePin={togglePinnedChat}
+              onDelete={deleteChat}
             />
           )}
           {selectedTransaction && (

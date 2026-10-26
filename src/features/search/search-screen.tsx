@@ -12,7 +12,7 @@ import {
   type FlatList,
   StyleSheet,
   View,
-  type ViewToken,
+  type ListViewToken,
 } from "react-native";
 import Reanimated, {
   Easing,
@@ -166,7 +166,7 @@ function ProfileSearch() {
     }),
   );
   const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken<SearchRow>[] }) =>
+    ({ viewableItems }: { viewableItems: ListViewToken[] }) =>
       rowFade.update(viewableItems),
     [rowFade],
   );
@@ -264,7 +264,7 @@ function ProfileSearch() {
         <View style={styles.footer}>
           <ActivityIndicator accessibilityLabel={t("search.results.loading")} />
         </View>
-      ) : null,
+      ) : undefined,
     [hasMore, t],
   );
 

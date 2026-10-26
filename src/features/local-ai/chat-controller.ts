@@ -32,6 +32,8 @@ import type { ChatCard } from "./tools/tool-context";
 
 /** The slice of the LiteRT-LM instance the chat needs; tests pass a fake. */
 export interface ChatModel {
+  /** Remote auth, limit and transport failures must stop the turn. */
+  isRequestError?(error: unknown): boolean;
   resetConversation(historyJson?: string, systemPrompt?: string): void;
   execute(
     parts: { type: "text" | "audio" | "image"; text?: string; path?: string }[],
@@ -99,7 +101,8 @@ async function plan(input: ChatTurnInput, route: IntentResolution) {
   if (schema) {
     try {
       return await model.execute(prompt, undefined, { responseSchema: schema, maxOutputTokens: 320 });
-    } catch {
+    } catch (error) {
+      if (model.isRequestError?.(error)) throw error;
       // Constrained decoding is unavailable on this engine; plan freely.
       input.structuredOutput!.enabled = false;
       model.resetConversation(
@@ -296,7 +299,8 @@ async function mutationTurn(input: ChatTurnInput, route: IntentResolution): Prom
   let first = "";
   try {
     first = await plan(input, route);
-  } catch {
+  } catch (error) {
+    if (model.isRequestError?.(error)) throw error;
     first = "";
   }
   const requested = (parseToolCalls(first) ?? []).find((call) => call.name === "prepare_change" && call.change);
@@ -418,7 +422,8 @@ export async function runChatTurn(input: ChatTurnInput): Promise<ChatTurnResult>
     let first = "";
     try {
       first = await plan(input, route);
-    } catch {
+    } catch (error) {
+      if (model.isRequestError?.(error)) throw error;
       first = "";
     }
     const requested = parseToolCalls(first);

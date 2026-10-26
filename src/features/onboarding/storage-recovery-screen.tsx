@@ -44,7 +44,7 @@ async function createRecoveryArchive(
     }
   const archive = new File(Paths.cache, `plutus-recovery-${Date.now()}.zip`);
   archive.create({ overwrite: true });
-  archive.write(zipSync(files, { level: 0 }));
+  archive.writeSync(zipSync(files, { level: 0 }));
   return archive;
 }
 
