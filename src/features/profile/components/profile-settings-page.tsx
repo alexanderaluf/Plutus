@@ -27,6 +27,7 @@ type ProfileSettingsPageProps = {
   onOpenBackup: () => void;
   onOpenConverter: () => void;
   onOpenLanguage: () => void;
+  onOpenSecurity: () => void;
   onOpenTheme: () => void;
 };
 
@@ -93,12 +94,14 @@ function SettingsGroup({
   onOpenBackup,
   onOpenConverter,
   onOpenLanguage,
+  onOpenSecurity,
   onOpenTheme,
 }: {
   items: SettingsItem[];
   onOpenBackup?: () => void;
   onOpenConverter?: () => void;
   onOpenLanguage?: () => void;
+  onOpenSecurity?: () => void;
   onOpenTheme?: () => void;
 }) {
   return (
@@ -116,7 +119,9 @@ function SettingsGroup({
                   ? onOpenBackup
                   : item.id === "converter"
                     ? onOpenConverter
-                    : undefined
+                    : item.id === "security"
+                      ? onOpenSecurity
+                      : undefined
           }
         />
       ))}
@@ -135,6 +140,7 @@ export function ProfileSettingsPage({
   onOpenBackup,
   onOpenConverter,
   onOpenLanguage,
+  onOpenSecurity,
   onOpenTheme,
 }: ProfileSettingsPageProps) {
   const { t } = useTranslation();
@@ -178,7 +184,7 @@ export function ProfileSettingsPage({
       id: "security",
       title: t("settings.items.security.title"),
       description: t("settings.items.security.description"),
-      icon: "notifications-active",
+      icon: "lock",
       iconBackground: "#9bd59b",
     },
     {
@@ -248,6 +254,7 @@ export function ProfileSettingsPage({
           items={primarySettings}
           onOpenBackup={onOpenBackup}
           onOpenLanguage={onOpenLanguage}
+          onOpenSecurity={onOpenSecurity}
           onOpenTheme={onOpenTheme}
         />
       </Animated.View>

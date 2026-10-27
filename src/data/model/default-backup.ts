@@ -2,6 +2,7 @@ import {
   BACKUP_COLLECTION_KEYS,
   BACKUP_VERSION,
   DEFAULT_CATEGORIES_REVISION,
+  createDefaultNotificationPreferences,
   LOCAL_SCHEMA_VERSION,
   type BackupCollectionKey,
   type BackupDocument,
@@ -47,6 +48,7 @@ export function createDefaultBackup(): BackupDocument {
       aiExitWarningDismissed: false,
       aiFirstChatAt: null,
       aiModelKey: "E2B",
+      notifications: createDefaultNotificationPreferences(),
     },
     categories: [
       {

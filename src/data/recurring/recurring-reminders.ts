@@ -9,7 +9,7 @@ const CHANNEL = "recurring-reminders";
 type NotificationsModule = typeof import('expo-notifications');
 let notificationModule: Promise<NotificationsModule> | null = null;
 
-async function loadNotifications() {
+export async function loadNotifications() {
   // Importing the package's barrel also initializes its push-token listener.
   // Expo Go must never evaluate that module, even for local-only reminders.
   if (isRunningInExpoGo() || Platform.OS === 'web') return null;
@@ -123,7 +123,11 @@ export function syncRecurringReminders(
           content: {
             title: request.name,
             body: i18n.t("recurring.reminderBody"),
-            data: { recurringId: request.id, signature: request.signature },
+            data: {
+              recurringId: request.id,
+              signature: request.signature,
+              url: `/recurring/${request.id}`,
+            },
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.DATE,

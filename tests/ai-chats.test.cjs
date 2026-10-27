@@ -35,7 +35,7 @@ const question = { role: "user", text: "How much did I   spend on groceries this
 const answer = { role: "assistant", text: "You spent $320.", cards: [{ kind: "transaction", id: "t1" }], mentions: { T1: { kind: "transaction", id: "t1" } } };
 
 test("schema 23 adds a backed-up chat collection with empty defaults", () => {
-  assert.equal(LOCAL_SCHEMA_VERSION, 23);
+  assert.ok(LOCAL_SCHEMA_VERSION >= 23);
   assert.ok(BACKUP_COLLECTION_KEYS.includes("aiChats"));
   assert.deepEqual(createDefaultBackup().aiChats, []);
   const legacy = normalizeBackupDocument({ backupVersion: 3, users: profiles, _local: { schemaVersion: 22 } });

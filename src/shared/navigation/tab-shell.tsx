@@ -7,6 +7,7 @@ import { View, type ViewInstance } from "react-native";
 
 import { BottomNavigation } from "./bottom-navigation";
 import { getTabFromPathname, navigationItems } from "./navigation-config";
+import { TabActionProvider, useTabActionRegistry } from "./tab-actions";
 import type { TabId } from "./types";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 
@@ -17,6 +18,7 @@ export function TabShell() {
   const pathname = usePathname();
   const router = useRouter();
   const activeItem = getTabFromPathname(pathname);
+  const tabActions = useTabActionRegistry();
 
   function handleTabChange(tabId: TabId) {
     const destination = navigationItems.find((item) => item.id === tabId);
@@ -35,9 +37,14 @@ export function TabShell() {
       router.push("/accounts/create");
       return;
     }
+    const screenAction = tabActions.get(tabId);
+    if (screenAction) {
+      screenAction();
+      return;
+    }
     const action =
       tabId === "reports"
-        ? t("navigation.actions.filterReports")
+        ? t("navigation.actions.reviewPeriod")
         : t("navigation.actions.searchTransactions");
     AppAlert.alert(action, t("navigation.actions.unavailable", { action }));
   }
@@ -46,7 +53,9 @@ export function TabShell() {
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={{ flex: 1 }}>
         <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-          <Slot />
+          <TabActionProvider registry={tabActions}>
+            <Slot />
+          </TabActionProvider>
         </BlurTargetView>
 
         <BottomNavigation

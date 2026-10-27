@@ -193,6 +193,15 @@ export const ru = {
     skipBody:
       "Пропустить платёж, запланированный на {{date}}? Следующий платёж останется в расписании.",
     skipConfirm: "Пропустить платёж",
+    dueNow: "К оплате сейчас: {{count}}",
+    processAll: "Провести все",
+    processAllAccessibility: "Провести все платежи к оплате",
+    processAllTitle: "Провести все платежи к оплате?",
+    processAllBody:
+      "Каждый платёж к оплате, включая ранее пропущенные даты, будет записан как операция, а балансы счетов обновятся.\n\nПлатежей к записи: {{count}}",
+    processAllConfirm: "Провести платежи",
+    processAllPartial:
+      "Записано: {{processed}}. Не проведено: {{failed}}. {{error}}",
     periods: {
       ...en.recurring.periods,
       Daily: "Ежедневно",
@@ -1228,6 +1237,30 @@ export const ru = {
   },
   reports: {
     ...en.reports,
+    review: {
+      title: "Обзор периода",
+      comparedTo: "{{current}} против {{previous}}",
+      partialNote:
+        "Период ещё идёт, поэтому он сравнивается с тем же числом дней прошлого периода.",
+      fullNote: "Сравнение с полным прошлым периодом.",
+      spent: "Расходы",
+      income: "Доходы",
+      net: "Итог",
+      previous: "Ранее: {{amount}}",
+      noPrevious: "Пока не с чем сравнить",
+      new: "Новое",
+      paceTitle: "При текущем темпе",
+      paceDescription: "Ожидаемые расходы к концу периода",
+      paceAbove: "На {{amount}} больше, чем за весь прошлый период ({{total}})",
+      paceBelow: "На {{amount}} меньше, чем за весь прошлый период ({{total}})",
+      paceSame: "На уровне прошлого периода ({{total}})",
+      summary: "Сводка",
+      changesTitle: "Главные изменения",
+      changesDescription:
+        "Категории, которые изменились сильнее всего по сравнению с прошлым периодом",
+      changeAccessibility: "{{label}}: {{current}}, ранее {{previous}}",
+      empty: "Пока нет операций ни в этом, ни в прошлом периоде.",
+    },
     overview: {
       categoriesLabel: "Категории",
       viewCategory: "Открыть категорию",
@@ -1593,7 +1626,7 @@ export const ru = {
       ...en.navigation.actions,
       addTransaction: "Добавить операцию",
       addAccount: "Добавить счёт",
-      filterReports: "Фильтровать отчёты",
+      reviewPeriod: "Обзор периода",
       searchTransactions: "Искать операции",
       openSearch: "Открыть поиск",
     },
@@ -1718,6 +1751,11 @@ export const ru = {
         title: "Курсы валют",
         description: "Управление курсами конвертации",
       },
+      security: {
+        ...en.settings.items.security,
+        title: "Безопасность и напоминания",
+        description: "Блокировка приложения и ежедневные уведомления",
+      },
       converter: {
         ...en.settings.items.converter,
         title: "Конвертер валют",
@@ -1738,6 +1776,130 @@ export const ru = {
     noRate: "Нет доступного курса для {{currency}}.",
     loadError: "Не удалось загрузить курс валюты.",
     savedRateNotice: "Показан последний курс, сохранённый на устройстве.",
+  },
+  security: {
+    biometric: {
+      faceId: "Face ID",
+      touchId: "Touch ID",
+      fingerprint: "Отпечаток пальца",
+      faceUnlock: "Распознавание лица",
+      iris: "Сканирование радужки",
+    },
+    lock: {
+      title: "Plutus заблокирован",
+      pinSubtitle: "Введите PIN-код, чтобы продолжить.",
+      biometricSubtitle: "Используйте {{method}}, чтобы продолжить.",
+      prompt: "Разблокировать Plutus",
+      cancel: "Отмена",
+      useBiometric: "Разблокировать: {{method}}",
+      useDevice: "Разблокировать блокировкой экрана устройства",
+      wrongPin: "Неверный PIN-код. Попробуйте ещё раз.",
+      cooldown: "Слишком много попыток. Повторите через {{seconds}} с.",
+      cooldownShort: "Слишком много попыток. Подождите немного и повторите.",
+    },
+    pin: {
+      createTitle: "Создайте PIN-код",
+      createDescription: "Выберите код из {{count}} цифр для разблокировки Plutus.",
+      confirmTitle: "Подтвердите PIN-код",
+      confirmDescription: "Введите тот же код ещё раз.",
+      verifyTitle: "Введите текущий PIN-код",
+      verifyDescription:
+        "Подтвердите, что это вы, перед изменением настроек безопасности.",
+      mismatch: "Коды не совпали. Начните заново.",
+      delete: "Удалить цифру",
+    },
+    settings: {
+      lockTitle: "Блокировка приложения",
+      lockDescriptionIos:
+        "Требовать Face ID или PIN-код Plutus при открытии приложения.",
+      lockDescriptionAndroid:
+        "Требовать отпечаток пальца или PIN-код Plutus при открытии приложения.",
+      lockToggle: "Блокировать Plutus",
+      lockOn: "Разблокировка: {{method}}",
+      lockOff: "Любой, у кого ваш телефон, может открыть Plutus",
+      methodTitle: "Способ разблокировки",
+      biometricDescription: "Быстро и надёжно",
+      biometricMissingIos: "Сначала настройте {{method}} в настройках iOS",
+      biometricMissingAndroid:
+        "Сначала настройте «{{method}}» в настройках устройства",
+      pin: "PIN-код",
+      pinDescription: "Код из 4 цифр только для Plutus",
+      changePin: "Изменить PIN-код",
+      relockTitle: "Снова блокировать после выхода из приложения",
+      relock: {
+        "0": "Сразу",
+        "60": "1 минута",
+        "300": "5 минут",
+        "900": "15 минут",
+        "1800": "30 минут",
+        "3600": "1 час",
+      },
+      relockHint:
+        "Пока блокировка включена, Plutus также скрывает экран в списке недавних приложений.",
+      pinRecovery:
+        "Забыли PIN-код? На экране блокировки можно разблокировать приложение блокировкой экрана устройства.",
+      confirmPrompt: "Подтвердите, что это вы",
+      enablePrompt: "Включить {{method}} для Plutus",
+      saveError: "Не удалось сохранить настройку. Попробуйте ещё раз.",
+    },
+    notifications: {
+      title: "Уведомления",
+      description: "Выберите ежедневные уведомления и время для каждого из них.",
+      deliveredAt: "Время доставки",
+      timeLabel: "Время доставки {{time}}. Изменить время",
+      blocked:
+        "Уведомления Plutus отключены. Разрешите их в настройках системы, чтобы получать эти напоминания.",
+      openSettings: "Открыть настройки системы",
+      unavailable:
+        "Уведомления работают только в установленном приложении Plutus и недоступны в этой предварительной сборке.",
+      privacy:
+        "Суммы не показываются, пока они скрыты в Plutus. На заблокированном телефоне Android скрывает подробности уведомлений, если вы это не разрешили.",
+      expenseReminder: {
+        title: "Напоминание о расходах",
+        description: "Напоминание записать сегодняшние траты",
+      },
+      dailySummary: {
+        title: "Ежедневная сводка расходов",
+        description: "Сегодня в сравнении со вчера и тем же днём прошлого месяца",
+      },
+      recurringDigest: {
+        title: "Регулярные платежи на сегодня",
+        description: "Одно уведомление со всеми платежами на сегодня",
+      },
+    },
+  },
+  notifications: {
+    expenseReminder: {
+      channel: "Напоминания о расходах",
+      description: "Ежедневное напоминание записать расходы",
+      title: "Пора записать сегодняшние расходы",
+      body: "Уделите минуту записи трат, чтобы бюджет оставался точным.",
+      loggedTitle: "Ещё что-нибудь за сегодня?",
+      loggedBody:
+        "Расходов записано сегодня: {{count}}. Добавьте всё, что пропустили, до конца дня.",
+    },
+    dailySummary: {
+      channel: "Ежедневная сводка",
+      description: "Ваши расходы за день в сравнении с прошлыми днями",
+      title: "Ваши расходы сегодня",
+      cheerTitle: "Отлично, сегодня вы потратили меньше",
+      belowYesterdayTitle: "Вы потратили меньше, чем вчера",
+      belowLastMonthTitle: "Меньше, чем в этот день прошлого месяца",
+      body: "Сегодня: {{today}}. Вчера: {{yesterday}}. Этот день прошлого месяца: {{lastMonth}}.",
+      hiddenBody: "Откройте Plutus, чтобы сравнить сегодняшний день.",
+      emptyTitle: "Сегодня расходов не записано",
+      emptyBody:
+        "Если вы что-то тратили сегодня, добавьте это сейчас, чтобы отчёты были точными.",
+    },
+    recurringDigest: {
+      channel: "Регулярные платежи",
+      description: "Платежи, запланированные на сегодня",
+      title: "Регулярных платежей сегодня: {{count}}",
+      singleTitle: "Сегодня платёж: {{name}}",
+      singleBody: "{{amount}} запланировано на сегодня.",
+      singleHiddenBody: "На сегодня запланирован регулярный платёж.",
+      more: "+{{count}} ещё",
+    },
   },
   language: {
     ...en.language,

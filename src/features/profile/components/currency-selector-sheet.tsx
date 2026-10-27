@@ -15,7 +15,12 @@ import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 
-import type { CurrencyOption } from "../data/currencies-data";
+import {
+  getCurrencyDisplayName,
+  getCurrencyFlag,
+  searchCurrencies,
+  type CurrencyOption,
+} from "../data/currencies-data";
 
 type CurrencySelectorSheetProps = {
   currencies: CurrencyOption[];
@@ -25,14 +30,6 @@ type CurrencySelectorSheetProps = {
   onOpenChange: (isOpen: boolean) => void;
   onSelect: (currency: CurrencyOption) => void;
 };
-
-function normalizeSearch(value: string, locale: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase(locale)
-    .trim();
-}
 
 function CurrencySearch({
   value,
@@ -88,14 +85,12 @@ function CurrencyList({
     "accent-foreground",
     "muted",
   ]);
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const normalizedCode = selectedCode.toUpperCase();
-  const results = useMemo(() => {
-    const search = normalizeSearch(query, locale);
-    return currencies.filter((item) =>
-      normalizeSearch(`${item.code} ${item.name}`, locale).includes(search),
-    );
-  }, [currencies, locale, query]);
+  const results = useMemo(
+    () => searchCurrencies(currencies, query),
+    [currencies, query],
+  );
 
   return (
     <>
@@ -112,7 +107,7 @@ function CurrencyList({
       <BottomSheetFlatList
         ref={listRef}
         data={results}
-        extraData={normalizedCode}
+        extraData={`${normalizedCode}:${language}`}
         keyExtractor={(item: CurrencyOption) => item.code}
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -125,13 +120,15 @@ function CurrencyList({
         windowSize={7}
         renderItem={({ item }: { item: CurrencyOption }) => {
           const isSelected = item.code === normalizedCode;
+          const name = getCurrencyDisplayName(item, language);
+          const flag = getCurrencyFlag(item.code);
 
           return (
             <Pressable
               accessibilityRole="radio"
               accessibilityState={{ checked: isSelected }}
               accessibilityLabel={t("currency.optionAccessibility", {
-                name: item.name,
+                name,
                 code: item.code,
               })}
               className={`my-0.5 min-h-18 flex-row items-center gap-3 rounded-2xl px-3 py-3 active:bg-surface-tertiary ${
@@ -140,23 +137,26 @@ function CurrencyList({
               onPress={() => onSelect(item)}
             >
               <View
+                importantForAccessibility="no-hide-descendants"
                 className={`h-11 w-14 items-center justify-center rounded-xl ${
-                  isSelected ? "bg-accent" : "bg-surface-tertiary"
+                  isSelected ? "bg-accent/20" : "bg-surface-tertiary"
                 }`}
               >
-                <Text
-                  className={`font-manrope-bold text-xs ${
-                    isSelected ? "text-accent-foreground" : "text-foreground"
-                  }`}
-                >
-                  {item.code}
-                </Text>
+                {flag ? (
+                  <Text className="text-2xl" allowFontScaling={false}>
+                    {flag}
+                  </Text>
+                ) : (
+                  <Text className="font-manrope-bold text-xs text-foreground">
+                    {item.code}
+                  </Text>
+                )}
               </View>
               <View className="flex-1 gap-1">
                 <Text className="font-manrope-semibold text-sm text-foreground">
-                  {item.name}
+                  {name}
                 </Text>
-                <Text className="font-sans text-xs text-muted">
+                <Text className="font-manrope-bold text-xs text-muted">
                   {item.code}
                 </Text>
               </View>

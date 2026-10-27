@@ -33,7 +33,7 @@ type BottomNavigationProps = {
 const actionIcons = {
   home: "plus-thick",
   accounts: "credit-card-plus",
-  reports: "filter",
+  reports: "query-stats",
   search: "magnify",
 } satisfies Record<TabId, FilledIconName>;
 
@@ -62,7 +62,7 @@ export function BottomNavigation({
   const actionLabels: Record<TabId, string> = {
     home: t("navigation.actions.addTransaction"),
     accounts: t("navigation.actions.addAccount"),
-    reports: t("navigation.actions.filterReports"),
+    reports: t("navigation.actions.reviewPeriod"),
     search: t("navigation.actions.openSearch"),
   };
 

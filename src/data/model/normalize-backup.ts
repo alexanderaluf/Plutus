@@ -11,8 +11,11 @@ import {
   DEFAULT_APP_LANGUAGE,
   DEFAULT_ACCENT_COLOR,
   LOCAL_SCHEMA_VERSION,
+  NOTIFICATION_KINDS,
   THEME_MODES,
+  createDefaultNotificationPreferences,
   type AccentColorId,
+  type NotificationPreferences,
   type AppLanguage,
   type AttachmentManifest,
   type BackupDocument,
@@ -34,6 +37,27 @@ function normalizeAttachments(value: unknown): AttachmentManifest[] {
       typeof item.relativePath === "string" &&
       typeof item.size === "number",
   );
+}
+
+/** Schema 24 notification schedule; every invalid entry falls back alone. */
+export function normalizeNotificationPreferences(
+  value: unknown,
+): NotificationPreferences {
+  const defaults = createDefaultNotificationPreferences();
+  if (!isJsonObject(value)) return defaults;
+  for (const kind of NOTIFICATION_KINDS) {
+    const entry = value[kind];
+    if (!isJsonObject(entry)) continue;
+    defaults[kind] = {
+      enabled: entry.enabled === true,
+      time: isNotificationTime(entry.time) ? entry.time : defaults[kind].time,
+    };
+  }
+  return defaults;
+}
+
+export function isNotificationTime(value: unknown): value is string {
+  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
 function isThemeMode(value: unknown): value is ThemeMode {
@@ -228,6 +252,7 @@ export function normalizeBackupDocument(value: unknown): BackupDocument {
     amountsHidden: local.amountsHidden === true,
     aiExitWarningDismissed: local.aiExitWarningDismissed === true,
     aiModelKey: local.aiModelKey === "E4B" ? "E4B" : "E2B",
+    notifications: normalizeNotificationPreferences(local.notifications),
     aiFirstChatAt:
       typeof local.aiFirstChatAt === "string" &&
       Number.isFinite(Date.parse(local.aiFirstChatAt))

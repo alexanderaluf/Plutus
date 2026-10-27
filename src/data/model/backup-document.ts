@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from "./json";
 
 export const BACKUP_VERSION = 3;
-export const LOCAL_SCHEMA_VERSION = 23;
+export const LOCAL_SCHEMA_VERSION = 24;
 export const DEFAULT_CATEGORIES_REVISION = 1;
 
 export const APP_LANGUAGES = ["en", "he", "ru"] as const;
@@ -33,6 +33,31 @@ export const ACCENT_COLOR_IDS = [
 ] as const;
 export type AccentColorId = (typeof ACCENT_COLOR_IDS)[number];
 export const DEFAULT_ACCENT_COLOR: AccentColorId = "cyan";
+
+/** Daily local notifications the user can schedule (schema 24). */
+export const NOTIFICATION_KINDS = [
+  "expenseReminder",
+  "dailySummary",
+  "recurringDigest",
+] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
+export type NotificationPreference = {
+  enabled: boolean;
+  /** Local wall time, "HH:MM" (24-hour). */
+  time: string;
+};
+export type NotificationPreferences = Record<
+  NotificationKind,
+  NotificationPreference
+>;
+/** Every notification starts off; the user opts in from Settings. */
+export function createDefaultNotificationPreferences(): NotificationPreferences {
+  return {
+    expenseReminder: { enabled: false, time: "20:00" },
+    dailySummary: { enabled: false, time: "21:00" },
+    recurringDigest: { enabled: false, time: "09:00" },
+  };
+}
 
 export const BACKUP_COLLECTION_KEYS = [
   "transactions",
@@ -91,6 +116,8 @@ export interface LocalBackupMetadata extends JsonObject {
   aiFirstChatAt: string | null;
   /** Last selected on-device model. Model files themselves are never backed up. */
   aiModelKey: "E2B" | "E4B";
+  /** Daily reminder, summary and recurring digest schedule (schema 24). */
+  notifications: NotificationPreferences;
 }
 
 export interface BackupDocument extends JsonObject {

@@ -28,7 +28,7 @@ import { FilledIcon } from "@/shared/ui/filled-icon";
 import { CurrencySelectorSheet } from "./components/currency-selector-sheet";
 import { ProfilePhotoPicker } from "./components/profile-photo-picker";
 import { ProfileScreenHeader } from "./components/profile-screen-header";
-import { currencies } from "./data/currencies-data";
+import { currencies, getCurrencyDisplayName } from "./data/currencies-data";
 import { getProfileInitials } from "./lib/profile-utils";
 import { useProfiles } from "./profile-provider";
 
@@ -118,6 +118,9 @@ export function UserEditorScreen() {
   const [imageUri, setImageUri] = useState(profile?.imageUri);
   const [currency, setCurrency] = useState(defaultCurrency);
   const [isCurrencyOpen, setIsCurrencyOpen] = useState(false);
+  const currencyDisplayName = currency
+    ? getCurrencyDisplayName(currency, i18n.resolvedLanguage ?? i18n.language)
+    : undefined;
   const [isSaving, setIsSaving] = useState(false);
   // App-wide formatting preferences, mirroring the onboarding steps.
   const [dateFormat, setDateFormat] = useState<AppDateFormat>(
@@ -251,9 +254,9 @@ export function UserEditorScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
-                  currency
+                  currency && currencyDisplayName
                     ? t("profile.editor.mainCurrencyAccessibility", {
-                        name: currency.name,
+                        name: currencyDisplayName,
                         code: currency.code,
                       })
                     : t("profile.editor.chooseMainCurrency")
@@ -282,7 +285,7 @@ export function UserEditorScreen() {
                 ) : null}
                 <View className={`${currency ? "ms-4" : "ms-1"} flex-1`}>
                   <Text className="font-manrope-semibold text-base text-foreground">
-                    {currency?.name ?? t("profile.editor.currency")}
+                    {currencyDisplayName ?? t("profile.editor.currency")}
                   </Text>
                   <Text className="mt-0.5 font-sans text-sm leading-5 text-muted">
                     {currency?.code ??

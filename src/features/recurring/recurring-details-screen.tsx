@@ -1,11 +1,17 @@
 import { AppAlert } from "@/shared/ui/app-alert";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Animated, Pressable, View } from "react-native";
+import Reanimated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Path } from "react-native-svg";
 import { useLocalData } from "@/data/local-data-provider";
 import { belongsToProfile, identity } from "@/data/model/category-record";
 import { occurrenceDate } from "@/data/model/recurring-record";
@@ -30,6 +36,7 @@ import {
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
 import {
+  BusyButtonLabel,
   MoneyLines,
   RecurringBadge,
   RecurringScrim,
@@ -37,6 +44,46 @@ import {
 import { useAppDate } from "@/shared/lib/use-app-date";
 import { useRecurringActions } from "./use-recurring-actions";
 import { useRecurringClock } from "./recurring-screen";
+
+/** Elapsed share of the gap between the previous and next occurrence. */
+function OccurrenceProgress({
+  fraction,
+  trackColor,
+  fillColor,
+}: {
+  fraction: number;
+  trackColor: string;
+  fillColor: string;
+}) {
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    // Grows from empty when the page opens, then follows clock updates.
+    progress.set(
+      withTiming(fraction, {
+        duration: 900,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [fraction, progress]);
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${progress.get() * 100}%`,
+  }));
+
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(fraction * 100) }}
+      className="h-[7px] w-full overflow-hidden rounded-full"
+      style={{ backgroundColor: trackColor }}
+    >
+      <Reanimated.View
+        className="h-full rounded-full"
+        style={[{ backgroundColor: fillColor }, fillStyle]}
+      />
+    </View>
+  );
+}
 
 export function RecurringDetailsScreen({ id }: { id: string }) {
   const { document, updateDocument } = useLocalData(),
@@ -111,6 +158,7 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
           ),
         )
       : 0;
+  const busyAction = item ? actions.actionFor(item) : null;
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
@@ -169,32 +217,11 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
                   {item.next ? date(item.next) : t("recurring.ended")}
                 </Text>
               </View>
-              <View
-                accessibilityRole="progressbar"
-                accessibilityValue={{
-                  min: 0,
-                  max: 100,
-                  now: Math.round(fraction * 100),
-                }}
-              >
-                <Svg height={24} width="100%" viewBox="0 0 320 24">
-                  <Path
-                    d="M4 12 Q14 2 24 12 T64 12 T104 12 T144 12 T184 12 T224 12 T264 12 T304 12"
-                    stroke={colorWithAlpha(item.color, 0.5)}
-                    strokeWidth={7}
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                  <Path
-                    d="M4 12 Q14 2 24 12 T64 12 T104 12 T144 12 T184 12 T224 12 T264 12 T304 12"
-                    stroke={c.foreground}
-                    strokeWidth={7}
-                    fill="none"
-                    strokeDasharray={`${Math.max(1, fraction * 340)} 500`}
-                    strokeLinecap="round"
-                  />
-                </Svg>
-              </View>
+              <OccurrenceProgress
+                fraction={fraction}
+                trackColor={colorWithAlpha(item.color, 0.5)}
+                fillColor={c.foreground}
+              />
               <View className="flex-row justify-between">
                 <Text className="text-sm text-foreground">
                   {t(
@@ -222,22 +249,26 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
                   variant="outline"
                   className="flex-1"
                   isDisabled={busy || !!actions.busy}
+                  accessibilityState={{ busy: busyAction === "skip" }}
                   onPress={() => actions.skip(item)}
                 >
-                  <Button.Label>{t("recurring.skip")}</Button.Label>
+                  <BusyButtonLabel
+                    label={t("recurring.skip")}
+                    busy={busyAction === "skip"}
+                    spinnerColor={c.accent}
+                  />
                 </Button>
                 <Button
                   className="flex-1"
                   isDisabled={!item.due || busy || !!actions.busy}
+                  accessibilityState={{ busy: busyAction === "process" }}
                   onPress={() => actions.process(item)}
                 >
-                  <Button.Label>
-                    {t(
-                      actions.busy
-                        ? "recurring.processing"
-                        : "recurring.process",
-                    )}
-                  </Button.Label>
+                  <BusyButtonLabel
+                    label={t("recurring.process")}
+                    busy={busyAction === "process"}
+                    spinnerColor={c.accentForeground}
+                  />
                 </Button>
               </View>
             )}

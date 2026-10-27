@@ -10,7 +10,11 @@ import { selectExchangeRates } from "@/data/selectors/exchange-rate-selectors";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
-import { currencies, type CurrencyOption } from "../data/currencies-data";
+import {
+  currencies,
+  getCurrencyDisplayName,
+  type CurrencyOption,
+} from "../data/currencies-data";
 import { useProfiles } from "../profile-provider";
 import { CurrencySelectorSheet } from "./currency-selector-sheet";
 
@@ -37,6 +41,8 @@ function CurrencyPanel({
   onChangeAmount: (value: string) => void;
   onSelectCurrency: () => void;
 }) {
+  const { i18n } = useTranslation();
+
   return (
     <View className="min-w-0 flex-1 gap-3 rounded-[24px] bg-surface p-4">
       <Text className="font-manrope-semibold text-xs text-muted">{label}</Text>
@@ -52,7 +58,10 @@ function CurrencyPanel({
             {currency.code}
           </Text>
           <Text className="font-sans text-xs text-muted" numberOfLines={1}>
-            {currency.name}
+            {getCurrencyDisplayName(
+              currency,
+              i18n.resolvedLanguage ?? i18n.language,
+            )}
           </Text>
         </View>
         <FilledIcon name="chevron-right" size={20} tone="muted" />

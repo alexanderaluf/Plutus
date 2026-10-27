@@ -35,11 +35,15 @@ import {
 } from "@/shared/ui/collapsing-header";
 import { RecurringCard } from "./components/recurring-card";
 import {
+  BusyButtonLabel,
   MoneyLines,
   RecurringBadge,
   RecurringScrim,
 } from "./components/recurring-ui";
-import { useRecurringActions } from "./use-recurring-actions";
+import {
+  dueOccurrenceTotal,
+  useRecurringActions,
+} from "./use-recurring-actions";
 
 export function useRecurringClock() {
   const [now, setNow] = useState(() => new Date());
@@ -87,6 +91,7 @@ export function RecurringScreen() {
     () => selectRecurringSummary(items, now),
     [items, now],
   );
+  const dueCount = useMemo(() => dueOccurrenceTotal(items, now), [items, now]);
   const visible = items
     .filter((r) =>
       status === "archived"
@@ -195,6 +200,31 @@ export function RecurringScreen() {
               {stat(t("recurring.expense"), summary.expense, c.danger)}
             </View>
           </View>
+          {dueCount > 0 && (
+            <View
+              className="flex-row items-center gap-3 rounded-[22px] p-3 ps-4"
+              style={{ backgroundColor: colorWithAlpha(c.accent, 0.14) }}
+            >
+              <FilledIcon name="clock" size={22} tone="accent" />
+              <Text className="flex-1 font-manrope-semibold text-base text-foreground">
+                {t("recurring.dueNow", { count: dueCount })}
+              </Text>
+              <Button
+                size="sm"
+                variant="primary"
+                isDisabled={!!actions.busy}
+                accessibilityLabel={t("recurring.processAllAccessibility")}
+                accessibilityState={{ busy: actions.processingAll }}
+                onPress={() => actions.processAll(items)}
+              >
+                <BusyButtonLabel
+                  label={t("recurring.processAll")}
+                  busy={actions.processingAll}
+                  spinnerColor={c.accentForeground}
+                />
+              </Button>
+            </View>
+          )}
           <GlassSegmentedControl
             accessibilityLabel={t("recurring.title")}
             options={[
@@ -273,7 +303,8 @@ export function RecurringScreen() {
                   key={item.id}
                   item={item}
                   compact={compact}
-                  busy={!!actions.busy}
+                  busyAction={actions.actionFor(item)}
+                  disabled={!!actions.busy}
                   onProcess={() => actions.process(item)}
                   onSkip={() => actions.skip(item)}
                 />

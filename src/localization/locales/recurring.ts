@@ -116,6 +116,14 @@ export const recurringEn = {
   skipBody:
     "Skip the payment scheduled for {{date}}? The following payment will remain scheduled.",
   skipConfirm: "Skip payment",
+  dueNow: "Due now: {{count}}",
+  processAll: "Process all",
+  processAllAccessibility: "Process all due payments",
+  processAllTitle: "Process all due payments?",
+  processAllBody:
+    "Every due payment, including dates missed earlier, will be recorded as a transaction and your account balances will be updated.\n\nPayments to record: {{count}}",
+  processAllConfirm: "Process payments",
+  processAllPartial: "Recorded: {{processed}}. Not processed: {{failed}}. {{error}}",
   periods: {
     Daily: "Daily",
     Weekly: "Weekly",
@@ -240,6 +248,14 @@ export const recurringHe = {
   skipTitle: "לדלג על תשלום זה?",
   skipBody: "לדלג על התשלום המתוכנן ל־{{date}}? התשלום הבא יישאר מתוכנן.",
   skipConfirm: "דילוג על התשלום",
+  dueNow: "לתשלום עכשיו: {{count}}",
+  processAll: "עיבוד הכול",
+  processAllAccessibility: "עיבוד כל התשלומים שהגיע מועדם",
+  processAllTitle: "לעבד את כל התשלומים שהגיע מועדם?",
+  processAllBody:
+    "כל תשלום שהגיע מועדו, כולל מועדים קודמים שהוחמצו, יירשם כעסקה ויתרות החשבונות יעודכנו.\n\nתשלומים לרישום: {{count}}",
+  processAllConfirm: "עיבוד התשלומים",
+  processAllPartial: "נרשמו: {{processed}}. לא עובדו: {{failed}}. {{error}}",
   periods: {
     Daily: "יומי",
     Weekly: "שבועי",

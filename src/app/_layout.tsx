@@ -25,6 +25,8 @@ import { OnboardingGate } from "@/features/onboarding/onboarding-gate";
 import { StorageBoundary } from "@/features/onboarding/storage-recovery-screen";
 import { LocalDataProvider } from "@/data/local-data-provider";
 import { ProfileProvider } from "@/features/profile/profile-provider";
+import { AppLockProvider } from "@/features/security/app-lock-provider";
+import { NotificationNavigation } from "@/shared/navigation/notification-navigation";
 import {
   LocalizationProvider,
   useAppLocalization,
@@ -126,16 +128,19 @@ export default function RootLayout() {
                 <LocalizedHeroUIProvider>
                   <AppThemeController />
                   <AppSystemBars />
-                  <AppBottomSheetPortalLayer>
-                    <View style={{ flex: 1 }}>
-                      <OnboardingGate>
-                        <ProfileProvider>
-                          <AppNavigation />
-                        </ProfileProvider>
-                      </OnboardingGate>
-                      <AppBottomSheetPortalHost />
-                    </View>
-                  </AppBottomSheetPortalLayer>
+                  <AppLockProvider>
+                    <AppBottomSheetPortalLayer>
+                      <View style={{ flex: 1 }}>
+                        <OnboardingGate>
+                          <ProfileProvider>
+                            <AppNavigation />
+                            <NotificationNavigation />
+                          </ProfileProvider>
+                        </OnboardingGate>
+                        <AppBottomSheetPortalHost />
+                      </View>
+                    </AppBottomSheetPortalLayer>
+                  </AppLockProvider>
                 </LocalizedHeroUIProvider>
               </LocalizationProvider>
             </LocalDataProvider>

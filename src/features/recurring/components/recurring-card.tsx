@@ -8,18 +8,23 @@ import { useAppDate } from "@/shared/lib/use-app-date";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
-import { RecurringBadge } from "./recurring-ui";
+import type { RecurringAction } from "../use-recurring-actions";
+import { BusyButtonLabel, RecurringBadge } from "./recurring-ui";
 
 export function RecurringCard({
   item,
   compact,
-  busy,
+  busyAction,
+  disabled,
   onProcess,
   onSkip,
 }: {
   item: Recurring;
   compact: boolean;
-  busy: boolean;
+  /** The action running for this card; it shows the spinner. */
+  busyAction: RecurringAction | null;
+  /** True while any recurring occurrence is being written. */
+  disabled: boolean;
   onProcess: () => void;
   onSkip: () => void;
 }) {
@@ -93,20 +98,28 @@ export function RecurringCard({
           <Button
             size="sm"
             variant="outline"
-            isDisabled={busy}
+            isDisabled={disabled}
+            accessibilityState={{ busy: busyAction === "skip" }}
             onPress={onSkip}
           >
-            <Button.Label>{t("recurring.skip")}</Button.Label>
+            <BusyButtonLabel
+              label={t("recurring.skip")}
+              busy={busyAction === "skip"}
+              spinnerColor={c.accent}
+            />
           </Button>
           <Button
             size="sm"
-            variant={item.type === 1 ? "primary" : "danger"}
-            isDisabled={busy}
+            variant="primary"
+            isDisabled={disabled}
+            accessibilityState={{ busy: busyAction === "process" }}
             onPress={onProcess}
           >
-            <Button.Label>
-              {t(busy ? "recurring.processing" : "recurring.process")}
-            </Button.Label>
+            <BusyButtonLabel
+              label={t("recurring.process")}
+              busy={busyAction === "process"}
+              spinnerColor={c.accentForeground}
+            />
           </Button>
         </View>
       )}

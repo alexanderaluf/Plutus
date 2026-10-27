@@ -121,6 +121,18 @@ export function occurrenceDate(record: JsonObject, index: number): Date | null {
 export function nextOccurrence(record: JsonObject) {
   return occurrenceDate(record, Number(record.nextIndex ?? 0));
 }
+/** How many unrecorded occurrences are due by `now`, including missed ones. */
+export function dueOccurrenceCount(record: JsonObject, now: Date, limit = 1000) {
+  if (record.archived === true) return 0;
+  const start = Number(record.nextIndex ?? 0);
+  let count = 0;
+  while (count < limit) {
+    const date = occurrenceDate(record, start + count);
+    if (!date || date > now) break;
+    count++;
+  }
+  return count;
+}
 export function occurrenceKey(record: JsonObject) {
   return `recurring:${identity(record)}:${Number(record.scheduleRevision ?? 0)}:${Number(record.nextIndex ?? 0)}`;
 }

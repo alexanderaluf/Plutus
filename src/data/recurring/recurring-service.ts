@@ -289,3 +289,78 @@ export async function reconcileRecurring(
     remaining: dueAutomaticRecurrings(await store.read(), now).length,
   };
 }
+
+/** Manual and automatic payments of one profile that are due by `now`. */
+export function dueProfileRecurrings(
+  document: BackupDocument,
+  now: Date,
+  profileId: string,
+) {
+  return document.recurrings
+    .filter((r) => {
+      const next = r.archived !== true ? nextOccurrence(r) : null;
+      return !!next && next <= now && belongsToProfile(document, r, profileId);
+    })
+    .sort(
+      (a, b) =>
+        nextOccurrence(a)!.getTime() - nextOccurrence(b)!.getTime() ||
+        identity(a).localeCompare(identity(b)),
+    );
+}
+
+/**
+ * Records every occurrence due by `now` for the profile, oldest first, after
+ * the user confirms "process all". A payment that fails is skipped so the
+ * rest still complete; its error is reported once the run ends.
+ */
+export async function processDueRecurrings(
+  store: RecurringStore,
+  profileId: string,
+  options: {
+    now?: Date;
+    fetchRates?: typeof getExchangeRates;
+    limit?: number;
+  } = {},
+) {
+  const now = options.now ?? new Date(),
+    blocked = new Set<string>(),
+    attempted = new Set<string>();
+  let processed = 0,
+    error = "";
+  for (let attempt = 0; attempt < (options.limit ?? 500); attempt++) {
+    const document = await store.read();
+    const record = dueProfileRecurrings(document, now, profileId).find(
+      (r) => !blocked.has(identity(r)),
+    );
+    if (!record) break;
+    const key = occurrenceKey(record);
+    // A key that is still due after an attempt made no progress; stop on it.
+    if (attempted.has(key)) {
+      blocked.add(identity(record));
+      continue;
+    }
+    attempted.add(key);
+    try {
+      await processRecurring(store, identity(record), key, {
+        fetchRates: options.fetchRates,
+        now,
+        profileId,
+      });
+      processed++;
+    } catch (reason) {
+      blocked.add(identity(record));
+      error =
+        reason instanceof Error
+          ? reason.message
+          : "A recurring payment could not be saved.";
+    }
+  }
+  return {
+    processed,
+    failed: blocked.size,
+    error,
+    remaining: dueProfileRecurrings(await store.read(), now, profileId).length,
+  };
+}
+
+export type ProcessDueResult = Awaited<ReturnType<typeof processDueRecurrings>>;

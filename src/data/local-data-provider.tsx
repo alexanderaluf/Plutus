@@ -21,9 +21,12 @@ import {
 import {
   processRecurring,
   reconcileRecurring,
+  processDueRecurrings,
+  type ProcessDueResult,
 } from "./recurring/recurring-service";
 import { registerRecurringBackgroundTask } from "./recurring/recurring-background";
 import { syncRecurringReminders } from "./recurring/recurring-reminders";
+import { syncDailyNotifications } from "./notifications/daily-notifications";
 import type {
   BackupCollectionKey,
   BackupDocument,
@@ -61,6 +64,8 @@ type LocalDataContextValue = {
     key: string,
     profileId: string,
   ) => Promise<void>;
+  /** Records every due occurrence for the profile after user confirmation. */
+  processDueRecurringPayments: (profileId: string) => Promise<ProcessDueResult>;
   reconcileCardPayments: () => Promise<void>;
   ensureExchangeRates: (base: string) => Promise<ExchangeRateSnapshot>;
   refresh: () => Promise<void>;
@@ -110,6 +115,9 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
               : "Reminders could not be scheduled.",
           ),
         );
+      // Summaries are rebuilt from the latest records; failures are retried
+      // on the next change and never block the recurring reminders.
+      void syncDailyNotifications(document).catch(() => undefined);
     }, 500);
     return () => clearTimeout(timer);
   }, [document, isHydrated]);
@@ -183,6 +191,13 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   ) {
     await processRecurring(recurringStore(), id, key, { profileId });
     setRecurringError("");
+  }
+  async function processDueRecurringPayments(profileId: string) {
+    // Let an automatic check finish first so both never chase the same key.
+    await recurringWork.current?.catch(() => undefined);
+    const result = await processDueRecurrings(recurringStore(), profileId);
+    if (!result.error) setRecurringError("");
+    return result;
   }
 
   useEffect(() => {
@@ -410,6 +425,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
         recurringBackgroundAvailable,
         reconcileRecurringPayments,
         processRecurringPayment,
+        processDueRecurringPayments,
         reconcileCardPayments: retryCardPayments,
         ensureExchangeRates,
         refresh,

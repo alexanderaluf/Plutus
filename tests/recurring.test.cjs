@@ -42,7 +42,12 @@ const { parseExchangeRates } = require("../src/data/model/exchange-rate.ts");
 const {
   reconcileRecurring,
   processRecurring,
+  processDueRecurrings,
 } = require("../src/data/recurring/recurring-service.ts");
+const { dueOccurrenceCount } = require("../src/data/model/recurring-record.ts");
+const {
+  selectTransactions,
+} = require("../src/data/selectors/transaction-selectors.ts");
 const {
   selectRecurrings,
   selectRecurringSummary,
@@ -524,8 +529,115 @@ test("migration defaults automatic off and atomic repository rolls back ledger a
       }),
     );
     assert.deepEqual(await readDocument(adapter), before);
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 23);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 24);
   } finally {
     db.close();
   }
+});
+
+test("process all records every due occurrence, manual and missed ones included", async () => {
+  let d = add(fixture(), {
+    currencyCode: "ILS",
+    automatic: false,
+    startAt: new Date(2026, 7, 10, 8).toISOString(),
+  });
+  d = add(d, { currencyCode: "ILS", amount: "5" }, "automatic");
+  d = add(d, { currencyCode: "ILS" }, "archived");
+  d.recurrings[2].archived = true;
+  d = add(
+    d,
+    { currencyCode: "ILS", startAt: new Date(2026, 9, 20, 8).toISOString() },
+    "future",
+  );
+  const [manual, automatic, archived, future] = d.recurrings;
+  assert.equal(dueOccurrenceCount(manual, now), 2);
+  assert.equal(dueOccurrenceCount(automatic, now), 1);
+  assert.equal(dueOccurrenceCount(archived, now), 0);
+  assert.equal(dueOccurrenceCount(future, now), 0);
+
+  const store = memory(d);
+  const result = await processDueRecurrings(store, owner, { now });
+  assert.deepEqual(result, {
+    processed: 3,
+    failed: 0,
+    error: "",
+    remaining: 0,
+  });
+  const after = await store.read();
+  assert.equal(after.transactions.length, 3);
+  assert.equal(after.accounts[0].amount, 1000 - 20 - 20 - 5);
+  assert.deepEqual(
+    after.transactions.map((t) => localDateKey(new Date(t.date))).sort(),
+    ["2026-08-10", "2026-09-10", "2026-09-10"],
+  );
+  // Nothing left to do on a second run.
+  assert.equal(
+    (await processDueRecurrings(store, owner, { now })).processed,
+    0,
+  );
+});
+
+test("process all keeps going when one payment fails and reports it", async () => {
+  let d = add(fixture(), { currencyCode: "ILS" }, "local");
+  d = add(d, { currencyCode: "USD" }, "foreign");
+  const store = memory(d);
+  const result = await processDueRecurrings(store, owner, {
+    now,
+    fetchRates: async () => {
+      throw new Error("Rates are offline.");
+    },
+  });
+  assert.equal(result.processed, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.remaining, 1);
+  assert.match(result.error, /offline/);
+  assert.equal((await store.read()).transactions.length, 1);
+});
+
+test("pressing process lists a transaction on the payment's scheduled date", async () => {
+  const scheduled = new Date(2026, 9, 1, 9, 30);
+  const d = add(fixture(), {
+    name: "Gym",
+    currencyCode: "ILS",
+    amount: "120",
+    automatic: false,
+    startAt: scheduled.toISOString(),
+  });
+  d._local.selectedProfileId = owner;
+  const store = memory(d);
+  await processRecurring(store, "subscription", occurrenceKey(d.recurrings[0]), {
+    now,
+    profileId: owner,
+  });
+  const after = await store.read();
+  const listed = selectTransactions(after).filter(
+    (t) => t.id === occurrenceKey(d.recurrings[0]),
+  );
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].merchant, "Gym");
+  assert.equal(listed[0].amount, -120);
+  // The date the user scheduled, not the moment the button was pressed.
+  assert.equal(listed[0].occurredAtIso, scheduled.toISOString());
+  assert.equal(after.recurrings[0].occurrences[0].transactionId, listed[0].id);
+});
+
+test("opening the app records automatic payments missed on earlier days", async () => {
+  const d = add(fixture(), {
+    currencyCode: "ILS",
+    period: "Daily",
+    startAt: new Date(2026, 8, 29, 8).toISOString(),
+  });
+  d._local.selectedProfileId = owner;
+  const store = memory(d);
+  const result = await reconcileRecurring(store, { now });
+  assert.equal(result.error, "");
+  const dates = selectTransactions(await store.read())
+    .map((t) => localDateKey(new Date(t.occurredAtIso)))
+    .sort();
+  assert.deepEqual(dates, [
+    "2026-09-29",
+    "2026-09-30",
+    "2026-10-01",
+    "2026-10-02",
+  ]);
 });

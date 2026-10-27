@@ -1411,6 +1411,29 @@ export const en = {
     },
   },
   reports: {
+    review: {
+      title: "Period review",
+      comparedTo: "{{current}} vs {{previous}}",
+      partialNote:
+        "This period is still running, so it is compared with the same number of days last period.",
+      fullNote: "Compared with the full previous period.",
+      spent: "Spent",
+      income: "Income",
+      net: "Net",
+      previous: "Before: {{amount}}",
+      noPrevious: "Nothing to compare yet",
+      new: "New",
+      paceTitle: "At this pace",
+      paceDescription: "Projected spending by the end of this period",
+      paceAbove: "{{amount}} more than last period's total of {{total}}",
+      paceBelow: "{{amount}} less than last period's total of {{total}}",
+      paceSame: "In line with last period's total of {{total}}",
+      summary: "Summary",
+      changesTitle: "Biggest changes",
+      changesDescription: "Categories that moved the most versus last period",
+      changeAccessibility: "{{label}}: {{current}}, previously {{previous}}",
+      empty: "No activity in this or the previous period yet.",
+    },
     overview: {
       categoriesLabel: "Categories",
       viewCategory: "View category",
@@ -1606,7 +1629,7 @@ export const en = {
     actions: {
       addTransaction: "Add transaction",
       addAccount: "Add account",
-      filterReports: "Filter reports",
+      reviewPeriod: "Review this period",
       searchTransactions: "Search transactions",
       openSearch: "Open search",
       unavailable: "{{action}} is ready for its dedicated flow.",
@@ -1749,7 +1772,7 @@ export const en = {
       },
       security: {
         title: "Security & Reminders",
-        description: "App lock, reminders, notifications, and vibration",
+        description: "App lock and daily notifications",
       },
       money: {
         title: "Money & Tools",
@@ -1799,6 +1822,128 @@ export const en = {
     loadError: "The exchange rate could not be loaded.",
     savedRateNotice: "Showing the latest rate saved on this device.",
     rate: "1 {{from}} = {{rate}} {{to}} · {{date}}",
+  },
+  security: {
+    biometric: {
+      faceId: "Face ID",
+      touchId: "Touch ID",
+      fingerprint: "Fingerprint",
+      faceUnlock: "Face unlock",
+      iris: "Iris scan",
+    },
+    lock: {
+      title: "Plutus is locked",
+      pinSubtitle: "Enter your PIN to continue.",
+      biometricSubtitle: "Use {{method}} to continue.",
+      prompt: "Unlock Plutus",
+      cancel: "Cancel",
+      useBiometric: "Unlock with {{method}}",
+      useDevice: "Unlock with device screen lock",
+      wrongPin: "Incorrect PIN. Try again.",
+      cooldown: "Too many attempts. Try again in {{seconds}} s.",
+      cooldownShort: "Too many attempts. Wait a moment and try again.",
+    },
+    pin: {
+      createTitle: "Create a PIN",
+      createDescription: "Choose a {{count}}-digit code to unlock Plutus.",
+      confirmTitle: "Confirm your PIN",
+      confirmDescription: "Enter the same code again.",
+      verifyTitle: "Enter your current PIN",
+      verifyDescription: "Confirm it's you before changing security settings.",
+      mismatch: "The PINs didn't match. Start again.",
+      delete: "Delete digit",
+    },
+    settings: {
+      lockTitle: "App lock",
+      lockDescriptionIos: "Require Face ID or a Plutus PIN to open the app.",
+      lockDescriptionAndroid:
+        "Require your fingerprint or a Plutus PIN to open the app.",
+      lockToggle: "Lock Plutus",
+      lockOn: "Unlocks with {{method}}",
+      lockOff: "Anyone with your phone can open Plutus",
+      methodTitle: "Unlock method",
+      biometricDescription: "Quick and secure",
+      biometricMissingIos: "Set up {{method}} in iOS Settings first",
+      biometricMissingAndroid: "Add {{method}} in your device settings first",
+      pin: "PIN code",
+      pinDescription: "A 4-digit code just for Plutus",
+      changePin: "Change PIN",
+      relockTitle: "Lock again after leaving the app",
+      relock: {
+        "0": "Immediately",
+        "60": "1 minute",
+        "300": "5 minutes",
+        "900": "15 minutes",
+        "1800": "30 minutes",
+        "3600": "1 hour",
+      },
+      relockHint:
+        "While the lock is on, Plutus also hides its screen in the app switcher.",
+      pinRecovery:
+        "Forgot your PIN? On the lock screen you can unlock with your device screen lock instead.",
+      confirmPrompt: "Confirm it's you",
+      enablePrompt: "Turn on {{method}} for Plutus",
+      saveError: "The setting could not be saved. Please try again.",
+    },
+    notifications: {
+      title: "Notifications",
+      description:
+        "Pick the daily notifications you want and the time each one arrives.",
+      deliveredAt: "Delivered at",
+      timeLabel: "Delivery time {{time}}. Change time",
+      blocked:
+        "Notifications are turned off for Plutus. Allow them in system settings to receive these updates.",
+      openSettings: "Open system settings",
+      unavailable:
+        "Notifications need the installed Plutus app and are not available in this preview build.",
+      privacy:
+        "Amounts are left out while you hide amounts in Plutus. On a locked phone, Android hides notification details unless you allow them.",
+      expenseReminder: {
+        title: "Expense reminder",
+        description: "A nudge to record what you spent today",
+      },
+      dailySummary: {
+        title: "Daily spending summary",
+        description: "Today compared with yesterday and the same day last month",
+      },
+      recurringDigest: {
+        title: "Today's recurring payments",
+        description: "One notification listing every payment due today",
+      },
+    },
+  },
+  notifications: {
+    expenseReminder: {
+      channel: "Expense reminders",
+      description: "Daily reminder to log expenses",
+      title: "Time to log today's expenses",
+      body: "Take a minute to record what you spent so your budget stays accurate.",
+      loggedTitle: "Anything else to add today?",
+      loggedBody:
+        "Expenses logged today: {{count}}. Add anything you missed before the day ends.",
+    },
+    dailySummary: {
+      channel: "Daily summary",
+      description: "Your daily spending compared with earlier days",
+      title: "Your spending today",
+      cheerTitle: "Great job, you spent less today",
+      belowYesterdayTitle: "You spent less than yesterday",
+      belowLastMonthTitle: "Less than this day last month",
+      body: "Today: {{today}}. Yesterday: {{yesterday}}. This day last month: {{lastMonth}}.",
+      hiddenBody: "Open Plutus to see how today compares.",
+      emptyTitle: "No spending recorded today",
+      emptyBody:
+        "If you spent anything today, add it now to keep your reports accurate.",
+    },
+    recurringDigest: {
+      channel: "Recurring payments",
+      description: "Payments scheduled for today",
+      title: "Recurring payments today: {{count}}",
+      singleTitle: "{{name}} is due today",
+      singleBody: "{{amount}} is scheduled for today.",
+      singleHiddenBody: "A recurring payment is scheduled for today.",
+      more: "+{{count}} more",
+    },
   },
   language: {
     title: "Language",

@@ -107,7 +107,19 @@
         }
       ],
       "expo-background-task",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icons-android/notification-icon.png",
+          "color": "#087E8B"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Plutus to use Face ID to unlock the app and keep your finances private."
+        }
+      ],
       "expo-image",
       "expo-web-browser",
       [
@@ -130,7 +142,8 @@
             "enableMinifyInReleaseBuilds": false
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

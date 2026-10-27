@@ -591,3 +591,99 @@ test("an empty profile asks for data instead of inventing an assessment", () => 
     ["needsData"],
   );
 });
+
+test("period review compares a running period with the same days of the previous one", () => {
+  const {
+    selectPeriodReview,
+  } = require("../src/data/selectors/consumption-report-selectors.ts");
+  const document = documentWith(
+    [
+      // Previous period: two expenses inside the first 20 days, one after.
+      { ...entry("prev-food", 100, 0, new Date(2026, 7, 5)), category: "food" },
+      {
+        ...entry("prev-rent", 400, 0, new Date(2026, 7, 10)),
+        category: "rent",
+      },
+      {
+        ...entry("prev-late", 900, 0, new Date(2026, 7, 28)),
+        category: "rent",
+      },
+      entry("prev-salary", 1000, 1, new Date(2026, 7, 1)),
+      // Current period up to NOW (September 20).
+      { ...entry("food", 250, 0, new Date(2026, 8, 3)), category: "food" },
+      { ...entry("rent", 400, 0, new Date(2026, 8, 10)), category: "rent" },
+      entry("salary", 1200, 1, new Date(2026, 8, 1)),
+    ],
+    { categories: [category("food", "Food"), category("rent", "Rent")] },
+  );
+  const review = selectPeriodReview(document, "USD", NOW);
+
+  assert.equal(review.isPartial, true);
+  assert.equal(review.elapsedDays, 20);
+  assert.equal(review.totalDays, 30);
+  assert.deepEqual(review.spent, { current: 650, previous: 500 });
+  assert.deepEqual(review.income, { current: 1200, previous: 1000 });
+  assert.deepEqual(review.net, { current: 550, previous: 500 });
+  assert.equal(review.projectedSpend, 975);
+  assert.equal(review.previousTotalSpend, 1400);
+  assert.deepEqual(
+    review.categoryChanges.map(({ id, delta }) => [id, delta]),
+    [["food", 150]],
+  );
+  assert.equal(review.hasPrevious, true);
+});
+
+test("period review of a closed period compares whole periods without projecting", () => {
+  const {
+    selectPeriodReview,
+  } = require("../src/data/selectors/consumption-report-selectors.ts");
+  const document = documentWith([
+    entry("july", 300, 0, new Date(2026, 6, 30)),
+    entry("august", 100, 0, new Date(2026, 7, 28)),
+  ]);
+  const review = selectPeriodReview(document, "USD", NOW, -1);
+
+  assert.equal(review.isPartial, false);
+  assert.equal(review.projectedSpend, null);
+  assert.deepEqual(review.spent, { current: 100, previous: 300 });
+  assert.equal(review.categoryChanges[0].delta, -200);
+});
+
+test("period review changes keep subcategories with their own icons", () => {
+  const {
+    selectPeriodReview,
+  } = require("../src/data/selectors/consumption-report-selectors.ts");
+  const document = documentWith(
+    [
+      { ...entry("prev-cafe", 50, 0, new Date(2026, 7, 4)), category: "cafe" },
+      { ...entry("cafe", 200, 0, new Date(2026, 8, 4)), category: "cafe" },
+      { ...entry("loose", 30, 0, new Date(2026, 8, 5)), category: "missing" },
+    ],
+    {
+      categories: [
+        { ...category("food", "Food"), icon: "food", color: "#AA3311" },
+        {
+          ...category("cafe", "Cafe", "food"),
+          icon: "material:local_cafe",
+          iconPath: "M10 10h10",
+          color: "#112233",
+        },
+      ],
+    },
+  );
+  const [cafe, loose] = selectPeriodReview(
+    document,
+    "USD",
+    NOW,
+  ).categoryChanges;
+
+  assert.equal(cafe.id, "cafe");
+  assert.equal(cafe.label, "Cafe");
+  assert.equal(cafe.parentLabel, "Food");
+  assert.equal(cafe.icon, "material:local_cafe");
+  assert.equal(cafe.iconPath, "M10 10h10");
+  assert.equal(cafe.color, "#112233");
+  assert.equal(cafe.delta, 150);
+  assert.equal(loose.icon, "help");
+  assert.equal(loose.parentLabel, null);
+});

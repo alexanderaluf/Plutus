@@ -226,6 +226,7 @@ export function selectConsumptionReport(
       income,
       expense,
       net: income - expense,
+      entries: records,
       expenses,
       slices,
       categories,
@@ -326,3 +327,130 @@ export function selectConsumptionDetails(
     categories: [...buckets.values()].sort((a, b) => b.amount - a.amount),
   };
 }
+
+export type PeriodComparison = { current: number; previous: number };
+export type PeriodCategoryChange = {
+  id: string;
+  label: string;
+  /** Top-level category name when this change belongs to a subcategory. */
+  parentLabel: string | null;
+  color: string;
+  icon: string;
+  iconPath: string | null;
+  current: number;
+  previous: number;
+  delta: number;
+};
+
+/**
+ * Compares a reporting period with the one before it. While the period is
+ * still running, the previous period is cut to the same number of days so a
+ * half-finished month is never measured against a complete one.
+ */
+export function selectPeriodReview(
+  document: BackupDocument,
+  profileCurrency: string,
+  now = new Date(),
+  offset = 0,
+  currencyCode = profileCurrency,
+) {
+  const current = selectConsumptionReport(
+    document,
+    profileCurrency,
+    now,
+    offset,
+  );
+  const previous = selectConsumptionReport(
+    document,
+    profileCurrency,
+    now,
+    Math.min(0, offset) - 1,
+  );
+  const flow =
+    current.flows.find((item) => item.currencyCode === currencyCode) ??
+    current.flows[0];
+  const previousFlow = previous.flows.find(
+    (item) => item.currencyCode === flow.currencyCode,
+  );
+  const totalDays = flow.days.length;
+  const elapsedDays = flow.days.filter((day) => day.elapsed).length;
+  const isPartial = elapsedDays < totalDays;
+  const cutoff = new Date(previous.period.start);
+  cutoff.setDate(cutoff.getDate() + elapsedDays);
+  const previousEnd = isPartial ? cutoff : previous.period.end;
+  const previousEntries = (previousFlow?.entries ?? []).filter(
+    (entry) => entry.date < previousEnd,
+  );
+  const previousIncome = previousEntries
+    .filter((entry) => entry.isIncome)
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const previousSpent = previousEntries
+    .filter((entry) => !entry.isIncome)
+    .reduce((sum, entry) => sum + entry.amount, 0);
+
+  // Changes are tracked per selected category, so a subcategory shows with its
+  // own icon instead of being folded into its parent.
+  const categoryLookup = createRecordLookup(document.categories);
+  const changes = new Map<string, PeriodCategoryChange>();
+  const changeFor = (entry: ConsumptionEntry) => {
+    const existing = changes.get(entry.categoryId);
+    if (existing) return existing;
+    const record = categoryLookup.get(entry.categoryId);
+    const iconPath = string(record?.iconPath);
+    const change: PeriodCategoryChange = {
+      id: entry.categoryId,
+      label: entry.category,
+      parentLabel: entry.rootId !== entry.categoryId ? entry.root : null,
+      color: /^#[a-f\d]{6}$/i.test(string(record?.color))
+        ? string(record?.color)
+        : record
+          ? "#70d2eb"
+          : UNASSIGNED_COLOR,
+      icon: record ? string(record.icon, "shopping") : "help",
+      iconPath:
+        /^[Mm]/.test(iconPath) && iconPath.length <= 20_000 ? iconPath : null,
+      current: 0,
+      previous: 0,
+      delta: 0,
+    };
+    changes.set(entry.categoryId, change);
+    return change;
+  };
+  for (const entry of flow.expenses) changeFor(entry).current += entry.amount;
+  for (const entry of previousEntries) {
+    if (!entry.isIncome) changeFor(entry).previous += entry.amount;
+  }
+  const categoryChanges = [...changes.values()]
+    .map((change) => ({ ...change, delta: change.current - change.previous }))
+    .filter((change) => Math.abs(change.delta) >= 0.005)
+    .sort(
+      (a, b) =>
+        Math.abs(b.delta) - Math.abs(a.delta) || a.id.localeCompare(b.id),
+    )
+    .slice(0, 4);
+
+  return {
+    currencyCode: flow.currencyCode,
+    period: current.period,
+    previousPeriod: { start: previous.period.start, end: previousEnd },
+    isPartial,
+    elapsedDays,
+    totalDays,
+    spent: { current: flow.expense, previous: previousSpent },
+    income: { current: flow.income, previous: previousIncome },
+    net: {
+      current: flow.net,
+      previous: previousIncome - previousSpent,
+    },
+    projectedSpend:
+      isPartial && elapsedDays > 0
+        ? (flow.expense / elapsedDays) * totalDays
+        : null,
+    previousTotalSpend: previousFlow?.expense ?? 0,
+    categoryChanges,
+    hasActivity: flow.entries.length > 0 || previousEntries.length > 0,
+    hasPrevious: previousEntries.length > 0,
+  };
+}
+
+export type PeriodReview = ReturnType<typeof selectPeriodReview>;

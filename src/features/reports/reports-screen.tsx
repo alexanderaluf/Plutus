@@ -3,18 +3,23 @@ import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 
 import { useLocalData } from "@/data/local-data-provider";
-import { selectConsumptionReport } from "@/data/selectors/consumption-report-selectors";
+import {
+  selectConsumptionReport,
+  selectPeriodReview,
+} from "@/data/selectors/consumption-report-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { TransactionMonthSelector } from "@/features/home/components/transaction-month-selector";
 import { Text } from "@/shared/ui/app-text";
 import { TabPage } from "@/shared/ui/tab-page";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
+import { useTabAction } from "@/shared/navigation/tab-actions";
 
 import { ExpensePieCard } from "./components/expense-pie-card";
 import { CashFlowCard } from "./components/cash-flow-card";
 import { DailyActivityCard } from "./components/daily-activity-card";
 import { MoneyLocationCard } from "./components/money-location-card";
+import { PeriodReviewSheet } from "./components/period-review-sheet";
 
 export function ReportsScreen() {
   const { activeProfile } = useProfiles();
@@ -49,53 +54,93 @@ function ProfileReports() {
     report.flows.find((item) => item.currencyCode === currency) ??
     report.flows[0];
   const periodKey = `${report.period.key}:${flow.currencyCode}`;
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
+  // Stays computed after the first open so the sheet keeps its content while
+  // it animates closed.
+  const [isReviewRequested, setIsReviewRequested] = useState(false);
+  useTabAction("reports", () => {
+    setIsReviewRequested(true);
+    setIsReviewOpen(true);
+  });
+  const review = useMemo(
+    () =>
+      isReviewRequested
+        ? selectPeriodReview(
+            document,
+            activeProfile.currencyCode,
+            now,
+            offset,
+            flow.currencyCode,
+          )
+        : null,
+    // Unnamed categories are localized by the selector.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      isReviewRequested,
+      document,
+      activeProfile.currencyCode,
+      now,
+      offset,
+      flow.currencyCode,
+      i18n.resolvedLanguage,
+    ],
+  );
 
   return (
-    <TabPage
-      animateLayout
-      headerHeight={TAB_HEADER_HEIGHT}
-      header={<TabHeader />}
-    >
-      <View className="gap-3">
-        <TransactionMonthSelector
-          start={report.period.start}
-          end={report.period.end}
-          isCurrent={offset === 0}
-          dateFormat={document._local.dateFormat}
-          onPrevious={() => setOffset((value) => value - 1)}
-          onNext={() => setOffset((value) => Math.min(0, value + 1))}
-        />
-        {report.flows.length > 1 ? (
-          <View className="gap-2">
-            <Text className="font-sans text-xs text-muted">
-              {t("reports.overview.currencies")}
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {report.flows.map((item) => (
-                <Pressable
-                  key={item.currencyCode}
-                  accessibilityRole="button"
-                  accessibilityState={{
-                    selected: item.currencyCode === flow.currencyCode,
-                  }}
-                  onPress={() => setCurrency(item.currencyCode)}
-                  className={`min-h-11 min-w-16 items-center justify-center rounded-full px-4 ${item.currencyCode === flow.currencyCode ? "bg-accent" : "bg-surface"}`}
-                >
-                  <Text
-                    className={`font-manrope-bold text-sm ${item.currencyCode === flow.currencyCode ? "text-accent-foreground" : "text-foreground"}`}
+    <>
+      <TabPage
+        animateLayout
+        headerHeight={TAB_HEADER_HEIGHT}
+        header={<TabHeader />}
+      >
+        <View className="gap-3">
+          <TransactionMonthSelector
+            start={report.period.start}
+            end={report.period.end}
+            isCurrent={offset === 0}
+            dateFormat={document._local.dateFormat}
+            onPrevious={() => setOffset((value) => value - 1)}
+            onNext={() => setOffset((value) => Math.min(0, value + 1))}
+          />
+          {report.flows.length > 1 ? (
+            <View className="gap-2">
+              <Text className="font-sans text-xs text-muted">
+                {t("reports.overview.currencies")}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {report.flows.map((item) => (
+                  <Pressable
+                    key={item.currencyCode}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      selected: item.currencyCode === flow.currencyCode,
+                    }}
+                    onPress={() => setCurrency(item.currencyCode)}
+                    className={`min-h-11 min-w-16 items-center justify-center rounded-full px-4 ${item.currencyCode === flow.currencyCode ? "bg-accent" : "bg-surface"}`}
                   >
-                    {item.currencyCode}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text
+                      className={`font-manrope-bold text-sm ${item.currencyCode === flow.currencyCode ? "text-accent-foreground" : "text-foreground"}`}
+                    >
+                      {item.currencyCode}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
             </View>
-          </View>
-        ) : null}
-      </View>
-      <ExpensePieCard key={`pie:${periodKey}`} flow={flow} />
-      <CashFlowCard flow={flow} />
-      <DailyActivityCard key={`daily:${periodKey}`} flow={flow} />
-      <MoneyLocationCard holdings={report.holdings} />
-    </TabPage>
+          ) : null}
+        </View>
+        <ExpensePieCard key={`pie:${periodKey}`} flow={flow} />
+        <CashFlowCard flow={flow} />
+        <DailyActivityCard key={`daily:${periodKey}`} flow={flow} />
+        <MoneyLocationCard holdings={report.holdings} />
+      </TabPage>
+      {review ? (
+        <PeriodReviewSheet
+          review={review}
+          isOpen={isReviewOpen}
+          onOpenChange={setIsReviewOpen}
+        />
+      ) : null}
+    </>
   );
 }

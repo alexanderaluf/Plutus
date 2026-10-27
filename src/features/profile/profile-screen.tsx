@@ -17,11 +17,27 @@ import { ProfileAvatar } from "./components/profile-avatar";
 import { ProfileHubActions } from "./components/profile-hub-actions";
 import { ProfileScreenHeader } from "./components/profile-screen-header";
 import { ProfileSettingsPage } from "./components/profile-settings-page";
+import { SecuritySettingsPage } from "./components/security-settings-page";
 import { ThemeSettingsPage } from "./components/theme-settings-page";
 import { useProfiles } from "./profile-provider";
 
 type ProfilePage =
-  "profile" | "settings" | "theme" | "language" | "backup" | "converter";
+  | "profile"
+  | "settings"
+  | "theme"
+  | "language"
+  | "backup"
+  | "converter"
+  | "security";
+
+// Pages opened from Settings; back returns to Settings.
+const SETTINGS_PAGES: readonly ProfilePage[] = [
+  "theme",
+  "language",
+  "backup",
+  "converter",
+  "security",
+];
 
 export function ProfileScreen() {
   const { t } = useTranslation();
@@ -37,12 +53,7 @@ export function ProfileScreen() {
       "hardwareBackPress",
       () => {
         setPage((current) =>
-          current === "theme" ||
-          current === "language" ||
-          current === "backup" ||
-          current === "converter"
-            ? "settings"
-            : "profile",
+          SETTINGS_PAGES.includes(current) ? "settings" : "profile",
         );
         return true;
       },
@@ -60,7 +71,9 @@ export function ProfileScreen() {
           ? t("settings.items.backup.title")
           : page === "converter"
             ? t("settings.items.converter.title")
-            : page === "settings"
+            : page === "security"
+              ? t("settings.items.security.title")
+              : page === "settings"
               ? t("settings.title")
               : t("profile.accountsTitle");
 
@@ -69,10 +82,7 @@ export function ProfileScreen() {
       header={
         <ProfileScreenHeader
           onBack={
-            page === "theme" ||
-            page === "language" ||
-            page === "backup" ||
-            page === "converter"
+            SETTINGS_PAGES.includes(page)
               ? () => setPage("settings")
               : page === "settings"
                 ? () => setPage("profile")
@@ -87,8 +97,11 @@ export function ProfileScreen() {
           onOpenBackup={() => setPage("backup")}
           onOpenConverter={() => setPage("converter")}
           onOpenLanguage={() => setPage("language")}
+          onOpenSecurity={() => setPage("security")}
           onOpenTheme={() => setPage("theme")}
         />
+      ) : page === "security" ? (
+        <SecuritySettingsPage />
       ) : page === "theme" ? (
         <ThemeSettingsPage />
       ) : page === "language" ? (

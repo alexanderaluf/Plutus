@@ -161,6 +161,16 @@ title, `pinned`, model, `createdAt`/`updatedAt`/`lastMessageAt` and messages
 proposals are never saved. Chats are included in JSON and ZIP backups with their
 pinned state. On-device model chats remain unsaved.
 
+Schema 24 adds `_local.notifications`: an `enabled` flag and a local `HH:MM`
+time for the expense reminder, daily spending summary and recurring digest.
+Older documents and backups default to all three off (20:00, 21:00, 09:00);
+each invalid entry falls back on its own. The schedule itself is not stored:
+it is rebuilt from the document for the next five days on every change and
+background run. App-lock settings and the salted PIN hash are deliberately
+not part of the document. They live only in the device keychain/keystore
+(`expo-secure-store`, this-device-only), so backups never contain them and a
+restore on another device can never lock its owner out.
+
 Expo SDK references used for this implementation:
 [SQLite v57](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/) and
 [SDK v57](https://docs.expo.dev/versions/v57.0.0/).

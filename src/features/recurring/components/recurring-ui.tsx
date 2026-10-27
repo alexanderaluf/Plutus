@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -30,6 +31,33 @@ import { colorForeground } from "@/shared/icons/colors";
 
 export function RecurringScrim() {
   return <BottomSafeAreaGradient />;
+}
+
+/**
+ * A Button label that swaps to a spinner while its action runs. The hidden
+ * label keeps the button's width so neighbouring buttons do not shift.
+ */
+export function BusyButtonLabel({
+  label,
+  busy,
+  spinnerColor,
+}: {
+  label: string;
+  busy: boolean;
+  spinnerColor: string;
+}) {
+  return (
+    <View className="items-center justify-center">
+      <Button.Label style={{ opacity: busy ? 0 : 1 }}>{label}</Button.Label>
+      {busy ? (
+        <ActivityIndicator
+          color={spinnerColor}
+          size="small"
+          style={{ position: "absolute" }}
+        />
+      ) : null}
+    </View>
+  );
 }
 export function RecurringAction({
   label,

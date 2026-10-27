@@ -19,7 +19,10 @@ import {
   BudgetOption,
 } from "@/features/budgets/components/budget-ui";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
-import { currencies } from "@/features/profile/data/currencies-data";
+import {
+  currencies,
+  getCurrencyDisplayName,
+} from "@/features/profile/data/currencies-data";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { TransactionSelectionSection } from "@/features/transactions/components/transaction-selection-section";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
@@ -122,7 +125,8 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
   const saving = useRef(false),
     id = useRef(editId ?? uuid.v4());
   const accounts = selectAccounts(document),
-    categories = selectCategories(document);
+    categories = selectCategories(document),
+    draftCurrency = currencies.find((v) => v.code === draft.currencyCode);
   const change = <K extends keyof RecurringDraft>(
     key: K,
     value: RecurringDraft[K],
@@ -315,7 +319,12 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
                 <Text className="text-muted">{t("recurring.currency")}</Text>
                 <Text className="font-manrope-semibold text-lg text-foreground">
                   {draft.currencyCode} ·{" "}
-                  {currencies.find((v) => v.code === draft.currencyCode)?.name}
+                  {draftCurrency
+                    ? getCurrencyDisplayName(
+                        draftCurrency,
+                        i18n.resolvedLanguage ?? i18n.language,
+                      )
+                    : null}
                 </Text>
               </View>
               <FilledIcon name="chevron-right" size={24} />

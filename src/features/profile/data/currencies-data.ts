@@ -1,5 +1,11 @@
+import {
+  currencySearchAliases,
+  currencyTranslations,
+} from "./currency-translations";
+
 export type CurrencyOption = {
   code: string;
+  /** Canonical English name; this is the value persisted on profile records. */
   name: string;
   symbol: string;
 };
@@ -224,3 +230,76 @@ export const currencies: CurrencyOption[] = Object.entries(currencyNames).map(
     return { code, name: name || code, symbol: currencySymbols[code] ?? code };
   },
 );
+
+const REGIONAL_INDICATOR_A = 0x1f1e6;
+
+/** Flag emoji of the issuing country (or a globe for multinational currencies). */
+export function getCurrencyFlag(code: string) {
+  const region = currencyTranslations[code.toUpperCase()]?.[0];
+  if (!region) return "";
+  if (!/^[A-Z]{2}$/.test(region)) return region;
+  return String.fromCodePoint(
+    ...[...region].map((char) => REGIONAL_INDICATOR_A + char.charCodeAt(0) - 65),
+  );
+}
+
+/** Currency name in the interface language, falling back to English. */
+export function getCurrencyDisplayName(
+  currency: CurrencyOption,
+  language: string | undefined,
+) {
+  const translation = currencyTranslations[currency.code.toUpperCase()];
+  const base = language?.split("-")[0];
+  if (base === "he") return translation?.[1] ?? currency.name;
+  if (base === "ru") return translation?.[2] ?? currency.name;
+  return currency.name;
+}
+
+// Strips Latin diacritics, Hebrew niqqud, and quote marks (so ש"ח matches ש״ח)
+// before case-folding, so typed queries match regardless of accents or marks.
+export function normalizeCurrencySearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-֑ͯ-ׇ]/g, "")
+    .replace(/["'`’׳״]/g, "")
+    .replace(/[-‐–—]/g, " ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const searchIndex = new Map<string, string[]>();
+
+function getCurrencySearchWords(currency: CurrencyOption) {
+  const code = currency.code.toUpperCase();
+  let words = searchIndex.get(code);
+  if (words === undefined) {
+    const [, he = "", ru = ""] = currencyTranslations[code] ?? [];
+    words = normalizeCurrencySearch(
+      [
+        code,
+        currency.symbol,
+        currency.name,
+        he,
+        ru,
+        ...(currencySearchAliases[code] ?? []),
+      ].join(" "),
+    ).split(" ");
+    searchIndex.set(code, words);
+  }
+  return words;
+}
+
+/**
+ * Matches the query against the code, symbol, and every localized name at
+ * once, so a Hebrew name finds the currency in an English interface and vice
+ * versa. Every query word must start a word of some name, in any order.
+ */
+export function searchCurrencies(list: CurrencyOption[], query: string) {
+  const terms = normalizeCurrencySearch(query).split(" ").filter(Boolean);
+  if (terms.length === 0) return list;
+  return list.filter((currency) => {
+    const words = getCurrencySearchWords(currency);
+    return terms.every((term) => words.some((word) => word.startsWith(term)));
+  });
+}
