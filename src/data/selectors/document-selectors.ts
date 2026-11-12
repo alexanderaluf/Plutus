@@ -2,6 +2,7 @@ import { financialMonth } from "../model/financial-month";
 import { createRecordLookup } from "./transaction-selectors";
 import { filterProjection, finishProjection } from "./cooperative";
 import { ACCOUNT_ICONS } from "@/features/accounts/account-options";
+import { isBrandIconName } from "@/shared/icons/brand-icon-registry";
 import { selectBudgets } from "./budget-selectors";
 import { selectExchangeQuote } from "./exchange-rate-selectors";
 import {
@@ -345,9 +346,10 @@ export function selectAccounts(
             )
           : null,
       lastFour: text(record.cardLastFour, text(record.accountNumber)).slice(-4),
-      icon: materialIconIsValid
-        ? storedIcon
-        : (ACCOUNT_ICONS.find(
+      icon:
+        materialIconIsValid || isBrandIconName(storedIcon)
+          ? storedIcon
+          : (ACCOUNT_ICONS.find(
             (icon) =>
               !icon.name.startsWith("material:") && icon.name === record.icon,
           )?.name ??

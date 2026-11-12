@@ -220,7 +220,10 @@ full device test checklist.
 ├── scripts/
 │   ├── patch-*.cjs                     # postinstall patches (see §3)
 │   ├── generate-device-test-backup.cjs # Deterministic test dataset generator
-│   └── generate-material-account-icons.mjs
+│   ├── generate-material-icons.mjs     # Picker Material icons (from icon-options.ts)
+│   ├── generate-brand-icons.mjs        # Brand logos for the icon picker
+│   ├── brand-icon-categories.json      # Brands bundled, by picker category
+│   └── brand-icon-wordmarks.json       # Text-only logos excluded after review
 │
 ├── tests/                        # *.test.cjs + fixtures/legacy-development-backup.ts
 ├── test-data/                    # Large fictional backups (en/he/ru)

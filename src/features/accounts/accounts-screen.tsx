@@ -1,5 +1,9 @@
 import { useLocalData } from "@/data/local-data-provider";
-import { selectAccounts } from "@/data/selectors/document-selectors";
+import {
+  selectAccountTotalsByCurrency,
+  selectAccounts,
+} from "@/data/selectors/document-selectors";
+import { useProfiles } from "@/features/profile/profile-provider";
 import { useLocalDayClock } from "@/shared/lib/use-local-day-clock";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
@@ -17,7 +21,20 @@ import {
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
-import { AccountCard } from "./components/account-card";
+import { AccountGroupCard } from "./components/account-list-card";
+import { AccountsOverview } from "./components/accounts-overview";
+import type { Account } from "./types";
+
+type AccountGroup = "everyday" | "cards" | "savings";
+type Section = { key: AccountGroup; accounts: Account[] };
+
+const GROUP_ORDER: AccountGroup[] = ["everyday", "cards", "savings"];
+
+function groupOf(account: Account): AccountGroup {
+  if (account.kind === "credit") return "cards";
+  if (account.kind === "savings") return "savings";
+  return "everyday";
+}
 
 const INITIAL_DELAY = 45;
 const STAGGER_DELAY = 85;
@@ -37,16 +54,28 @@ export function AccountsScreen() {
   const insets = useSafeAreaInsets();
   const now = useLocalDayClock();
   const accounts = selectAccounts(document, now);
+  const { activeProfile } = useProfiles();
+  const included = accounts.filter((account) => !account.isExcluded);
+  // The profile currency leads; other currencies are listed, never converted.
+  const totals = selectAccountTotalsByCurrency(included).sort(
+    (a, b) =>
+      Number(b.currencyCode === activeProfile.currencyCode) -
+      Number(a.currencyCode === activeProfile.currencyCode),
+  );
+  const sections: Section[] = GROUP_ORDER.map((group) => ({
+    key: group,
+    accounts: accounts.filter((account) => groupOf(account) === group),
+  })).filter((section) => section.accounts.length > 0);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
     <View style={{ flex: 1 }}>
       <NativeAnimated.FlatList
-        data={accounts}
-        keyExtractor={(item) => item.id}
+        data={sections}
+        keyExtractor={(item) => item.key}
         contentContainerStyle={{
           paddingHorizontal: 16,
           paddingBottom: 110 + insets.bottom,
-          gap: 14,
+          gap: 24,
         }}
         onScroll={onScroll}
         scrollEventThrottle={16}
@@ -55,7 +84,7 @@ export function AccountsScreen() {
           <View>
             <CollapsingHeaderSpacer height={TAB_HEADER_HEIGHT} />
             {/* With the list gap, 28pt below the header like Home. */}
-            <View className="h-3.5" />
+            <View className="h-1" />
             {!!paymentError && (
               <Animated.View
                 entering={reveal(1)}
@@ -76,25 +105,44 @@ export function AccountsScreen() {
                 </Pressable>
               </Animated.View>
             )}
+            {accounts.length > 0 && (
+              <Animated.View entering={reveal(0)}>
+                <AccountsOverview
+                  totals={totals}
+                  excludedCount={accounts.length - included.length}
+                />
+              </Animated.View>
+            )}
           </View>
         }
         renderItem={({ item, index }) => (
-          <Animated.View entering={reveal(index + (paymentError ? 2 : 1))}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t("accounts.list.viewDetails", {
-                name: item.name,
-              })}
-              onPress={() =>
+          <Animated.View
+            entering={reveal(index + (paymentError ? 2 : 1))}
+            className="gap-2.5"
+          >
+            <View className="flex-row items-baseline justify-between px-1">
+              <Text
+                accessibilityRole="header"
+                className="font-manrope-bold text-lg text-foreground"
+              >
+                {t(`accounts.list.groups.${item.key}`)}
+              </Text>
+              <Text
+                className="font-manrope-medium text-xs text-muted"
+                style={{ fontVariant: ["tabular-nums"] }}
+              >
+                {t("accounts.list.count", { count: item.accounts.length })}
+              </Text>
+            </View>
+            <AccountGroupCard
+              accounts={item.accounts}
+              onAccountPress={(account) =>
                 router.push({
                   pathname: "/accounts/[id]",
-                  params: { id: item.id },
+                  params: { id: account.id },
                 })
               }
-              style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-            >
-              <AccountCard account={item} showDetails={false} />
-            </Pressable>
+            />
           </Animated.View>
         )}
         ListEmptyComponent={

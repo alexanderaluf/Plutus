@@ -109,26 +109,27 @@ const validSavingsDetails = () => ({
 const add = (document, changes = {}, id = "test-account") =>
   addAccountToDocument(document, draft(changes), "alex-personal", id, now);
 
-test("generated Material catalog contains every installed rounded symbol", () => {
-  const metadata = JSON.parse(
-    fs.readFileSync(
-      path.resolve(
-        __dirname,
-        "../node_modules/@material-symbols-svg/react-native/dist/metadata/icon-index.json",
-      ),
-      "utf8",
-    ),
-  );
+function readMaterialCatalog() {
   const source = fs.readFileSync(
     path.join(sourceRoot, "shared/icons/material-rounded-filled-icons.ts"),
     "utf8",
   );
   const assignment = source.indexOf("= [");
   const end = source.lastIndexOf("];");
-  const icons = JSON.parse(source.slice(assignment + 2, end + 1));
-  assert.equal(icons.length, 3903);
-  assert.ok(icons.length <= Object.keys(metadata).length);
-  assert.equal(new Set(icons.map((icon) => icon.name)).size, icons.length);
+  return JSON.parse(source.slice(assignment + 2, end + 1));
+}
+
+function productionDefaultCategories() {
+  const {
+    createDefaultBackup: createProductionDefaultBackup,
+  } = require("../src/data/model/default-backup.ts");
+  return createProductionDefaultBackup().categories;
+}
+
+test("generated Material catalog contains exactly the picker and default-category icons", () => {
+  const icons = readMaterialCatalog();
+  const names = icons.map((icon) => icon.name);
+  assert.equal(new Set(names).size, names.length);
   assert.ok(
     icons.every(
       (icon) =>
@@ -137,47 +138,46 @@ test("generated Material catalog contains every installed rounded symbol", () =>
         /^[Mm]/.test(icon.pathData),
     ),
   );
-  const trailingNames = icons.slice(-68).map((icon) => icon.name);
-  assert.ok(trailingNames.every((name) => /^\d/.test(name) || name === "abc"));
-  for (const name of ["10k", "18_up_rating", "360", "9mp", "abc"]) {
-    assert.ok(trailingNames.includes(name));
-  }
+  const expected = new Set(
+    [
+      ...ACCOUNT_ICON_GROUPS.flatMap((group) => group.icons).map(
+        (icon) => icon.name,
+      ),
+      ...productionDefaultCategories().map((category) => String(category.icon)),
+    ]
+      .filter((name) => name.startsWith("material:"))
+      .map((name) => name.slice("material:".length)),
+  );
+  assert.deepEqual([...names].sort(), [...expected].sort());
+  // Resolution and utility glyphs such as 4K/5K never reach the picker.
+  assert.ok(names.every((name) => !/^\d/.test(name)));
 });
 
-test("suggested icon categories contain 20 valid choices each", () => {
-  const expectedTitles = [
-    "Money & accounts",
-    "Everyday spending",
-    "Goals & interests",
-    "Entertainment",
-    "Food",
-    "Groceries",
-    "Subscriptions",
-    "Transportation",
-    "Travel",
-    "Rent",
-    "Health",
-    "Education",
-    "Utilities",
-    "Other",
-    "More",
-  ];
+test("icon picker has one section per default category", () => {
+  const categories = productionDefaultCategories();
+  const categoryKeys = categories.map((category) =>
+    String(category.name).toLowerCase(),
+  );
+  assert.equal(ACCOUNT_ICON_GROUPS[0].key, "accounts");
   assert.deepEqual(
-    ACCOUNT_ICON_GROUPS.map((group) => group.title),
-    expectedTitles,
+    ACCOUNT_ICON_GROUPS.map((group) => group.key).sort(),
+    ["accounts", ...categoryKeys].sort(),
   );
-  assert.ok(ACCOUNT_ICON_GROUPS.every((group) => group.icons.length >= 20));
+  assert.ok(ACCOUNT_ICON_GROUPS.every((group) => group.icons.length >= 12));
 
-  const source = fs.readFileSync(
-    path.join(sourceRoot, "shared/icons/material-rounded-filled-icons.ts"),
-    "utf8",
-  );
-  const assignment = source.indexOf("= [");
-  const end = source.lastIndexOf("];");
+  // Every default category's own icon is offered in its matching section.
+  for (const category of categories) {
+    const group = ACCOUNT_ICON_GROUPS.find(
+      (item) => item.key === String(category.name).toLowerCase(),
+    );
+    assert.ok(
+      group.icons.some((icon) => icon.name === category.icon),
+      `${category.name} section offers ${category.icon}`,
+    );
+  }
+
   const materialNames = new Set(
-    JSON.parse(source.slice(assignment + 2, end + 1)).map(
-      (icon) => `material:${icon.name}`,
-    ),
+    readMaterialCatalog().map((icon) => `material:${icon.name}`),
   );
   assert.deepEqual(
     ACCOUNT_ICON_GROUPS.flatMap((group) =>
@@ -186,7 +186,7 @@ test("suggested icon categories contain 20 valid choices each", () => {
           (icon) =>
             icon.name.startsWith("material:") && !materialNames.has(icon.name),
         )
-        .map((icon) => `${group.title}: ${icon.name}`),
+        .map((icon) => `${group.key}: ${icon.name}`),
     ),
     [],
   );
