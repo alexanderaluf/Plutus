@@ -278,7 +278,7 @@ test("validation rejects cross-currency and same-account transfers", () => {
   );
 });
 
-test("a category with children requires a subcategory selection", () => {
+test("a category with children can be used directly or through a subcategory", () => {
   const document = fixture();
   document.categories.push({
     uuid: "restaurant",
@@ -287,17 +287,14 @@ test("a category with children requires a subcategory selection", () => {
     type: 0,
     parentId: "food",
   });
-  assert.throws(
-    () =>
-      saveTransaction(
-        document,
-        draft(),
-        "parent-category",
-        "alex-personal",
-        now,
-      ),
-    /Choose a subcategory of Food/,
+  const parent = saveTransaction(
+    document,
+    draft(),
+    "parent-category",
+    "alex-personal",
+    now,
   );
+  assert.equal(parent.transactions[0].category, "food");
   const saved = saveTransaction(
     document,
     draft({ categoryId: "restaurant" }),

@@ -308,7 +308,6 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
             containerStyle={deleteSheetInitialPositionFix.containerStyle}
             onChange={deleteSheetInitialPositionFix.onChange}
             topInset={insets.top}
-            bottomInset={insets.bottom}
             enablePanDownToClose={!busy}
             enableHandlePanningGesture={!busy}
             enableContentPanningGesture={!busy}

@@ -60,12 +60,17 @@ export function selectCategoryRootId(
   document: BackupDocument,
   categoryId: string,
 ): string {
-  const categories = selectCategories(document);
-  const byId = new Map(categories.map((category) => [category.id, category]));
-  const selected = byId.get(categoryId);
-  if (!selected) return "";
+  return categoryRootIdIn(selectCategories(document), categoryId);
+}
 
-  let current = selected;
+/** Root ancestor of a category inside an already-selected list. */
+export function categoryRootIdIn(
+  categories: readonly Category[],
+  categoryId: string,
+): string {
+  const byId = new Map(categories.map((category) => [category.id, category]));
+  let current = byId.get(categoryId);
+  if (!current) return "";
   const visited = new Set<string>();
   while (current.parentId && !visited.has(current.id)) {
     visited.add(current.id);
@@ -74,6 +79,42 @@ export function selectCategoryRootId(
     current = parent;
   }
   return current.id;
+}
+
+export function categoryHasChildren(
+  categories: readonly Category[],
+  categoryId: string,
+): boolean {
+  return categories.some((category) => category.parentId === categoryId);
+}
+
+/**
+ * Every descendant of `parentId` in tree order (each child is followed by its
+ * own children). Parents are included so any level can be selected.
+ */
+export function categoryDescendants(
+  categories: readonly Category[],
+  parentId: string,
+): (Category & { depth: number })[] {
+  const children = new Map<string, Category[]>();
+  for (const category of categories)
+    if (category.parentId)
+      children.set(category.parentId, [
+        ...(children.get(category.parentId) ?? []),
+        category,
+      ]);
+  const result: (Category & { depth: number })[] = [];
+  const visited = new Set<string>([parentId]);
+  const walk = (id: string, depth: number) => {
+    for (const child of children.get(id) ?? []) {
+      if (visited.has(child.id)) continue;
+      visited.add(child.id);
+      result.push({ ...child, depth });
+      walk(child.id, depth + 1);
+    }
+  };
+  walk(parentId, 1);
+  return result;
 }
 
 function transactionContext(document: BackupDocument) {

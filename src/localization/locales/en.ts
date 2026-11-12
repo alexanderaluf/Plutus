@@ -175,7 +175,6 @@ export const en = {
       exchangeRate:
         "Choose the transaction currency again to load its current exchange rate.",
       category: "Choose a category for this transaction type.",
-      subcategory: "Choose a subcategory of {{name}}.",
       relation: "Choose a valid {{label}} in this profile.",
       missing: "This transaction no longer exists.",
       alreadySaved: "This transaction has already been saved.",
@@ -1132,7 +1131,6 @@ export const en = {
         exchangeRate:
           "Choose the transaction currency again to load its current exchange rate.",
         category: "Choose a category for this transaction type.",
-        subcategory: "Choose a subcategory of {{name}}.",
         relation: "Choose a valid {{relation}} in this profile.",
         missing: "This transaction no longer exists.",
         alreadySaved: "This transaction has already been saved.",
@@ -1153,12 +1151,9 @@ export const en = {
       add: "Add",
     },
     categorySheet: {
-      title: "Select a {{name}} subcategory",
-      description_one: "Choose the subcategory below to continue.",
-      description_other:
-        "Choose one of the {{count}} subcategories below to continue.",
-      empty: "No subcategories are available.",
-      cancel: "Cancel",
+      title: "Choose a {{name}} category",
+      parentOption: "Main category, without a subcategory",
+      subcategories: "Subcategories",
     },
     details: {
       typeAndDate: "{{type}} · {{date}}",

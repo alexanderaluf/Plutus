@@ -167,7 +167,6 @@ export const he = {
       exchangeRate:
         "יש לבחור שוב את מטבע העסקה כדי לטעון את שער החליפין הנוכחי שלו.",
       category: "יש לבחור קטגוריה לסוג העסקה הזה.",
-      subcategory: "יש לבחור תת־קטגוריה של {{name}}.",
       relation: "יש לבחור {{label}} תקין בפרופיל הזה.",
       missing: "העסקה הזו כבר לא קיימת.",
       alreadySaved: "העסקה הזו כבר נשמרה.",
@@ -1109,7 +1108,6 @@ export const he = {
         exchangeRate:
           "יש לבחור שוב את מטבע העסקה כדי לטעון את שער החליפין הנוכחי שלו.",
         category: "יש לבחור קטגוריה לסוג העסקה הזה.",
-        subcategory: "יש לבחור תת־קטגוריה של {{name}}.",
         relation: "יש לבחור {{relation}} תקין בפרופיל הזה.",
         missing: "העסקה הזו כבר לא קיימת.",
         alreadySaved: "העסקה הזו כבר נשמרה.",
@@ -1130,12 +1128,9 @@ export const he = {
       add: "הוספה",
     },
     categorySheet: {
-      title: "בחירת תת־קטגוריה של {{name}}",
-      description_one: "בחרו את תת־הקטגוריה שלמטה כדי להמשיך.",
-      description_other:
-        "בחרו אחת מתוך {{count}} תת־הקטגוריות שלמטה כדי להמשיך.",
-      empty: "אין תת־קטגוריות זמינות.",
-      cancel: "ביטול",
+      title: "בחירת קטגוריה מתוך {{name}}",
+      parentOption: "קטגוריה ראשית, ללא תת־קטגוריה",
+      subcategories: "תת־קטגוריות",
     },
     details: {
       typeAndDate: "{{type}} · {{date}}",

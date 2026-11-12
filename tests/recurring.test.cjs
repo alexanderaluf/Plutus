@@ -641,3 +641,17 @@ test("opening the app records automatic payments missed on earlier days", async 
     "2026-10-02",
   ]);
 });
+
+test("a recurring can use a parent category that has subcategories", () => {
+  const d = fixture();
+  d.categories = [
+    { uuid: "car", user: owner, name: "Car", type: 0 },
+    { uuid: "fuel", user: owner, name: "Fuel", type: 0, parentId: "car" },
+    { uuid: "salary", user: owner, name: "Salary", type: 1 },
+  ];
+  const parent = add(d, { category: "car" });
+  assert.equal(parent.recurrings[0].category, "car");
+  const child = add(d, { category: "fuel" }, "child");
+  assert.equal(child.recurrings[0].category, "fuel");
+  assert.throws(() => add(d, { category: "salary" }, "mismatch"), /matches/);
+});

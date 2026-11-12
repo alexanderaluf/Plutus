@@ -96,7 +96,6 @@ function BudgetEditorSheet({
           enableOverDrag={false}
           enablePanDownToClose={!busy}
           topInset={insets.top}
-          bottomInset={insets.bottom}
           keyboardBehavior="interactive"
           keyboardBlurBehavior="restore"
           android_keyboardInputMode="adjustResize"

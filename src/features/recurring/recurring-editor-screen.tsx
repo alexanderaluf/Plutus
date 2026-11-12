@@ -24,6 +24,7 @@ import {
   getCurrencyDisplayName,
 } from "@/features/profile/data/currencies-data";
 import { useProfiles } from "@/features/profile/profile-provider";
+import { CategorySelectionSection } from "@/features/transactions/components/category-selection-section";
 import { TransactionSelectionSection } from "@/features/transactions/components/transaction-selection-section";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
@@ -194,25 +195,8 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
         color: a.color,
       })),
     },
-    {
-      key: "category",
-      icon: "shopping",
-      options: categories
-        .filter(
-          (a) =>
-            a.type === draft.type &&
-            !categories.some((child) => child.parentId === a.id),
-        )
-        .map((a) => ({
-          id: a.id,
-          name: a.parentId
-            ? `${categories.find((p) => p.id === a.parentId)?.name ?? ""} / ${a.name}`
-            : a.name,
-          icon: a.icon,
-          iconPath: a.iconPath,
-          color: a.color,
-        })),
-    },
+    // Rendered by CategorySelectionSection (main categories + subcategory sheet).
+    { key: "category", icon: "shopping" },
     {
       key: "budget",
       icon: "piggy-bank",
@@ -386,7 +370,32 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
               </View>
               <FilledIcon name="chevron-right" size={24} />
             </Pressable>
-            {relations.map((relation) => (
+            {relations.map((relation) =>
+              relation.key === "category" ? (
+                <CategorySelectionSection
+                  key={relation.key}
+                  title={t("recurring.category")}
+                  placeholder={t("recurring.select", {
+                    name: t("recurring.category"),
+                  })}
+                  icon={relation.icon}
+                  categories={categories}
+                  type={draft.type}
+                  selectedId={draft.category}
+                  expanded={expanded === relation.key}
+                  optional
+                  onToggle={() =>
+                    setExpanded(expanded === relation.key ? "" : relation.key)
+                  }
+                  onSelect={(value) => change("category", value)}
+                  onAdd={() =>
+                    router.push({
+                      pathname: "/categories/create",
+                      params: { type: String(draft.type) },
+                    })
+                  }
+                />
+              ) : (
               <TransactionSelectionSection
                 key={relation.key}
                 title={t(`recurring.${relation.key}`)}
@@ -398,9 +407,7 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
                 options={relation.options}
                 expanded={expanded === relation.key}
                 compactOptions={
-                  relation.key === "account" ||
-                  relation.key === "category" ||
-                  relation.key === "budget"
+                  relation.key === "account" || relation.key === "budget"
                 }
                 onToggle={() =>
                   setExpanded(expanded === relation.key ? "" : relation.key)
@@ -410,12 +417,11 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
                 onAdd={
                   relation.key === "account"
                     ? () => router.push("/accounts/create")
-                    : relation.key === "category"
-                      ? () => router.push("/categories/create")
-                      : undefined
+                    : undefined
                 }
               />
-            ))}
+              ),
+            )}
             <Pressable
               accessibilityRole="switch"
               accessibilityLabel={t("recurring.automatic")}

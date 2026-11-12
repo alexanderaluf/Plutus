@@ -81,7 +81,6 @@ export function CommandSheet({
           enableDynamicSizing={false}
           enableOverDrag={false}
           topInset={insets.top}
-          bottomInset={insets.bottom}
           contentContainerClassName="h-full px-0 pb-0 pt-2"
           backgroundClassName="rounded-t-[28px] bg-surface"
           handleIndicatorClassName="w-10 bg-muted/40"

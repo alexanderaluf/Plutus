@@ -2,7 +2,6 @@ import {
   BottomSheetScrollView,
   BottomSheet,
 } from "@/shared/ui/app-bottom-sheet";
-import { Button } from "heroui-native";
 
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, View } from "react-native";
@@ -136,49 +135,38 @@ export function TransactionCategorySheet({
           enableDynamicSizing={false}
           enableOverDrag={false}
           topInset={insets.top}
-          bottomInset={insets.bottom}
           contentContainerClassName="h-full px-0 pb-0 pt-2"
           backgroundClassName="rounded-t-[28px] bg-surface"
           handleIndicatorClassName="w-10 bg-muted/40"
         >
           <View onLayout={openAfterLayout} className="flex-1">
-            <View className="gap-3 border-b border-border px-5 pb-4">
+            <View className="border-b border-border px-5 pb-4">
               <BottomSheet.Title>
                 {t("transactions.categorySheet.title", {
                   name: parent.name,
                 })}
               </BottomSheet.Title>
-              <View className="flex-row items-center gap-3">
-                <View
-                  className="size-11 items-center justify-center rounded-full"
-                  style={{
-                    backgroundColor: colorWithAlpha(parent.color, 0.18),
-                  }}
-                >
-                  <RecordIcon
-                    color={parent.color}
-                    name={parent.icon}
-                    pathData={parent.iconPath}
-                    size={23}
-                  />
-                </View>
-                <BottomSheet.Description className="flex-1">
-                  {options.length
-                    ? t("transactions.categorySheet.description", {
-                        count: options.length,
-                      })
-                    : t("transactions.categorySheet.empty")}
-                </BottomSheet.Description>
-              </View>
             </View>
             <BottomSheetScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
                 paddingHorizontal: 20,
                 paddingTop: 8,
-                paddingBottom: 12,
+                // Keeps the last row clear of the Android navigation buttons.
+                paddingBottom: Math.max(insets.bottom, 16) + 12,
               }}
             >
+              <CategoryRow
+                option={parent}
+                selected={selectedId === parent.id}
+                subtitle={t("transactions.categorySheet.parentOption")}
+                onPress={() => select(parent.id)}
+              />
+              {options.length ? (
+                <Text className="px-1 pb-1 pt-4 font-manrope-semibold text-xs uppercase tracking-wider text-muted">
+                  {t("transactions.categorySheet.subcategories")}
+                </Text>
+              ) : null}
               {options.map((child) => (
                 <CategoryRow
                   key={child.id}
@@ -189,16 +177,6 @@ export function TransactionCategorySheet({
                 />
               ))}
             </BottomSheetScrollView>
-            <View
-              className="border-t border-border px-5 pt-3"
-              style={{ paddingBottom: Math.max(insets.bottom, 16) + 12 }}
-            >
-              <Button variant="outline" onPress={close}>
-                <Button.Label>
-                  {t("transactions.categorySheet.cancel")}
-                </Button.Label>
-              </Button>
-            </View>
           </View>
         </BottomSheet.Content>
       </AppBottomSheetPortal>

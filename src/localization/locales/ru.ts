@@ -1119,12 +1119,9 @@ export const ru = {
     },
     categorySheet: {
       ...en.transactions.categorySheet,
-      title: "Выберите подкатегорию {{name}}",
-      description_one: "Выберите подкатегорию ниже, чтобы продолжить.",
-      description_other:
-        "Выберите одну из {{count}} подкатегорий ниже, чтобы продолжить.",
-      empty: "Нет доступных подкатегорий.",
-      cancel: "Отмена",
+      title: "Выберите категорию {{name}}",
+      parentOption: "Основная категория, без подкатегории",
+      subcategories: "Подкатегории",
     },
     details: {
       ...en.transactions.details,

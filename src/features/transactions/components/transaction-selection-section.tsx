@@ -27,6 +27,8 @@ type TransactionSelectionSectionProps = {
   icon: FilledIconName;
   options: TransactionOption[];
   selectedId: string;
+  /** Header text for the selection when it differs from the option name. */
+  selectedLabel?: string;
   expanded: boolean;
   disabled?: boolean;
   optional?: boolean;
@@ -43,6 +45,7 @@ export function TransactionSelectionSection({
   icon,
   options,
   selectedId,
+  selectedLabel,
   expanded,
   disabled = false,
   optional = false,
@@ -96,7 +99,7 @@ export function TransactionSelectionSection({
             numberOfLines={1}
             className={`font-sans ${compact ? "text-xs" : "text-sm"} ${selected ? "text-accent" : "text-muted"}`}
           >
-            {selected?.name ?? placeholder}
+            {selected ? (selectedLabel ?? selected.name) : placeholder}
           </Text>
         </View>
         <FilledIcon

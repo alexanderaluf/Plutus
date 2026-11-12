@@ -413,7 +413,6 @@ export function AccountDetailsScreen() {
           <BottomSheet.Content
             containerStyle={menuInitialPositionFix.containerStyle}
             onChange={menuInitialPositionFix.onChange}
-            bottomInset={insets.bottom}
             topInset={insets.top}
             enablePanDownToClose={!deleting}
             enableHandlePanningGesture={!deleting}

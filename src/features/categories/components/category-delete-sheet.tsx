@@ -93,7 +93,6 @@ export function CategoryDeleteSheet({
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           topInset={insets.top}
-          bottomInset={insets.bottom}
           enablePanDownToClose={!busy}
           enableHandlePanningGesture={!busy}
           enableContentPanningGesture={!busy}

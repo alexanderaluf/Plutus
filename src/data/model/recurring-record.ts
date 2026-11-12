@@ -1,7 +1,6 @@
 import type { BackupDocument } from "./backup-document";
 import {
   belongsToProfile,
-  categoryParent,
   identity,
   references,
 } from "./category-record";
@@ -201,12 +200,8 @@ export function saveRecurring(
       throw new Error(
         "A selected record is no longer available in this profile.",
       );
-    if (
-      collection === "categories" &&
-      (related.type !== draft.type ||
-        document.categories.some((c) => references(related, categoryParent(c))))
-    )
-      throw new Error("Select a matching category without subcategories.");
+    if (collection === "categories" && related.type !== draft.type)
+      throw new Error("Select a category that matches this payment type.");
   }
   const changedSchedule =
     !!existing &&

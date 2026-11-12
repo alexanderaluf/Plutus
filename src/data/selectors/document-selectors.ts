@@ -56,6 +56,9 @@ export {
   selectRecurrings,
 } from "./recurring-selectors";
 export {
+  categoryDescendants,
+  categoryHasChildren,
+  categoryRootIdIn,
   selectCategories,
   selectCategoryRootId,
   selectCategoryMonthlyTotals,

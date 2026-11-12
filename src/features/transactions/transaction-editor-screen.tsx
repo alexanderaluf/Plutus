@@ -50,8 +50,6 @@ import {
   selectAppPreferences,
   selectBudgets,
   selectCategories,
-  selectCategoryRootId,
-  selectTopLevelCategories,
 } from "@/data/selectors/document-selectors";
 import { selectExchangeRates } from "@/data/selectors/exchange-rate-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
@@ -66,7 +64,7 @@ import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 
-import { TransactionCategorySheet } from "./components/transaction-category-sheet";
+import { CategorySelectionSection } from "./components/category-selection-section";
 import {
   TransactionSelectionSection,
   type TransactionOption,
@@ -144,7 +142,6 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   );
   const accounts = selectAccounts(document);
   const categories = selectCategories(document);
-  const topLevelCategories = selectTopLevelCategories(document);
   const budgets = selectBudgets(document);
   const presetBudget =
     !sourceId && params.budgetId
@@ -227,9 +224,6 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   const [currencyRateLoading, setCurrencyRateLoading] = useState(false);
   const [currencyRateError, setCurrencyRateError] = useState("");
   const [currencyRateNotice, setCurrencyRateNotice] = useState("");
-  const [categorySheetParentId, setCategorySheetParentId] = useState<
-    string | null
-  >(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -289,65 +283,6 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         account?.currencyCode === selectedAccount.currencyCode)
     );
   });
-  const categoryOptions: TransactionOption[] = topLevelCategories
-    .filter((category) => category.type === draft.type)
-    .map((category) => ({
-      id: category.id,
-      name: category.name,
-      description: category.description,
-      icon: category.icon,
-      iconPath: category.iconPath,
-      color: category.color,
-    }));
-  const selectedCategoryRootId = selectCategoryRootId(
-    document,
-    draft.categoryId,
-  );
-  const categorySheetParent = categorySheetParentId
-    ? categories.find((category) => category.id === categorySheetParentId)
-    : undefined;
-  const categorySheetParentOption = categorySheetParent
-    ? {
-        id: categorySheetParent.id,
-        name: categorySheetParent.name,
-        description: categorySheetParent.description,
-        icon: categorySheetParent.icon,
-        iconPath: categorySheetParent.iconPath,
-        color: categorySheetParent.color,
-      }
-    : null;
-  const categorySheetChildren: TransactionOption[] = categorySheetParent
-    ? categories
-        .filter((category) => {
-          const visited = new Set<string>();
-          let parentId = category.parentId;
-          let isDescendant = false;
-          while (parentId && !visited.has(parentId)) {
-            if (parentId === categorySheetParent.id) {
-              isDescendant = true;
-              break;
-            }
-            visited.add(parentId);
-            parentId =
-              categories.find((candidate) => candidate.id === parentId)
-                ?.parentId ?? null;
-          }
-          return (
-            isDescendant &&
-            !categories.some((candidate) => candidate.parentId === category.id)
-          );
-        })
-        .map((category) => ({
-          id: category.id,
-          name: category.name,
-          description:
-            categories.find((candidate) => candidate.id === category.parentId)
-              ?.name ?? category.description,
-          icon: category.icon,
-          iconPath: category.iconPath,
-          color: category.color,
-        }))
-    : [];
   function localizeBudgetPeriod(period: string) {
     switch (period.toLowerCase()) {
       case "daily":
@@ -605,13 +540,6 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       case "This template has already been saved.":
         return t("transactions.form.validation.templateAlreadySaved");
     }
-    const subcategoryMatch = /^Choose a subcategory of (.+)\.$/.exec(
-      reason.message,
-    );
-    if (subcategoryMatch)
-      return t("transactions.form.validation.subcategory", {
-        name: subcategoryMatch[1],
-      });
     const relationMatch =
       /^Choose a valid (budget|label|loan|place|person) in this profile\.$/.exec(
         reason.message,
@@ -1157,24 +1085,17 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   />
                 ) : null}
 
-                <TransactionSelectionSection
+                <CategorySelectionSection
                   title={t("transactions.common.fields.category")}
                   placeholder={t("transactions.form.selectCategory")}
-                  icon="chart-donut-variant"
-                  options={categoryOptions}
-                  selectedId={selectedCategoryRootId}
+                  categories={categories}
+                  type={draft.type}
+                  selectedId={draft.categoryId}
                   expanded={expanded.category}
-                  compactOptions
                   disabled={isSaving}
                   optional
                   onToggle={() => toggleSection("category")}
-                  onSelect={(value) => {
-                    const hasChildren = categories.some(
-                      (category) => category.parentId === value,
-                    );
-                    if (value && hasChildren) setCategorySheetParentId(value);
-                    else change("categoryId", value);
-                  }}
+                  onSelect={(value) => change("categoryId", value)}
                   onAdd={() =>
                     router.push({
                       pathname: "/categories/create",
@@ -1470,7 +1391,6 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             containerStyle={actionSheetInitialPositionFix.containerStyle}
             onChange={actionSheetInitialPositionFix.onChange}
             topInset={insets.top}
-            bottomInset={insets.bottom}
             contentContainerClassName="px-5 pb-0 pt-2"
             backgroundClassName="rounded-t-[28px] bg-surface"
           >
@@ -1512,15 +1432,6 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         onOpenChange={setCurrencySheetOpen}
         onSelect={(currency) => void selectCurrency(currency.code)}
       />
-      {categorySheetParentOption ? (
-        <TransactionCategorySheet
-          parent={categorySheetParentOption}
-          options={categorySheetChildren}
-          selectedId={draft.categoryId}
-          onSelect={(value) => change("categoryId", value)}
-          onDismiss={() => setCategorySheetParentId(null)}
-        />
-      ) : null}
     </View>
   );
 }
