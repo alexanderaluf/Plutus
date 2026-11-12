@@ -7,6 +7,7 @@ import { settleDueCardPayments } from "../model/card-payment";
 import { reconcileRecurring } from "./recurring-service";
 import { syncRecurringReminders } from "./recurring-reminders";
 import { syncDailyNotifications } from "../notifications/daily-notifications";
+import { syncHomeWidget } from "../widgets/widget-sync";
 import { i18n } from "@/localization/i18n";
 
 const TASK = "plutus-recurring-payments-v1";
@@ -36,6 +37,7 @@ if (!TaskManager.isTaskDefined(TASK))
       await syncRecurringReminders(latest);
       // Keeps the daily notification window filled when the app stays closed.
       await syncDailyNotifications(latest).catch(() => undefined);
+      await syncHomeWidget(latest).catch(() => undefined);
       return result.error
         ? BackgroundTask.BackgroundTaskResult.Failed
         : BackgroundTask.BackgroundTaskResult.Success;

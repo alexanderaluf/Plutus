@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <receiver
+      android:name="expo.modules.plutuswidget.PlutusWidgetProvider"
+      android:exported="true"
+      android:label="@string/plutus_widget_title">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        <action android:name="com.plutus.budgettracker.widget.ACTION_SWITCH_PROFILE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/plutus_widget_info" />
+    </receiver>
+  </application>
+</manifest>
+

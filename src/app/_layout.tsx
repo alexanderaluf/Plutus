@@ -3,6 +3,7 @@ import "../../global.css";
 import { Huninn_400Regular } from "@expo-google-fonts/huninn/400Regular";
 import { useFonts } from "expo-font";
 import { NavigationBar } from "expo-navigation-bar";
+import * as ScreenOrientation from "expo-screen-orientation";
 import {
   DarkTheme,
   DefaultTheme,
@@ -15,7 +16,7 @@ import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import { HeroUINativeProvider } from "heroui-native";
 import { useEffect, type PropsWithChildren } from "react";
-import { View } from "react-native";
+import { Dimensions, View, type ScaledSize } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LayoutDirection, useUniwind } from "uniwind";
@@ -27,6 +28,7 @@ import { LocalDataProvider } from "@/data/local-data-provider";
 import { ProfileProvider } from "@/features/profile/profile-provider";
 import { AppLockProvider } from "@/features/security/app-lock-provider";
 import { NotificationNavigation } from "@/shared/navigation/notification-navigation";
+import { WidgetNavigation } from "@/shared/navigation/widget-navigation";
 import {
   LocalizationProvider,
   useAppLocalization,
@@ -45,6 +47,32 @@ const ROOT_BACKGROUNDS = {
   dark: "#000000",
   light: "#DCE7E0",
 } as const;
+
+// Android's large-screen threshold; tablets and unfolded foldables may rotate.
+const PHONE_MAX_SHORT_SIDE = 600;
+
+function applyPhonePortraitLock(screen: ScaledSize) {
+  const lock =
+    Math.min(screen.width, screen.height) < PHONE_MAX_SHORT_SIDE
+      ? ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.PORTRAIT_UP,
+        )
+      : ScreenOrientation.unlockAsync();
+  void lock.catch(() => undefined);
+}
+
+// The manifest stays unrestricted for Play's large-screen policy; phones keep
+// the portrait layout at runtime.
+function usePhonePortraitLock() {
+  useEffect(() => {
+    applyPhonePortraitLock(Dimensions.get("screen"));
+    const subscription = Dimensions.addEventListener(
+      "change",
+      ({ screen }: { screen: ScaledSize }) => applyPhonePortraitLock(screen),
+    );
+    return () => subscription.remove();
+  }, []);
+}
 
 function LocalizedHeroUIProvider({ children }: PropsWithChildren) {
   const { isRTL } = useAppLocalization();
@@ -104,6 +132,7 @@ function AppSystemBars() {
 
 export default function RootLayout() {
   const { theme } = useUniwind();
+  usePhonePortraitLock();
   const [fontsLoaded, fontError] = useFonts({
     Huninn_400Regular,
   });
@@ -135,6 +164,7 @@ export default function RootLayout() {
                           <ProfileProvider>
                             <AppNavigation />
                             <NotificationNavigation />
+                            <WidgetNavigation />
                           </ProfileProvider>
                         </OnboardingGate>
                         <AppBottomSheetPortalHost />

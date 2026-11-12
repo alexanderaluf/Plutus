@@ -19,6 +19,9 @@ if (fs.existsSync(header)) {
   if (after !== before) fs.writeFileSync(header, after);
 }
 
+// Keep ExpoModulesJSI in its shipped Swift 6 mode. Swift 5 mode reintroduces
+// Sendable warnings, and Xcode 27 reports those as a phantom "exit code 0"
+// error from the nested xcodebuild, failing the archive (expo/expo#50482).
 const manifest = path.join(
   __dirname,
   "../node_modules/expo-modules-jsi/apple/Package.swift",
@@ -26,8 +29,8 @@ const manifest = path.join(
 if (fs.existsSync(manifest)) {
   const before = fs.readFileSync(manifest, "utf8");
   const after = before.replace(
-    "swiftLanguageModes: [.v6]",
     "swiftLanguageModes: [.v5]",
+    "swiftLanguageModes: [.v6]",
   );
   if (after !== before) fs.writeFileSync(manifest, after);
 }

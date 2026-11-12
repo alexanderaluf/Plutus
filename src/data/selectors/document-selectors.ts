@@ -41,6 +41,13 @@ import { readAIChat, type AIChat } from "../model/ai-chat-record";
 export { selectTransactions } from "./transaction-selectors";
 export { selectBudgets, selectBudgetCurrency } from "./budget-selectors";
 export {
+  selectWidgetSnapshot,
+  type WidgetAccountItem,
+  type WidgetLabels,
+  type WidgetProfileSnapshot,
+  type WidgetSnapshot,
+} from "./widget-selectors";
+export {
   recurringTotals,
   selectHomeRecurringPayments,
   selectRecurringEvents,

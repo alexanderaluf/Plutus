@@ -1918,4 +1918,22 @@ export const he = {
     russian: "רוסית",
     accessibilityLabel: "בחירת {{language}} כשפת האפליקציה",
   },
+  widgets: {
+    overview: {
+      title: "נכסים ותזרים",
+      subtitle: "מעקב אחר יתרות, תזרים חודשי והוספת עסקאות",
+      totalBalance: "יתרה כוללת",
+      assets: "נכסים",
+      debt: "התחייבויות",
+      monthlyIncome: "הכנסות החודש",
+      monthlyExpense: "הוצאות החודש",
+      accountsState: "מצב החשבונות",
+      createIncome: "הוספת הכנסה",
+      createExpense: "הוספת הוצאה",
+      switchProfile: "החלפת פרופיל",
+      noAccounts: "אין עדיין חשבונות פעילים",
+      setupTitle: "השלימו את הגדרת Plutus",
+      setupSubtitle: "פתחו את Plutus כדי ליצור פרופיל וחשבונות.",
+    },
+  },
 } as const;

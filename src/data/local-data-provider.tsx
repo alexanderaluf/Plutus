@@ -27,6 +27,7 @@ import {
 import { registerRecurringBackgroundTask } from "./recurring/recurring-background";
 import { syncRecurringReminders } from "./recurring/recurring-reminders";
 import { syncDailyNotifications } from "./notifications/daily-notifications";
+import { syncHomeWidget } from "./widgets/widget-sync";
 import type {
   BackupCollectionKey,
   BackupDocument,
@@ -118,6 +119,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
       // Summaries are rebuilt from the latest records; failures are retried
       // on the next change and never block the recurring reminders.
       void syncDailyNotifications(document).catch(() => undefined);
+      void syncHomeWidget(document).catch(() => undefined);
     }, 500);
     return () => clearTimeout(timer);
   }, [document, isHydrated]);

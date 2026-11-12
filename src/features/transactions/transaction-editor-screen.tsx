@@ -123,7 +123,11 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   const { t, i18n } = useTranslation();
   const { direction } = useAppLocalization();
   const router = useRouter();
-  const params = useLocalSearchParams<{ copyId?: string; budgetId?: string }>();
+  const params = useLocalSearchParams<{
+    copyId?: string;
+    budgetId?: string;
+    type?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
   const { document, ensureExchangeRates, updateDocument } = useLocalData();
@@ -180,6 +184,12 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     }
     return {
       ...createTransactionDraft(),
+      type:
+        params.type === "income" || params.type === "1"
+          ? 1
+          : params.type === "transfer" || params.type === "2"
+            ? 2
+            : 0,
       accountId: defaultAccount?.id ?? "",
       currencyCode:
         defaultAccount?.currencyCode ??

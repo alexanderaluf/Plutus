@@ -1957,4 +1957,22 @@ export const en = {
     russian: "Russian",
     accessibilityLabel: "Select {{language}} as the application language",
   },
+  widgets: {
+    overview: {
+      title: "Assets & Cash Flow",
+      subtitle: "Track balances, monthly flow, and add transactions",
+      totalBalance: "Total balance",
+      assets: "Assets",
+      debt: "Liabilities",
+      monthlyIncome: "Month income",
+      monthlyExpense: "Month expense",
+      accountsState: "Accounts state",
+      createIncome: "Create income",
+      createExpense: "Create expense",
+      switchProfile: "Switch profile",
+      noAccounts: "No active accounts yet",
+      setupTitle: "Finish setting up Plutus",
+      setupSubtitle: "Open Plutus to create your profile and accounts.",
+    },
+  },
 } as const;

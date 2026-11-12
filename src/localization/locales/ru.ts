@@ -1914,4 +1914,22 @@ export const ru = {
     russian: "Русский",
     accessibilityLabel: "Выбрать {{language}} в качестве языка приложения",
   },
+  widgets: {
+    overview: {
+      title: "Активы и поток",
+      subtitle: "Баланс счетов, итоги месяца и быстрые операции",
+      totalBalance: "Общий баланс",
+      assets: "Активы",
+      debt: "Обязательства",
+      monthlyIncome: "Доход за месяц",
+      monthlyExpense: "Расход за месяц",
+      accountsState: "Состояние счетов",
+      createIncome: "Добавить доход",
+      createExpense: "Добавить расход",
+      switchProfile: "Сменить профиль",
+      noAccounts: "Пока нет активных счетов",
+      setupTitle: "Завершите настройку Plutus",
+      setupSubtitle: "Откройте Plutus, чтобы создать профиль и счета.",
+    },
+  },
 } as const;
