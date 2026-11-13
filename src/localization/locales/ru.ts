@@ -1605,6 +1605,10 @@ export const ru = {
       seeAll: "Показать все",
       empty: "Недавних операций пока нет.",
     },
+    dateGroups: {
+      today: "Сегодня",
+      yesterday: "Вчера",
+    },
     monthSelector: {
       thisMonth: "Этот месяц",
       previousMonth: "Предыдущий финансовый месяц",

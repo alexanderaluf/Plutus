@@ -249,7 +249,7 @@ test("overview totals and daily pacing use the same saved financial month", () =
 test("device-test backup history is navigable without losing records at custom month boundaries", () => {
   const d = JSON.parse(
     fs.readFileSync(
-      path.resolve(__dirname, "../test-data/plutus-device-test-2026-09.json"),
+      path.resolve(__dirname, "../test-data/plutus-en.json"),
       "utf8",
     ),
   );

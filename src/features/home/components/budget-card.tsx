@@ -20,7 +20,7 @@ import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
 
-import { HomeSectionHeader } from "./home-section-header";
+import { HomeSectionAction } from "./home-section-header";
 
 const layout = LinearTransition.duration(240).reduceMotion(ReduceMotion.System);
 
@@ -316,16 +316,13 @@ export function BudgetOverviewCard({
   );
 }
 
-export function BudgetListHeader({ count }: { count: number }) {
+export function BudgetListHeader() {
   const router = useRouter();
   const { t } = useTranslation();
   return (
-    <HomeSectionHeader
-      title={t("home.budgets.title")}
-      count={count}
-      actionLabel={t("home.budgets.manage")}
-      actionIcon="plus"
-      onActionPress={() => router.push("/budgets")}
+    <HomeSectionAction
+      label={t("home.budgets.manage")}
+      onPress={() => router.push("/budgets")}
     />
   );
 }

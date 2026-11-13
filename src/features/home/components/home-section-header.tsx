@@ -70,3 +70,30 @@ export function HomeSectionHeader({
     </View>
   );
 }
+
+/**
+ * The only control above the categories, budgets and recurring lists: a
+ * labelled link to the full management screen, aligned to the reading end.
+ */
+export function HomeSectionAction({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      hitSlop={6}
+      onPress={onPress}
+      className="mb-3 min-h-9 flex-row items-center gap-1.5 self-end rounded-full border border-border bg-surface px-3 py-1.5"
+      style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
+    >
+      <Text className="font-manrope-semibold text-[12px] leading-[16px] text-accent">
+        {label}
+      </Text>
+      <FilledIcon name="chevron-right" size={14} tone="accent" />
+    </Pressable>
+  );
+}

@@ -240,7 +240,7 @@ test("100,000 transactions yield to UI work while indexing, overview and all sec
 test("supplied device backup: cooperative projections preserve every profile's financial totals", async () => {
   const source = JSON.parse(
     fs.readFileSync(
-      path.resolve(__dirname, "../test-data/plutus-device-test-2026-09.json"),
+      path.resolve(__dirname, "../test-data/plutus-en.json"),
       "utf8",
     ),
   );

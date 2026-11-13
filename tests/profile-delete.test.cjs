@@ -363,24 +363,24 @@ test("deleting a missing profile does not change the document", () => {
   assert.equal(current.users.length, 2);
 });
 
-test("manage screen keeps the delete sheet mounted and opens it from the profile delete action", () => {
+// The sheet mounts on demand and animates itself open and closed, then asks
+// the screen to unmount it through onDismiss.
+test("manage screen mounts the delete sheet for the chosen profile and removes it on dismiss", () => {
   const app = mountManageProfilesScreen();
-  let sheet = app.nodes().find((node) => node.type === "ProfileDeleteSheet");
-  assert.ok(sheet);
-  assert.equal(sheet.props.isOpen, false);
-  assert.equal(sheet.props.profile, null);
+  const findSheet = () =>
+    app.nodes().find((node) => node.type === "ProfileDeleteSheet");
+  assert.equal(findSheet(), undefined);
 
   const list = app.nodes().find((node) => node.type === "ProfileList");
   list.props.onDelete(app.profiles[0]);
   app.render();
-  sheet = app.nodes().find((node) => node.type === "ProfileDeleteSheet");
-  assert.equal(sheet.props.isOpen, true);
+  const sheet = findSheet();
+  assert.ok(sheet);
   assert.equal(sheet.props.profile.id, "profile-one");
 
   sheet.props.onDismiss();
   app.render();
-  sheet = app.nodes().find((node) => node.type === "ProfileDeleteSheet");
-  assert.equal(sheet.props.isOpen, false);
+  assert.equal(findSheet(), undefined);
 });
 
 test("deleting a non-active profile preserves metadata selection despite a stale selected flag", () => {

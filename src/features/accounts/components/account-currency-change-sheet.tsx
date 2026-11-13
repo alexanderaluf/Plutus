@@ -39,12 +39,19 @@ export function AccountCurrencyChangeSheet({
   const [error, setError] = useState("");
   const [cached, setCached] = useState(false);
   const generation = useRef(0);
-  useEffect(() => {
-    generation.current += 1;
+  // A new request starts from a clean slate. Resetting while rendering avoids
+  // a second render pass with the previous request's rate.
+  const [shownRequest, setShownRequest] = useState(request);
+  if (shownRequest !== request) {
+    setShownRequest(request);
     setSnapshot(null);
     setLoading(false);
     setError("");
     setCached(false);
+  }
+  useEffect(() => {
+    // Invalidates any rate lookup still running for the previous request.
+    generation.current += 1;
     return () => {
       generation.current += 1;
     };

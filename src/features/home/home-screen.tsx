@@ -26,6 +26,7 @@ import Reanimated, {
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
+  createHomeTransactionRows,
   type HomeRow,
   type HomeSection,
 } from "@/data/selectors/home-section-selectors";
@@ -53,6 +54,7 @@ import {
   RecurringHomeRow,
 } from "./components/recurring-home-section";
 import { IndexedTransactionRow } from "./components/transaction-list";
+import { TransactionDateHeader } from "./components/transaction-date-header";
 import { TransactionMonthSelector } from "./components/transaction-month-selector";
 import { financialMonth } from "@/data/model/financial-month";
 import {
@@ -188,11 +190,7 @@ export function HomeScreen() {
   const rows = useMemo<HomeRow[]>(() => {
     if (isSectionPending) return EMPTY_ROWS;
     if (section === "transactions")
-      return transactions.map((entry) => ({
-        kind: "transaction",
-        id: entry.id,
-        entry,
-      }));
+      return createHomeTransactionRows(transactions);
     return sectionData?.rows.slice(0, sectionLimit) ?? EMPTY_ROWS;
   }, [isSectionPending, section, transactions, sectionData, sectionLimit]);
   const totalRows =
@@ -241,24 +239,27 @@ export function HomeScreen() {
         style={[
           item.kind !== "category" &&
             item.kind !== "transaction" &&
+            item.kind !== "date" &&
             styles.rowGap,
         ]}
       >
-        {item.kind === "transaction" ? (
+        {item.kind === "date" ? (
+          <TransactionDateHeader
+            timestamp={item.timestamp}
+            now={now}
+            isFirst={index === 0}
+          />
+        ) : item.kind === "transaction" ? (
           <View
             className={`border-x border-border bg-surface px-4 ${
-              index === 0 ? "rounded-t-[24px] border-t pt-1" : ""
-            } ${
-              index === transactions.length - 1
-                ? "rounded-b-[24px] border-b pb-1"
-                : ""
-            }`}
+              item.first ? "rounded-t-[24px] border-t pt-1" : ""
+            } ${item.last ? "rounded-b-[24px] border-b pb-1" : ""}`}
             style={{ borderCurve: "continuous" }}
           >
             <IndexedTransactionRow
               entry={item.entry}
               project={projectTransaction}
-              showBorder={index < transactions.length - 1}
+              showBorder={!item.last}
               onPress={onTransactionPress}
             />
           </View>
@@ -290,7 +291,7 @@ export function HomeScreen() {
     ),
     [
       projectTransaction,
-      transactions.length,
+      now,
       onTransactionPress,
       rowFade,
       sectionData,
@@ -611,59 +612,14 @@ export function HomeScreen() {
                   {monthSelector()}
                 </View>
                 <Reanimated.View style={sectionStyle}>
-                  {isSectionPending ? null : section === "transactions" ? (
-                    <View className="mb-3 flex-row items-center justify-between gap-3">
-                      <View className="min-w-0 flex-1 gap-0.5">
-                        <View className="flex-row items-center gap-2">
-                          <Text
-                            numberOfLines={1}
-                            className="min-w-0 shrink font-manrope-bold text-[19px] leading-[24px] tracking-[-0.2px] text-foreground"
-                          >
-                            {t("home.recentActivity.allTitle")}
-                          </Text>
-                          <View className="shrink-0 rounded-full border border-border/70 bg-surface px-2.5 py-0.5">
-                            <Text
-                              className="font-manrope-semibold text-[11px] leading-[15px] text-muted"
-                              style={{ fontVariant: ["tabular-nums"] }}
-                            >
-                              {monthTransactionCount.toLocaleString(
-                                i18n.resolvedLanguage,
-                              )}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text
-                          numberOfLines={1}
-                          className="font-sans text-[13px] leading-[18px] text-muted"
-                        >
-                          {t("home.recentActivity.description")}
-                        </Text>
-                      </View>
-                      <Pressable
-                        accessibilityRole="button"
-                        hitSlop={6}
-                        onPress={() => router.push("/search")}
-                        className="min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5"
-                        style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
-                      >
-                        <FilledIcon name="magnify" size={14} tone="accent" />
-                        <Text className="font-manrope-semibold text-[12px] leading-[16px] text-accent">
-                          {t("home.recentActivity.seeAll")}
-                        </Text>
-                        <FilledIcon
-                          name="chevron-right"
-                          size={14}
-                          tone="accent"
-                        />
-                      </Pressable>
-                    </View>
-                  ) : sectionData?.section === "categories" ? (
-                    <CategoryListHeader count={totalRows} />
+                  {isSectionPending ||
+                  section === "transactions" ? null : sectionData?.section ===
+                    "categories" ? (
+                    <CategoryListHeader />
                   ) : sectionData?.section === "budgets" ? (
-                    <BudgetListHeader count={totalRows} />
+                    <BudgetListHeader />
                   ) : sectionData?.section === "recurring" ? (
                     <RecurringHomeHeader
-                      count={totalRows}
                       paid={sectionData.paid}
                       remaining={sectionData.remaining}
                       fallbackCurrency={activeProfile.currencyCode}

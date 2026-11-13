@@ -11,7 +11,7 @@ import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
 
-import { HomeSectionHeader } from "./home-section-header";
+import { HomeSectionAction } from "./home-section-header";
 
 type MoneyTotal = { amount: number; currencyCode: string };
 
@@ -56,27 +56,22 @@ function Amounts({
 
 export function RecurringHomeHeader({
   paid,
-  count,
   remaining,
   fallbackCurrency,
 }: {
   paid: MoneyTotal[];
-  count: number;
   remaining: MoneyTotal[];
   fallbackCurrency: string;
 }) {
   const router = useRouter();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const theme = useAppThemeColors();
 
   return (
-    <View className="mb-3 gap-3.5">
-      <HomeSectionHeader
-        title={t("home.recurring.title")}
-        count={count}
-        actionLabel={t("home.recurring.manage")}
-        actionIcon="swap-horizontal"
-        onActionPress={() => router.push("/recurring")}
+    <View className="mb-3">
+      <HomeSectionAction
+        label={t("home.recurring.manage")}
+        onPress={() => router.push("/recurring")}
       />
 
       <View className="flex-row gap-3">
@@ -145,22 +140,6 @@ export function RecurringHomeHeader({
             color={theme.danger}
           />
         </View>
-      </View>
-
-      <View className="flex-row items-center justify-between gap-2 pt-0.5">
-        <Text className="min-w-0 flex-1 font-manrope-bold text-[15px] leading-[20px] text-foreground">
-          {t("home.recurring.remainingTitle")}
-        </Text>
-        {count > 0 ? (
-          <View className="shrink-0 rounded-full border border-border/70 bg-surface px-2.5 py-0.5">
-            <Text
-              className="font-manrope-semibold text-[11px] leading-[15px] text-muted"
-              style={{ fontVariant: ["tabular-nums"] }}
-            >
-              {count.toLocaleString(i18n.resolvedLanguage)}
-            </Text>
-          </View>
-        ) : null}
       </View>
     </View>
   );

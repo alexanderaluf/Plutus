@@ -4,6 +4,7 @@ import {
   type PropsWithChildren,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -124,10 +125,19 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
     return () => clearTimeout(timer);
   }, [document, isHydrated]);
 
+  // Effect events always see the latest records, so the effects below keep
+  // their deliberate schedules instead of restarting on every document change.
+  const reconcileRecurringNow = useEffectEvent(() =>
+    reconcileRecurringPayments(),
+  );
+  const refreshNow = useEffectEvent(() => refresh());
+  const reconcileCardsNow = useEffectEvent(() => reconcileCardPayments());
+  const isReady = isHydrated && getSetupStatus(document) === "ready";
+
   useEffect(() => {
-    if (!isHydrated || getSetupStatus(document) !== "ready") return;
+    if (!isReady) return;
     const run = () => {
-      void reconcileRecurringPayments().catch(() =>
+      void reconcileRecurringNow().catch(() =>
         setRecurringError(
           "Recurring payments could not be checked. Please try again.",
         ),
@@ -140,7 +150,7 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
     const timer = setInterval(run, 60_000);
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active")
-        void refresh()
+        void refreshNow()
           .then(run)
           .catch(() =>
             setRecurringError("Could not reload recurring payments."),
@@ -150,7 +160,8 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
       clearInterval(timer);
       subscription.remove();
     };
-  }, [isHydrated, document.users.length]);
+    // A new profile restarts the schedule, as do hydration and finished setup.
+  }, [isReady, document.users.length]);
 
   function recurringStore() {
     return {
@@ -203,11 +214,12 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   }
 
   useEffect(() => {
-    void refresh().catch(error => setHydrationError(error instanceof Error ? error : new Error("Could not open local data.")));
+    void refreshNow().catch(error => setHydrationError(error instanceof Error ? error : new Error("Could not open local data.")));
   }, []);
 
   useEffect(() => {
-    if (isHydrated) void reconcileCardPayments().catch(reportPaymentError);
+    if (isHydrated) void reconcileCardsNow().catch(reportPaymentError);
+    // Every saved change can settle a card payment.
   }, [isHydrated, document]);
 
   function reportPaymentError() {
@@ -229,14 +241,14 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
         1,
       );
       midnightTimer = setTimeout(() => {
-        void reconcileCardPayments()
+        void reconcileCardsNow()
           .catch(reportPaymentError)
           .finally(scheduleMidnightSettlement);
       }, nextMidnight.getTime() - now.getTime());
     };
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active")
-        void reconcileCardPayments().catch(reportPaymentError);
+        void reconcileCardsNow().catch(reportPaymentError);
     });
     scheduleMidnightSettlement();
     return () => {

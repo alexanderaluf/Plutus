@@ -261,6 +261,9 @@ function screenHarness(document, insets, sizes = {}) {
     "./components/transaction-month-selector": {
       TransactionMonthSelector: "MonthSelector",
     },
+    "./components/transaction-date-header": {
+      TransactionDateHeader: "DateHeader",
+    },
     "./components/budget-card": {
       BudgetListHeader: "Budgets",
       BudgetOverviewCard: "BudgetRow",
@@ -580,6 +583,10 @@ test("rapid section changes prepare only the latest requested data", () => {
     find(tree, "FlatList").props.data.every((row) => row.kind === "recurring"),
   );
 });
+// Date header rows group transactions by day; paging counts transactions only.
+function transactionRows(list) {
+  return list.props.data.filter((row) => row.kind === "transaction");
+}
 function find(tree, type) {
   if (!tree) return null;
   if (Array.isArray(tree))
@@ -618,8 +625,9 @@ for (const [device, top, bottom] of [
     const harness = screenHarness(fixture(), { top, bottom });
     let tree = harness.render(),
       list = find(tree, "FlatList");
-    assert.equal(list.props.data.length, 30);
-    assert.equal(list.props.data[0].id, "8-99");
+    assert.equal(transactionRows(list).length, 30);
+    assert.equal(list.props.data[0].kind, "date");
+    assert.equal(transactionRows(list)[0].id, "8-99");
     assert.equal(list.props.contentInsetAdjustmentBehavior, "never");
     assert.equal(
       list.props.contentContainerStyle[1].paddingBottom,
@@ -635,7 +643,7 @@ for (const [device, top, bottom] of [
       list.props.onEndReached();
       tree = harness.render();
       list = find(tree, "FlatList");
-      assert.equal(list.props.data.length, expected);
+      assert.equal(transactionRows(list).length, expected);
     }
     assert.equal(harness.counts.indexed, 1, "pages must reuse the date index");
     assert.equal(
@@ -644,7 +652,7 @@ for (const [device, top, bottom] of [
       "pages must not recalculate the overview",
     );
     const row = find(
-      list.props.renderItem({ item: list.props.data[0], index: 0 }),
+      list.props.renderItem({ item: list.props.data[1], index: 1 }),
       "Row",
     );
     row.props.onPress(row.props.project(row.props.entry));
@@ -663,8 +671,8 @@ for (const [device, top, bottom] of [
     find(list.props.ListHeaderComponent, "MonthSelector").props.onPrevious();
     tree = harness.render();
     list = find(tree, "FlatList");
-    assert.equal(list.props.data.length, 30);
-    assert.equal(list.props.data[0].id, "7-49");
+    assert.equal(transactionRows(list).length, 30);
+    assert.equal(transactionRows(list)[0].id, "7-49");
     assert.equal(
       find(list.props.ListHeaderComponent, "MonthSelector").props.isCurrent,
       false,
@@ -675,7 +683,7 @@ for (const [device, top, bottom] of [
     tree = harness.render();
     list = find(tree, "FlatList");
     assert.equal(
-      list.props.data.length,
+      transactionRows(list).length,
       30,
       "returning to a month starts with a small page again",
     );
@@ -712,7 +720,8 @@ for (const [device, top, bottom] of [
       ["categories", "Categories"],
       ["budgets", "Budgets"],
       ["recurring", "Recurring"],
-      ["transactions", "Text"],
+      // The transaction list has no header of its own.
+      ["transactions", null],
     ]) {
       harness.scrollY.setValue(650);
       tree = harness.render();
@@ -730,12 +739,18 @@ for (const [device, top, bottom] of [
         offset: 400 - top - 8,
         animated: false,
       });
-      assert.ok(find(list.props.ListHeaderComponent, content));
+      if (content) assert.ok(find(list.props.ListHeaderComponent, content));
+      else
+        for (const header of ["Categories", "Budgets", "Recurring"])
+          assert.ok(!find(list.props.ListHeaderComponent, header));
       assert.equal(
         find(list.props.ListHeaderComponent, "Selector").props.value,
         section,
       );
-      assert.equal(list.props.data.length, section === "transactions" ? 30 : 0);
+      assert.equal(
+        transactionRows(list).length,
+        section === "transactions" ? 30 : 0,
+      );
     }
     assert.equal(harness.counts.overview, 1);
     assert.equal(harness.counts.indexed, 1);

@@ -8,7 +8,6 @@ import { Pressable } from "react-native";
 import { useLocalData } from "@/data/local-data-provider";
 import { selectAccounts } from "@/data/selectors/document-selectors";
 import { AccountCreateScreen } from "@/features/accounts/account-create-screen";
-import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 
 export default function EditAccountRoute() {
@@ -16,7 +15,6 @@ export default function EditAccountRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { document } = useLocalData();
   const router = useRouter();
-  const theme = useAppThemeColors();
   if (!selectAccounts(document).some((account) => account.id === id))
     return (
       <EdgeToEdgeLayout>

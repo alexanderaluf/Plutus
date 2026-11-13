@@ -3,7 +3,6 @@ import type {
   CategoryTotal,
 } from "@/data/selectors/category-selectors";
 import type { HomeCategoryRow } from "@/data/selectors/home-section-selectors";
-import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { colorForeground } from "@/shared/icons/colors";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
@@ -13,32 +12,16 @@ import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 
-import { HomeSectionHeader } from "./home-section-header";
+import { HomeSectionAction } from "./home-section-header";
 
-export function CategoryListHeader({
-  count,
-  now,
-}: {
-  count: number;
-  now?: Date;
-}) {
-  const { t, i18n } = useTranslation();
+export function CategoryListHeader() {
+  const { t } = useTranslation();
   const router = useRouter();
-  const clockNow = useCategoryClock();
-  const activeDate = now ?? clockNow;
-  const monthLabel = activeDate.toLocaleDateString(i18n.resolvedLanguage, {
-    month: "long",
-    year: "numeric",
-  });
 
   return (
-    <HomeSectionHeader
-      title={t("categories.list.title")}
-      count={count}
-      subtitle={monthLabel}
-      actionLabel={t("categories.list.manage")}
-      actionIcon="plus"
-      onActionPress={() => router.push("/categories")}
+    <HomeSectionAction
+      label={t("categories.list.manage")}
+      onPress={() => router.push("/categories")}
     />
   );
 }

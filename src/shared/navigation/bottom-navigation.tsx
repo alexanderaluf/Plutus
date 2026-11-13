@@ -1,6 +1,12 @@
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { BlurView } from "expo-blur";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View, type ViewInstance } from "react-native";
 import Animated, {
@@ -66,42 +72,56 @@ export function BottomNavigation({
     search: t("navigation.actions.openSearch"),
   };
 
+  const showNextActionIcon = useCallback(() => {
+    setDisplayedActionItem(targetActionItem.current);
+    actionTranslateY.set(-12);
+
+    requestAnimationFrame(() => {
+      actionTranslateY.set(
+        withTiming(0, {
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+        }),
+      );
+      actionOpacity.set(
+        withTiming(1, {
+          duration: 190,
+          easing: Easing.out(Easing.quad),
+        }),
+      );
+    });
+  }, [actionOpacity, actionTranslateY]);
+
   useEffect(() => {
     if (activeItem === displayedActionItem) return;
 
     targetActionItem.current = activeItem;
-    actionTranslateY.value = withTiming(12, {
-      duration: 150,
-      easing: Easing.in(Easing.cubic),
-    });
-    actionOpacity.value = withTiming(
-      0,
-      { duration: 120, easing: Easing.in(Easing.quad) },
-      (finished) => {
-        if (finished) runOnJS(showNextActionIcon)();
-      },
+    actionTranslateY.set(
+      withTiming(12, {
+        duration: 150,
+        easing: Easing.in(Easing.cubic),
+      }),
     );
-  }, [activeItem, actionOpacity, actionTranslateY, displayedActionItem]);
-
-  function showNextActionIcon() {
-    setDisplayedActionItem(targetActionItem.current);
-    actionTranslateY.value = -12;
-
-    requestAnimationFrame(() => {
-      actionTranslateY.value = withTiming(0, {
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-      });
-      actionOpacity.value = withTiming(1, {
-        duration: 190,
-        easing: Easing.out(Easing.quad),
-      });
-    });
-  }
+    actionOpacity.set(
+      withTiming(
+        0,
+        { duration: 120, easing: Easing.in(Easing.quad) },
+        (finished) => {
+          if (finished) runOnJS(showNextActionIcon)();
+        },
+      ),
+    );
+  }, [
+    activeItem,
+    actionOpacity,
+    actionTranslateY,
+    displayedActionItem,
+    showNextActionIcon,
+  ]);
 
   const actionIconStyle = useAnimatedStyle(() => ({
-    opacity: actionOpacity.value,
-    transform: [{ translateY: actionTranslateY.value }],
+    opacity: actionOpacity.get(),
+    transform: [{ translateY: actionTranslateY.get() }],
   }));
 
   return (

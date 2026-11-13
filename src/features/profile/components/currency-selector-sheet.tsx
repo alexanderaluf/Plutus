@@ -74,11 +74,13 @@ function CurrencyList({
   const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
   const listRef = useRef<ComponentRef<typeof BottomSheetFlatList>>(null);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setQuery("");
+  }
   useEffect(() => {
-    if (isOpen) {
-      setQuery("");
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    }
+    if (isOpen) listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [isOpen]);
   const insets = useSafeAreaInsets();
   const [accentForeground, muted] = useThemeColor([

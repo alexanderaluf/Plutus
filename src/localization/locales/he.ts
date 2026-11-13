@@ -1272,6 +1272,10 @@ export const he = {
       seeAll: "הצגת הכול",
       empty: "עדיין אין פעילות אחרונה.",
     },
+    dateGroups: {
+      today: "היום",
+      yesterday: "אתמול",
+    },
     monthSelector: {
       thisMonth: "החודש הזה",
       previousMonth: "החודש הפיננסי הקודם",

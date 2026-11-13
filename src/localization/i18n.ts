@@ -1,11 +1,11 @@
-import i18next from "i18next";
+import { createInstance } from "i18next";
 import { initReactI18next } from "react-i18next";
 
 import { en } from "./locales/en";
 import { he } from "./locales/he";
 import { ru } from "./locales/ru";
 
-export const i18n = i18next.createInstance();
+export const i18n = createInstance();
 
 void i18n.use(initReactI18next).init({
   resources: {

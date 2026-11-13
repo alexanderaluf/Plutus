@@ -1297,6 +1297,10 @@ export const en = {
       seeAll: "See all",
       empty: "No recent activity yet.",
     },
+    dateGroups: {
+      today: "Today",
+      yesterday: "Yesterday",
+    },
     monthSelector: {
       thisMonth: "This month",
       previousMonth: "Previous financial month",

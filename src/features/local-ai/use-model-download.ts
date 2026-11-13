@@ -17,17 +17,17 @@ export function useModelDownload(modelKey: LocalAIModelKey) {
   const refresh = useCallback(async () => {
     if (!nativeAI) return;
     const ai = nativeAI;
-    try {
-      const pairs = await Promise.all(
-        KEYS.map(
-          async (key) => [key, await ai.getDownloadStateAsync(key)] as const,
-        ),
-      );
-      setStates(Object.fromEntries(pairs));
-      setError("");
-    } catch (cause) {
-      setError(String(cause));
-    }
+    await Promise.all(
+      KEYS.map(
+        async (key) => [key, await ai.getDownloadStateAsync(key)] as const,
+      ),
+    ).then(
+      (pairs) => {
+        setStates(Object.fromEntries(pairs));
+        setError("");
+      },
+      (cause: unknown) => setError(String(cause)),
+    );
   }, []);
   useEffect(() => {
     void refresh();

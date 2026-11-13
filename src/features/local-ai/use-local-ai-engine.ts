@@ -40,7 +40,11 @@ export function useLocalAIEngine(enabled: boolean, modelKey: LocalAIModelKey) {
   const cancelActiveLoad = useRef<(() => void) | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [released, setReleased] = useState(false);
-  useEffect(() => setReleased(false), [modelKey]);
+  const [releasedModelKey, setReleasedModelKey] = useState(modelKey);
+  if (releasedModelKey !== modelKey) {
+    setReleasedModelKey(modelKey);
+    setReleased(false);
+  }
   // Settled outcome per attempt; anything newer is still loading.
   const [outcome, setOutcome] = useState<{
     attempt: number;

@@ -17,7 +17,10 @@ export function WidgetNavigation() {
   const router = useRouter();
   const { profiles, activeProfileId, selectProfile } = useProfiles();
   const stateRef = useRef({ profiles, activeProfileId, selectProfile });
-  stateRef.current = { profiles, activeProfileId, selectProfile };
+  // Declared before the listeners below so it always runs first.
+  useEffect(() => {
+    stateRef.current = { profiles, activeProfileId, selectProfile };
+  });
 
   useEffect(() => {
     let cancelled = false;
