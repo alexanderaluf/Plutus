@@ -301,6 +301,32 @@ export function selectConsumptionCategoryLinks(
   });
 }
 
+/** Imported icon paths are untrusted: only bounded SVG path data is rendered. */
+function categoryIcon(record: JsonObject | undefined) {
+  const iconPath = string(record?.iconPath);
+  return {
+    icon: record ? string(record.icon, "shopping") : "help",
+    iconPath:
+      /^[Mm]/.test(iconPath) && iconPath.length <= 20_000 ? iconPath : null,
+  };
+}
+
+/** Aggregate and missing-category slices fall back to the neutral icon. */
+export function selectConsumptionSliceIcons(
+  document: BackupDocument,
+  slices: ConsumptionCategory[],
+) {
+  const lookup = createRecordLookup(document.categories);
+  return new Map(
+    slices.map((slice) => [
+      slice.id,
+      categoryIcon(
+        slice.memberIds.length === 1 ? lookup.get(slice.id) : undefined,
+      ),
+    ]),
+  );
+}
+
 export function selectConsumptionDetails(
   flow: ConsumptionFlow,
   slice: ConsumptionCategory,
@@ -396,7 +422,6 @@ export function selectPeriodReview(
     const existing = changes.get(entry.categoryId);
     if (existing) return existing;
     const record = categoryLookup.get(entry.categoryId);
-    const iconPath = string(record?.iconPath);
     const change: PeriodCategoryChange = {
       id: entry.categoryId,
       label: entry.category,
@@ -406,9 +431,7 @@ export function selectPeriodReview(
         : record
           ? "#70d2eb"
           : UNASSIGNED_COLOR,
-      icon: record ? string(record.icon, "shopping") : "help",
-      iconPath:
-        /^[Mm]/.test(iconPath) && iconPath.length <= 20_000 ? iconPath : null,
+      ...categoryIcon(record),
       current: 0,
       previous: 0,
       delta: 0,

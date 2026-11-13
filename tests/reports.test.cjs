@@ -34,6 +34,7 @@ const NOW = new Date(2026, 8, 20, 12, 0, 0);
 const {
   selectConsumptionReport,
   selectConsumptionDetails,
+  selectConsumptionSliceIcons,
 } = require("../src/data/selectors/consumption-report-selectors.ts");
 const PROFILE = "alex-personal";
 const {
@@ -315,6 +316,39 @@ test("pie drilldown reconciles every parent, child and remainder transaction", (
     flow.days.reduce((sum, day) => sum + day.amount, 0),
     flow.expense,
   );
+});
+
+test("category rows take the parent's saved icon and never render an unsafe or synthetic one", () => {
+  const names = ["A", "B", "C", "D", "E", "F", "G"];
+  const document = documentWith(
+    [
+      ...names.map((name, i) => ({
+        ...entry(name, 100 * (i + 2), 0, NOW),
+        category: name,
+      })),
+      { ...entry("loose", 5000, 0, NOW), category: "deleted-category" },
+    ],
+    {
+      categories: names.map((name, i) => ({
+        ...category(name, name),
+        icon: i === 6 ? "material:custom" : "food",
+        iconPath: i === 6 ? "M0 0h24v24H0z" : "javascript:alert(1)",
+      })),
+    },
+  );
+  const flow = selectConsumptionReport(document, "USD", NOW).flows[0];
+  const icons = selectConsumptionSliceIcons(document, flow.slices);
+
+  assert.equal(icons.size, flow.slices.length);
+  assert.deepEqual(icons.get("G"), {
+    icon: "material:custom",
+    iconPath: "M0 0h24v24H0z",
+  });
+  assert.deepEqual(icons.get("F"), { icon: "food", iconPath: null });
+  // A category that no longer exists and the grouped remainder stay neutral.
+  const missing = flow.slices.find((slice) => slice.id.startsWith("unfiled:"));
+  assert.deepEqual(icons.get(missing.id), { icon: "help", iconPath: null });
+  assert.deepEqual(icons.get("__other__"), { icon: "help", iconPath: null });
 });
 
 test("duplicate category names and broken parent cycles retain stable identities", () => {

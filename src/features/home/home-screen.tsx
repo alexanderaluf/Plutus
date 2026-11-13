@@ -351,9 +351,10 @@ export function HomeScreen() {
     );
     return entry ? projectTransaction(entry) : null;
   }, [transactions, selectedTransactionId, projectTransaction]);
-  const monthSelector =
+  const monthSelector = (blurTarget?: typeof blurTargetRef) =>
     section === "transactions" ? (
       <TransactionMonthSelector
+        blurTarget={blurTarget}
         start={monthStart}
         end={monthEnd}
         isCurrent={monthOffset === 0}
@@ -607,7 +608,7 @@ export function HomeScreen() {
                     value={section}
                     onChange={onSectionChange}
                   />
-                  {monthSelector}
+                  {monthSelector()}
                 </View>
                 <Reanimated.View style={sectionStyle}>
                   {isSectionPending ? null : section === "transactions" ? (
@@ -699,7 +700,7 @@ export function HomeScreen() {
               value={section}
               onChange={onSectionChange}
             />
-            {monthSelector}
+            {monthSelector(blurTargetRef)}
           </View>
         ) : null}
       </View>
