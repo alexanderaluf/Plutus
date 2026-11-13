@@ -1,6 +1,7 @@
 import {
   EdgeToEdgeLayout,
   EdgeToEdgeScrollView,
+  EdgeToEdgeHeaderScrollView,
 } from "@/shared/ui/edge-to-edge-layout";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import {
@@ -17,7 +18,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
@@ -259,7 +259,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
             behavior={Platform.OS === "ios" ? "padding" : undefined}
           >
             <View style={styles.fill}>
-              <ScrollView
+              <EdgeToEdgeHeaderScrollView
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={{
                   paddingHorizontal: 20,
@@ -405,7 +405,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
                     setDraft((current) => ({ ...current, color }))
                   }
                 />
-              </ScrollView>
+              </EdgeToEdgeHeaderScrollView>
 
               <BottomSafeAreaGradient />
 

@@ -1,6 +1,9 @@
 import { AppAlert } from "@/shared/ui/app-alert";
 import { useCollapsingHeader } from "@/shared/ui/collapsing-header";
-import { useEdgeToEdgeContentInsets } from "@/shared/ui/edge-to-edge-layout";
+import {
+  EdgeToEdgeHeaderScrollView,
+  useEdgeToEdgeContentInsets,
+} from "@/shared/ui/edge-to-edge-layout";
 import {
     BottomSafeAreaGradient,
     TopSafeAreaGradient,
@@ -18,7 +21,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
   View,
@@ -165,7 +167,7 @@ function PickerListScrollView({
   // reachable and tappable above them.
   const contentInsets = useEdgeToEdgeContentInsets();
   return (
-    <ScrollView
+    <EdgeToEdgeHeaderScrollView
       style={{ flex: 1 }}
       contentContainerClassName={contentContainerClassName}
       contentContainerStyle={{
@@ -174,7 +176,7 @@ function PickerListScrollView({
       }}
     >
       {children}
-    </ScrollView>
+    </EdgeToEdgeHeaderScrollView>
   );
 }
 

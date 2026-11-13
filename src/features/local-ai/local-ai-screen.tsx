@@ -9,7 +9,6 @@ import {
   Keyboard,
   Platform,
   Pressable,
-  ScrollView,
   View,
   type ScrollViewInstance,
   type TextInputInstance,
@@ -28,7 +27,10 @@ import { profileCurrency } from "@/data/model/transaction-conversion";
 import type { Transaction } from "@/features/home/types";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { TransactionDetailSheet } from "@/features/transactions/transaction-detail-sheet";
-import { EdgeToEdgeLayout } from "@/shared/ui/edge-to-edge-layout";
+import {
+  EdgeToEdgeHeaderScrollView,
+  EdgeToEdgeLayout,
+} from "@/shared/ui/edge-to-edge-layout";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { Text } from "@/shared/ui/app-text";
@@ -836,7 +838,7 @@ function LocalAIChatScreen() {
       {(insets) => (
         <>
           <View className="flex-1">
-            <ScrollView
+            <EdgeToEdgeHeaderScrollView
               ref={scroll}
               className="flex-1"
               contentContainerClassName="gap-4 px-4"
@@ -1077,7 +1079,7 @@ function LocalAIChatScreen() {
                   base={composerHeight + insets.bottom + 24}
                 />
               )}
-            </ScrollView>
+            </EdgeToEdgeHeaderScrollView>
             {!!nativeAI && (
               <BottomSafeAreaGradient fadeHeight={composerHeight + 24} />
             )}

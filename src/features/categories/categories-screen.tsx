@@ -1,5 +1,8 @@
 import { AppAlert } from "@/shared/ui/app-alert";
-import { EdgeToEdgeLayout } from "@/shared/ui/edge-to-edge-layout";
+import {
+  EdgeToEdgeFlatList,
+  EdgeToEdgeLayout,
+} from "@/shared/ui/edge-to-edge-layout";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import Animated from "react-native-reanimated";
 import { BlurTargetView } from "expo-blur";
@@ -12,7 +15,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlatList, I18nManager, Pressable, View, type ViewInstance } from "react-native";
+import { I18nManager, Pressable, View, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import type { CategoryType } from "@/data/model/category-record";
@@ -130,7 +133,7 @@ export function CategoriesScreen() {
       {(contentInsets) => (
         <>
           <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
-            <FlatList
+            <EdgeToEdgeFlatList
               data={roots}
               keyExtractor={(item) => item.id}
               contentContainerStyle={{

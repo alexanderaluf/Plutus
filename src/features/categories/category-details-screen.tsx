@@ -1,4 +1,7 @@
-import { EdgeToEdgeLayout } from "@/shared/ui/edge-to-edge-layout";
+import {
+  EdgeToEdgeFlatList,
+  EdgeToEdgeLayout,
+} from "@/shared/ui/edge-to-edge-layout";
 import Animated from "react-native-reanimated";
 import { categoryEntrance, categoryLayout } from "./components/category-motion";
 import { CategoryDeleteSheet } from "./components/category-delete-sheet";
@@ -9,7 +12,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlatList, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useLocalData } from "@/data/local-data-provider";
 import { categoryFamily } from "@/data/model/category-record";
 import {
@@ -80,108 +83,107 @@ export function CategoryDetailsScreen() {
   return (
     <EdgeToEdgeLayout
       header={
-        <>
-          <CategoryHeader
-            title={category?.name ?? t("categories.details.title")}
-            disabled={isDeleting}
-          >
-            {category && (
-              <>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  isDisabled={isDeleting}
-                  accessibilityLabel={t("categories.details.addChild")}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/categories/create",
-                      params: { parentId: id, type: String(category.type) },
-                    })
-                  }
-                >
-                  <FilledIcon name="plus" size={27} />
-                </Button>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  isDisabled={isDeleting}
-                  accessibilityLabel={t(
-                    "categories.details.deleteAccessibility",
-                  )}
-                  onPress={() => setDeleteTarget(category)}
-                >
-                  <DeleteFill color="#ef666d" size={26} />
-                </Button>
-              </>
-            )}
-          </CategoryHeader>
+        <CategoryHeader
+          title={category?.name ?? t("categories.details.title")}
+          disabled={isDeleting}
+        >
           {category && (
             <>
-              <Animated.View entering={categoryEntrance(40)}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ padding: 16, gap: 8 }}
-                >
-                  <CategoryChip
-                    selected={!selectedId}
-                    onPress={() => setSelected(null)}
-                  />
-                  {members.map((member) => (
-                    <CategoryChip
-                      key={member.id}
-                      category={member}
-                      selected={selectedId === member.id}
-                      onPress={() => setSelected(member.id)}
-                      onLongPress={
-                        member.id !== id
-                          ? () => setDeleteTarget(member)
-                          : undefined
-                      }
-                    />
-                  ))}
-                </ScrollView>
-              </Animated.View>
-              <Animated.View
-                entering={categoryEntrance(70)}
-                className="flex-row items-center px-3"
+              <Button
+                isIconOnly
+                variant="ghost"
+                isDisabled={isDeleting}
+                accessibilityLabel={t("categories.details.addChild")}
+                onPress={() =>
+                  router.push({
+                    pathname: "/categories/create",
+                    params: { parentId: id, type: String(category.type) },
+                  })
+                }
               >
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("categories.details.previousPeriod")}
-                  onPress={() => movePeriod(-1)}
-                >
-                  <FilledIcon name="arrow-left" size={20} tone="muted" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="flex-1"
-                  onPress={() => setAllTime((value) => !value)}
-                >
-                  <Button.Label className="text-sm text-muted">
-                    {allTime
-                      ? t("categories.details.allHistory")
-                      : formatDateRange(start, new Date(end.getTime() - 1))}
-                  </Button.Label>
-                </Button>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("categories.details.nextPeriod")}
-                  onPress={() => movePeriod(1)}
-                >
-                  <FilledIcon name="chevron-right" size={22} tone="muted" />
-                </Button>
-              </Animated.View>
-              <Text className="px-5 pb-2 font-sans text-xs text-muted">
-                {selectedId
-                  ? t("categories.details.directTransactions")
-                  : t("categories.details.includesChildren")}
-              </Text>
+                <FilledIcon name="plus" size={27} />
+              </Button>
+              <Button
+                isIconOnly
+                variant="ghost"
+                isDisabled={isDeleting}
+                accessibilityLabel={t("categories.details.deleteAccessibility")}
+                onPress={() => setDeleteTarget(category)}
+              >
+                <DeleteFill color="#ef666d" size={26} />
+              </Button>
             </>
           )}
-        </>
+        </CategoryHeader>
+      }
+      // Sub-category and period filters stay pinned while the title hides.
+      headerDock={
+        category && (
+          <View className="bg-background">
+            <Animated.View entering={categoryEntrance(40)}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ padding: 16, gap: 8 }}
+              >
+                <CategoryChip
+                  selected={!selectedId}
+                  onPress={() => setSelected(null)}
+                />
+                {members.map((member) => (
+                  <CategoryChip
+                    key={member.id}
+                    category={member}
+                    selected={selectedId === member.id}
+                    onPress={() => setSelected(member.id)}
+                    onLongPress={
+                      member.id !== id
+                        ? () => setDeleteTarget(member)
+                        : undefined
+                    }
+                  />
+                ))}
+              </ScrollView>
+            </Animated.View>
+            <Animated.View
+              entering={categoryEntrance(70)}
+              className="flex-row items-center px-3"
+            >
+              <Button
+                isIconOnly
+                variant="ghost"
+                accessibilityLabel={t("categories.details.previousPeriod")}
+                onPress={() => movePeriod(-1)}
+              >
+                <FilledIcon name="arrow-left" size={20} tone="muted" />
+              </Button>
+              <Button
+                variant="ghost"
+                className="flex-1"
+                onPress={() => setAllTime((value) => !value)}
+              >
+                <Button.Label className="text-sm text-muted">
+                  {allTime
+                    ? t("categories.details.allHistory")
+                    : formatDateRange(start, new Date(end.getTime() - 1))}
+                </Button.Label>
+              </Button>
+              <Button
+                isIconOnly
+                variant="ghost"
+                accessibilityLabel={t("categories.details.nextPeriod")}
+                onPress={() => movePeriod(1)}
+              >
+                <FilledIcon name="chevron-right" size={22} tone="muted" />
+              </Button>
+            </Animated.View>
+            <Text className="px-5 pb-2 font-sans text-xs text-muted">
+              {selectedId
+                ? t("categories.details.directTransactions")
+                : t("categories.details.includesChildren")}
+            </Text>
+          </View>
+        )
       }
       footer={
         category && (
@@ -232,7 +234,7 @@ export function CategoryDetailsScreen() {
             </Text>
           ) : (
             <>
-              <FlatList
+              <EdgeToEdgeFlatList
                 data={visible}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={{
