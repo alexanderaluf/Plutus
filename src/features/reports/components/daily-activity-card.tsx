@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
-import { Pressable, View } from "react-native";
 import type { ConsumptionFlow } from "@/data/selectors/consumption-report-selectors";
 import { useAppDate } from "@/shared/lib/use-app-date";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Pressable, View } from "react-native";
 import { ReportHeading, ReportMetric, ReportPanel } from "./report-primitives";
 
 export function DailyActivityCard({ flow }: { flow: ConsumptionFlow }) {

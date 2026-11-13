@@ -1,7 +1,7 @@
-import type { PropsWithChildren } from "react";
-import { View } from "react-native";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import type { PropsWithChildren } from "react";
+import { View } from "react-native";
 
 export function ReportPanel({ children }: PropsWithChildren) {
   return (

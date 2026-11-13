@@ -1,38 +1,38 @@
-import { Link } from "expo-router";
-import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
-import { useTranslation } from "react-i18next";
-import {
-  Pressable,
-  useWindowDimensions,
-  View,
-  type ViewStyle,
-} from "react-native";
-import Animated, {
-  Easing,
-  FadeInDown,
-  FadeOut,
-  LinearTransition,
-  ReduceMotion,
-  useAnimatedProps,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
-import Svg, { Circle, G, Path } from "react-native-svg";
 import { useLocalData } from "@/data/local-data-provider";
 import {
-  selectConsumptionCategoryLinks,
-  selectConsumptionDetails,
-  type ConsumptionCategory,
-  type ConsumptionFlow,
+    selectConsumptionCategoryLinks,
+    selectConsumptionDetails,
+    type ConsumptionCategory,
+    type ConsumptionFlow,
 } from "@/data/selectors/consumption-report-selectors";
 import { useAppDate } from "@/shared/lib/use-app-date";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
-import { ReportHeading } from "./report-primitives";
+import { Link } from "expo-router";
+import { useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { useTranslation } from "react-i18next";
+import {
+    Pressable,
+    useWindowDimensions,
+    View,
+    type ViewStyle,
+} from "react-native";
+import Animated, {
+    Easing,
+    FadeInDown,
+    FadeOut,
+    LinearTransition,
+    ReduceMotion,
+    useAnimatedProps,
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from "react-native-reanimated";
+import Svg, { Circle, G, Path } from "react-native-svg";
 import { expensePieLayout } from "./expense-pie-layout";
+import { ReportHeading } from "./report-primitives";
 
 const DETAILS_LAYOUT = LinearTransition.duration(240)
   .easing(Easing.bezier(0.77, 0, 0.175, 1))

@@ -31,6 +31,7 @@ import {
 } from "@/data/selectors/home-section-selectors";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { Text } from "@/shared/ui/app-text";
+import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 import {
@@ -244,12 +245,23 @@ export function HomeScreen() {
         ]}
       >
         {item.kind === "transaction" ? (
-          <IndexedTransactionRow
-            entry={item.entry}
-            project={projectTransaction}
-            showBorder={index < transactions.length - 1}
-            onPress={onTransactionPress}
-          />
+          <View
+            className={`border-x border-border bg-surface px-4 ${
+              index === 0 ? "rounded-t-[24px] border-t pt-1" : ""
+            } ${
+              index === transactions.length - 1
+                ? "rounded-b-[24px] border-b pb-1"
+                : ""
+            }`}
+            style={{ borderCurve: "continuous" }}
+          >
+            <IndexedTransactionRow
+              entry={item.entry}
+              project={projectTransaction}
+              showBorder={index < transactions.length - 1}
+              onPress={onTransactionPress}
+            />
+          </View>
         ) : item.kind === "category" ? (
           <CategoryListRow
             row={item}
@@ -402,16 +414,27 @@ export function HomeScreen() {
             contentInsetAdjustmentBehavior="never"
             ListEmptyComponent={
               homeData.error ? (
-                <View accessibilityRole="alert" style={styles.loading}>
-                  <Text className="text-center text-sm text-danger">
+                <View
+                  accessibilityRole="alert"
+                  className="items-center gap-3 rounded-[24px] border border-border bg-surface p-6"
+                  style={{ borderCurve: "continuous" }}
+                >
+                  <View
+                    className="size-11 items-center justify-center rounded-2xl bg-surface-secondary"
+                    style={{ borderCurve: "continuous" }}
+                  >
+                    <FilledIcon name="help" size={20} tone="danger" />
+                  </View>
+                  <Text className="text-center font-manrope-semibold text-[14px] leading-[20px] text-danger">
                     {t("home.loadError")}
                   </Text>
                   <Pressable
                     accessibilityRole="button"
-                    className="min-h-11 items-center justify-center"
                     onPress={() => setLoadRetry((retry) => retry + 1)}
+                    className="min-h-10 items-center justify-center rounded-full border border-border bg-surface-secondary px-4"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
                   >
-                    <Text className="text-sm text-accent">
+                    <Text className="font-manrope-semibold text-[13px] leading-[18px] text-accent">
                       {t("home.retryLoad")}
                     </Text>
                   </Pressable>
@@ -427,9 +450,20 @@ export function HomeScreen() {
                 </View>
               ) : section === "transactions" ? (
                 <Reanimated.View style={sectionStyle}>
-                  <Text className="py-5 text-center font-sans text-sm text-muted">
-                    {t("home.monthSelector.empty")}
-                  </Text>
+                  <View
+                    className="items-center gap-2.5 rounded-[24px] border border-border bg-surface px-6 py-8"
+                    style={{ borderCurve: "continuous" }}
+                  >
+                    <View
+                      className="size-11 items-center justify-center rounded-2xl bg-surface-secondary"
+                      style={{ borderCurve: "continuous" }}
+                    >
+                      <FilledIcon name="receipt" size={20} tone="muted" />
+                    </View>
+                    <Text className="text-center font-sans text-[14px] leading-[20px] text-muted">
+                      {t("home.monthSelector.empty")}
+                    </Text>
+                  </View>
                 </Reanimated.View>
               ) : (
                 <Reanimated.View style={sectionStyle}>
@@ -444,11 +478,32 @@ export function HomeScreen() {
                             : "/recurring",
                       )
                     }
-                    className="rounded-3xl bg-surface p-4"
+                    className="flex-row items-center gap-3.5 rounded-[24px] border border-border bg-surface p-4"
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.68 : 1,
+                      borderCurve: "continuous",
+                    })}
                   >
-                    <Text className="text-sm text-muted">
+                    <View
+                      className="size-11 shrink-0 items-center justify-center rounded-2xl bg-surface-secondary"
+                      style={{ borderCurve: "continuous" }}
+                    >
+                      <FilledIcon
+                        name={
+                          section === "categories"
+                            ? "tag"
+                            : section === "budgets"
+                              ? "chart-donut-variant"
+                              : "event-repeat"
+                        }
+                        size={20}
+                        tone="accent"
+                      />
+                    </View>
+                    <Text className="min-w-0 flex-1 font-sans text-[13px] leading-[19px] text-muted">
                       {t(`home.${section}.empty`)}
                     </Text>
+                    <FilledIcon name="chevron-right" size={18} tone="muted" />
                   </Pressable>
                 </Reanimated.View>
               )
@@ -476,16 +531,21 @@ export function HomeScreen() {
                 <CollapsingHeaderSpacer height={HEADER_HEIGHT} />
                 <View style={styles.headerGap} />
                 {homeData.error && rows.length > 0 ? (
-                  <View accessibilityRole="alert">
-                    <Text className="text-sm text-danger">
+                  <View
+                    accessibilityRole="alert"
+                    className="mb-4 flex-row items-center justify-between gap-3 rounded-[22px] border border-border bg-surface p-3.5"
+                    style={{ borderCurve: "continuous" }}
+                  >
+                    <Text className="min-w-0 flex-1 font-manrope-semibold text-[13px] leading-[18px] text-danger">
                       {t("home.loadError")}
                     </Text>
                     <Pressable
                       accessibilityRole="button"
-                      className="min-h-11 justify-center"
+                      className="min-h-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-secondary px-3"
+                      style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
                       onPress={() => setLoadRetry((retry) => retry + 1)}
                     >
-                      <Text className="text-sm text-accent">
+                      <Text className="font-manrope-semibold text-[12px] leading-[16px] text-accent">
                         {t("home.retryLoad")}
                       </Text>
                     </Pressable>
@@ -551,15 +611,50 @@ export function HomeScreen() {
                 </View>
                 <Reanimated.View style={sectionStyle}>
                   {isSectionPending ? null : section === "transactions" ? (
-                    <View>
-                      <View className="mb-2">
-                        <Text className="font-manrope-bold text-lg text-foreground">
-                          {t("home.recentActivity.allTitle")}
-                        </Text>
-                        <Text className="mt-0.5 font-sans text-xs text-muted">
+                    <View className="mb-3 flex-row items-center justify-between gap-3">
+                      <View className="min-w-0 flex-1 gap-0.5">
+                        <View className="flex-row items-center gap-2">
+                          <Text
+                            numberOfLines={1}
+                            className="min-w-0 shrink font-manrope-bold text-[19px] leading-[24px] tracking-[-0.2px] text-foreground"
+                          >
+                            {t("home.recentActivity.allTitle")}
+                          </Text>
+                          <View className="shrink-0 rounded-full border border-border/70 bg-surface px-2.5 py-0.5">
+                            <Text
+                              className="font-manrope-semibold text-[11px] leading-[15px] text-muted"
+                              style={{ fontVariant: ["tabular-nums"] }}
+                            >
+                              {monthTransactionCount.toLocaleString(
+                                i18n.resolvedLanguage,
+                              )}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text
+                          numberOfLines={1}
+                          className="font-sans text-[13px] leading-[18px] text-muted"
+                        >
                           {t("home.recentActivity.description")}
                         </Text>
                       </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        hitSlop={6}
+                        onPress={() => router.push("/search")}
+                        className="min-h-9 shrink-0 flex-row items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5"
+                        style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
+                      >
+                        <FilledIcon name="magnify" size={14} tone="accent" />
+                        <Text className="font-manrope-semibold text-[12px] leading-[16px] text-accent">
+                          {t("home.recentActivity.seeAll")}
+                        </Text>
+                        <FilledIcon
+                          name="chevron-right"
+                          size={14}
+                          tone="accent"
+                        />
+                      </Pressable>
                     </View>
                   ) : sectionData?.section === "categories" ? (
                     <CategoryListHeader count={totalRows} />
@@ -621,11 +716,11 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { paddingHorizontal: 20, paddingBottom: 160 },
-  headerGap: { height: 28 },
-  sectionGap: { height: 28 },
+  headerGap: { height: 16 },
+  sectionGap: { height: 20 },
   rowGap: { marginBottom: 12 },
   loading: { minHeight: 80, alignItems: "center", justifyContent: "center" },
-  selectorSpacer: { paddingBottom: 20 },
+  selectorSpacer: { paddingBottom: 16 },
   hiddenSelectorSpacer: { opacity: 0 },
   selectorDock: {
     left: 12,

@@ -1,8 +1,8 @@
-import { useTranslation } from "react-i18next";
-import { View } from "react-native";
 import type { ConsumptionFlow } from "@/data/selectors/consumption-report-selectors";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
+import { useTranslation } from "react-i18next";
+import { View } from "react-native";
 import { ReportHeading, ReportMetric, ReportPanel } from "./report-primitives";
 
 export function CashFlowCard({ flow }: { flow: ConsumptionFlow }) {

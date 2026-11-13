@@ -20,6 +20,7 @@ import {
   CollapsingHeaderSpacer,
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
+import { FilledIcon } from "@/shared/ui/filled-icon";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 import { AccountGroupCard } from "./components/account-list-card";
 import { AccountsOverview } from "./components/accounts-overview";
@@ -67,15 +68,16 @@ export function AccountsScreen() {
     accounts: accounts.filter((account) => groupOf(account) === group),
   })).filter((section) => section.accounts.length > 0);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
+
   return (
     <View style={{ flex: 1 }}>
       <NativeAnimated.FlatList
         data={sections}
         keyExtractor={(item) => item.key}
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingBottom: 110 + insets.bottom,
-          gap: 24,
+          paddingHorizontal: 20,
+          paddingBottom: 112 + insets.bottom,
+          gap: 22,
         }}
         onScroll={onScroll}
         scrollEventThrottle={16}
@@ -83,26 +85,39 @@ export function AccountsScreen() {
         ListHeaderComponent={
           <View>
             <CollapsingHeaderSpacer height={TAB_HEADER_HEIGHT} />
-            {/* With the list gap, 28pt below the header like Home. */}
             <View className="h-1" />
             {!!paymentError && (
               <Animated.View
                 entering={reveal(1)}
-                className="mb-3 gap-3 rounded-2xl bg-surface p-4"
+                className="mb-3 flex-row items-center gap-3 rounded-[24px] border border-border bg-surface p-4"
+                style={{ borderCurve: "continuous" }}
               >
-                <Text accessibilityRole="alert" className="text-danger">
-                  {paymentError}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    void reconcileCardPayments();
-                  }}
+                <View
+                  className="size-10 shrink-0 items-center justify-center rounded-2xl bg-surface-secondary"
+                  style={{ borderCurve: "continuous" }}
                 >
-                  <Text className="font-manrope-bold text-accent">
-                    {t("accounts.list.retryCardPayments")}
+                  <FilledIcon name="help" size={18} tone="danger" />
+                </View>
+                <View className="min-w-0 flex-1 gap-2">
+                  <Text
+                    accessibilityRole="alert"
+                    className="font-sans text-[13px] leading-[18px] text-danger"
+                  >
+                    {paymentError}
                   </Text>
-                </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      void reconcileCardPayments();
+                    }}
+                    className="min-h-9 self-start rounded-full border border-border bg-surface-secondary px-3.5 py-1.5"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
+                  >
+                    <Text className="font-manrope-semibold text-[12px] leading-[16px] text-accent">
+                      {t("accounts.list.retryCardPayments")}
+                    </Text>
+                  </Pressable>
+                </View>
               </Animated.View>
             )}
             {accounts.length > 0 && (
@@ -120,19 +135,22 @@ export function AccountsScreen() {
             entering={reveal(index + (paymentError ? 2 : 1))}
             className="gap-2.5"
           >
-            <View className="flex-row items-baseline justify-between px-1">
+            <View className="flex-row items-center justify-between gap-3 px-0.5">
               <Text
                 accessibilityRole="header"
-                className="font-manrope-bold text-lg text-foreground"
+                numberOfLines={1}
+                className="min-w-0 flex-1 font-manrope-bold text-[19px] leading-[24px] tracking-[-0.2px] text-foreground"
               >
                 {t(`accounts.list.groups.${item.key}`)}
               </Text>
-              <Text
-                className="font-manrope-medium text-xs text-muted"
-                style={{ fontVariant: ["tabular-nums"] }}
-              >
-                {t("accounts.list.count", { count: item.accounts.length })}
-              </Text>
+              <View className="shrink-0 rounded-full border border-border/70 bg-surface px-2.5 py-0.5">
+                <Text
+                  className="font-manrope-semibold text-[11px] leading-[15px] text-muted"
+                  style={{ fontVariant: ["tabular-nums"] }}
+                >
+                  {t("accounts.list.count", { count: item.accounts.length })}
+                </Text>
+              </View>
             </View>
             <AccountGroupCard
               accounts={item.accounts}
@@ -147,9 +165,20 @@ export function AccountsScreen() {
         )}
         ListEmptyComponent={
           <Animated.View entering={reveal(1)}>
-            <Text className="px-4 py-12 text-center font-sans text-base text-muted">
-              {t("accounts.common.empty")}
-            </Text>
+            <View
+              className="items-center gap-3 rounded-[24px] border border-border bg-surface px-6 py-8"
+              style={{ borderCurve: "continuous" }}
+            >
+              <View
+                className="size-12 items-center justify-center rounded-2xl bg-surface-secondary"
+                style={{ borderCurve: "continuous" }}
+              >
+                <FilledIcon name="wallet" size={22} tone="accent" />
+              </View>
+              <Text className="text-center font-sans text-[14px] leading-[20px] text-muted">
+                {t("accounts.common.empty")}
+              </Text>
+            </View>
           </Animated.View>
         }
       />

@@ -3,38 +3,43 @@ import type {
   CategoryTotal,
 } from "@/data/selectors/category-selectors";
 import type { HomeCategoryRow } from "@/data/selectors/home-section-selectors";
-import { CategoryBadge } from "@/features/categories/components/category-ui";
+import { useCategoryClock } from "@/features/categories/use-category-clock";
+import { colorForeground } from "@/shared/icons/colors";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
-import { useAppThemeColors } from "@/shared/theme/app-theme";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
-import { FilledIcon } from "@/shared/ui/filled-icon";
+import { RecordIcon } from "@/shared/ui/record-icon";
 import { useRouter } from "expo-router";
-import { Button } from "heroui-native";
-import { Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
+import { Pressable, StyleSheet, View } from "react-native";
 
-export function CategoryListHeader({ count }: { count: number }) {
-  const { t } = useTranslation();
+import { HomeSectionHeader } from "./home-section-header";
+
+export function CategoryListHeader({
+  count,
+  now,
+}: {
+  count: number;
+  now?: Date;
+}) {
+  const { t, i18n } = useTranslation();
   const router = useRouter();
+  const clockNow = useCategoryClock();
+  const activeDate = now ?? clockNow;
+  const monthLabel = activeDate.toLocaleDateString(i18n.resolvedLanguage, {
+    month: "long",
+    year: "numeric",
+  });
+
   return (
-    <View className="mb-3 flex-row items-center justify-between">
-      <View className="min-w-0 flex-1 flex-row items-center gap-2">
-        <Text className="font-manrope-bold text-lg text-foreground">
-          {t("categories.list.title")}
-        </Text>
-        <Text className="text-xs text-muted">{count}</Text>
-      </View>
-      <Button
-        size="sm"
-        variant="outline"
-        onPress={() => router.push("/categories")}
-      >
-        <FilledIcon name="plus" size={16} tone="accent" />
-        <Button.Label className="font-manrope-semibold text-accent">
-          {t("categories.list.manage")}
-        </Button.Label>
-      </Button>
-    </View>
+    <HomeSectionHeader
+      title={t("categories.list.title")}
+      count={count}
+      subtitle={monthLabel}
+      actionLabel={t("categories.list.manage")}
+      actionIcon="plus"
+      onActionPress={() => router.push("/categories")}
+    />
   );
 }
 
@@ -54,18 +59,35 @@ export function CategoryListRow({
   const theme = useAppThemeColors();
   const { category, depth, last } = row;
   const amounts = Object.entries(total?.amounts ?? {});
-  const color =
+  const displayAmounts = amounts.length
+    ? amounts
+    : ([[fallbackCurrency, 0]] as [string, number][]);
+  const hasNonZero = displayAmounts.some(([, amount]) => amount !== 0);
+
+  const toneColor =
     category.type === 0
       ? theme.danger
       : category.type === 1
         ? theme.success
         : theme.foreground;
+  const amountColor = hasNonZero ? toneColor : theme.muted;
+
+  const indent = depth ? 14 + Math.min(depth, 5) * 14 : 16;
+  const txLabel = total?.count
+    ? t("categories.list.transactionCount", { count: total.count })
+    : t("categories.list.noTransactions");
+  const subtitle = category.description
+    ? total?.count
+      ? `${category.description} · ${txLabel}`
+      : category.description
+    : txLabel;
+
   return (
     <View
       style={{
         backgroundColor: theme.surface,
         borderColor: theme.border,
-        borderTopWidth: 1,
+        borderTopWidth: depth === 0 ? 1 : 0,
         borderLeftWidth: 1,
         borderRightWidth: 1,
         borderBottomWidth: last ? 1 : 0,
@@ -73,10 +95,21 @@ export function CategoryListRow({
         borderTopRightRadius: depth === 0 ? 24 : 0,
         borderBottomLeftRadius: last ? 24 : 0,
         borderBottomRightRadius: last ? 24 : 0,
+        borderCurve: "continuous",
         overflow: "hidden",
         marginBottom: last ? 12 : 0,
       }}
     >
+      {depth > 0 ? (
+        <View
+          style={{
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: theme.border,
+            marginStart: indent,
+            marginEnd: 16,
+          }}
+        />
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("categories.list.openWithTransactions", {
@@ -84,41 +117,68 @@ export function CategoryListRow({
           count: total?.count ?? 0,
         })}
         onPress={() => onPress(category)}
-        className="flex-row items-center gap-3 py-3 pe-3"
+        className="flex-row items-center gap-3 py-3.5 pe-4"
         style={({ pressed }) => ({
-          paddingStart: depth ? 16 + Math.min(depth, 6) * 16 : 12,
+          paddingStart: indent,
           opacity: pressed ? 0.68 : 1,
         })}
       >
-        <CategoryBadge category={category} small={depth > 0} />
-        <View className="min-w-0 flex-1 gap-1">
+        {depth > 0 ? (
+          <View
+            className="w-0.5 self-stretch rounded-full"
+            style={{
+              backgroundColor: colorWithAlpha(category.color, 0.35),
+              marginVertical: 2,
+            }}
+          />
+        ) : null}
+        <View
+          className={
+            depth > 0
+              ? "size-8 shrink-0 items-center justify-center rounded-xl"
+              : "size-11 shrink-0 items-center justify-center rounded-2xl"
+          }
+          style={{
+            backgroundColor: category.color,
+            borderCurve: "continuous",
+          }}
+        >
+          <RecordIcon
+            name={category.icon}
+            pathData={category.iconPath}
+            color={colorForeground(category.color)}
+            size={depth > 0 ? 16 : 21}
+          />
+        </View>
+
+        <View className="min-w-0 flex-1 gap-0.5">
           <Text
             numberOfLines={1}
             className={
-              depth
-                ? "font-manrope-semibold text-sm text-foreground"
-                : "font-manrope-bold text-base text-foreground"
+              depth > 0
+                ? "font-manrope-semibold text-[14px] leading-[19px] text-foreground"
+                : "font-manrope-bold text-[15px] leading-[20px] text-foreground"
             }
           >
             {category.name}
           </Text>
-          <Text numberOfLines={1} className="font-sans text-xs text-muted">
-            {category.description ||
-              (total?.count
-                ? t("categories.list.transactionCount", { count: total.count })
-                : t("categories.list.noTransactions"))}
+          <Text
+            numberOfLines={1}
+            className="font-sans text-[12px] leading-[16px] text-muted"
+          >
+            {subtitle}
           </Text>
         </View>
-        <View className="items-end" style={{ maxWidth: "34%" }}>
-          {(amounts.length
-            ? amounts
-            : [[fallbackCurrency, 0] as [string, number]]
-          ).map(([currency, amount]) => (
+
+        <View className="ms-2 max-w-[36%] shrink-0 items-end gap-0.5">
+          {displayAmounts.map(([currency, amount]) => (
             <Text
               key={currency}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
               numberOfLines={1}
-              className="font-manrope-bold text-sm"
-              style={{ color }}
+              className="text-right font-manrope-bold text-[14px] leading-[19px]"
+              style={{ color: amountColor, fontVariant: ["tabular-nums"] }}
             >
               {formatCurrency(amount, currency)}
             </Text>
