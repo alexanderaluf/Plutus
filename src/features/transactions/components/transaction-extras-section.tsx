@@ -282,6 +282,13 @@ export function TransactionExtrasSection({
 
       {/* Attribute Context Pills */}
       {allAttributes.length > 0 ? (
+        <View
+          style={[
+            styles.card,
+            styles.attributeCard,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}
+        >
         <View style={styles.attributeWrap}>
           {allAttributes.map((attr) => {
             const selectedOption = attr.options.find(
@@ -377,8 +384,8 @@ export function TransactionExtrasSection({
                 style={({ pressed }) => [
                   styles.attributeChip,
                   {
-                    backgroundColor: theme.surface,
-                    borderColor: theme.border,
+                    backgroundColor: theme.surfaceSecondary,
+                    borderColor: "transparent",
                     opacity: pressed ? 0.7 : 1,
                   },
                 ]}
@@ -394,6 +401,7 @@ export function TransactionExtrasSection({
               </Pressable>
             );
           })}
+        </View>
         </View>
       ) : null}
 
@@ -421,7 +429,7 @@ const styles = StyleSheet.create({
   notesRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 10,
   },
@@ -435,8 +443,8 @@ const styles = StyleSheet.create({
     maxHeight: 110,
     paddingVertical: 8,
     fontFamily: "Huninn_400Regular",
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 22,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
@@ -479,13 +487,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  attributeCard: {
+    padding: 14,
+  },
   attributeWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
   },
   attributeChip: {
-    minHeight: 42,
+    minHeight: 44,
     maxWidth: "100%",
     paddingHorizontal: 13,
     paddingVertical: 8,

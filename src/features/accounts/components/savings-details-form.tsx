@@ -1,14 +1,6 @@
-import { Switch as HeroSwitch, Input } from "heroui-native";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-    Platform,
-    Pressable,
-    StyleSheet,
-    Switch,
-    TextInput,
-    View,
-} from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import {
     CONTRIBUTION_MODE_OPTIONS,
@@ -19,11 +11,20 @@ import {
     TAX_TREATMENT_OPTIONS,
     type SavingsDetailsDraft,
 } from "@/data/model/savings-account";
-import { useAppLocalization } from "@/localization/localization-provider";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
-import { useAppThemeColors } from "@/shared/theme/app-theme";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+
+import {
+  CONTINUOUS,
+  FieldInput,
+  FormCard,
+  FormHelp,
+  FormLabel,
+  SwitchRow,
+  TABULAR,
+} from "@/shared/ui/form-ui";
 
 type SavingsDetailsFormProps = {
   balance: number;
@@ -40,7 +41,6 @@ export function SavingsDetailsForm({
 }: SavingsDetailsFormProps) {
   const { formatCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
-  const { direction } = useAppLocalization();
   const theme = useAppThemeColors();
   const [showProducts, setShowProducts] = useState(false);
   const productOptions = SAVINGS_PRODUCT_OPTIONS.map((option) => ({
@@ -76,31 +76,37 @@ export function SavingsDetailsForm({
     onChange({ ...value, [key]: next });
   }
 
-  if (!value.isDetailed) {
-    return (
-      <View className="pt-1">
-        <SavingsModeToggle
-          isDetailed={false}
-          onChange={(isDetailed) => change("isDetailed", isDetailed)}
-        />
-      </View>
-    );
-  }
-
-  return (
-    <View className="gap-5 pt-1">
-      <SavingsModeToggle
-        isDetailed
+  const modeToggle = (
+    <FormCard>
+      <SwitchRow
+        icon="piggy-bank"
+        title={t("accounts.savings.detailedTracking")}
+        description={
+          value.isDetailed
+            ? t("accounts.savings.detailedEnabled")
+            : t("accounts.savings.detailedDisabled")
+        }
+        value={value.isDetailed}
         onChange={(isDetailed) => change("isDetailed", isDetailed)}
       />
+    </FormCard>
+  );
 
+  if (!value.isDetailed) return modeToggle;
+
+  return (
+    <View className="gap-3">
+      {modeToggle}
+
+      <FormCard>
       <View className="gap-2">
         <FieldLabel>{t("accounts.savings.productType")}</FieldLabel>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: showProducts }}
           onPress={() => setShowProducts((current) => !current)}
-          className="min-h-16 flex-row items-center gap-3 rounded-2xl bg-surface px-4 py-3"
+          className="min-h-16 flex-row items-center gap-3 rounded-2xl px-4 py-3"
+          style={{ backgroundColor: theme.surfaceSecondary, ...CONTINUOUS }}
         >
           <View className="flex-1 gap-1">
             <Text className="font-manrope-semibold text-sm text-foreground">
@@ -116,7 +122,10 @@ export function SavingsDetailsForm({
           />
         </Pressable>
         {showProducts && (
-          <View className="overflow-hidden rounded-2xl border border-border bg-surface">
+          <View
+            className="overflow-hidden rounded-2xl"
+            style={{ backgroundColor: theme.surfaceSecondary, ...CONTINUOUS }}
+          >
             {productOptions.map((option, index) => {
               const selected = option.value === value.productType;
               return (
@@ -128,7 +137,17 @@ export function SavingsDetailsForm({
                     change("productType", option.value);
                     setShowProducts(false);
                   }}
-                  className={`min-h-16 flex-row items-center gap-3 px-4 py-3 ${index < productOptions.length - 1 ? "border-b border-border" : ""}`}
+                  className="min-h-16 flex-row items-center gap-3 px-4 py-3"
+                  style={{
+                    borderBottomWidth:
+                      index < productOptions.length - 1
+                        ? StyleSheet.hairlineWidth
+                        : 0,
+                    borderBottomColor: theme.border,
+                    backgroundColor: selected
+                      ? colorWithAlpha(theme.accent, 0.12)
+                      : "transparent",
+                  }}
                 >
                   <View className="flex-1 gap-1">
                     <Text className="font-manrope-semibold text-sm text-foreground">
@@ -154,6 +173,7 @@ export function SavingsDetailsForm({
         value={value.providerName}
         onChange={(next) => change("providerName", next)}
       />
+      </FormCard>
 
       <Section title={t("accounts.savings.ownershipSection")}>
         <MoneyField
@@ -236,9 +256,7 @@ export function SavingsDetailsForm({
       </Section>
 
       <Section title={t("accounts.savings.feesSection")}>
-        <Text className="font-sans text-xs leading-5 text-muted">
-          {t("accounts.savings.feesHelp")}
-        </Text>
+        <FormHelp>{t("accounts.savings.feesHelp")}</FormHelp>
         <View className="flex-row gap-3">
           <View className="flex-1">
             <RateField
@@ -274,9 +292,7 @@ export function SavingsDetailsForm({
       </Section>
 
       <Section title={t("accounts.savings.taxSection")}>
-        <Text className="font-sans text-xs leading-5 text-muted">
-          {t("accounts.savings.taxHelp")}
-        </Text>
+        <FormHelp>{t("accounts.savings.taxHelp")}</FormHelp>
         <TextField
           label={t("accounts.savings.taxJurisdiction")}
           placeholder={t("accounts.savings.taxJurisdictionPlaceholder")}
@@ -322,15 +338,22 @@ export function SavingsDetailsForm({
         )}
       </Section>
 
-      <View className="gap-3 rounded-2xl border border-border bg-surface p-4">
-        <View className="flex-row items-center justify-between">
-          <Text className="font-manrope-bold text-base text-foreground">
+      <FormCard>
+        <View className="gap-1">
+          <Text className="font-manrope-semibold text-[13px] leading-[18px] text-muted">
             {t("accounts.savings.fullWithdrawalEstimate")}
           </Text>
-          <Text className="font-manrope-bold text-base text-accent">
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            numberOfLines={1}
+            className="font-manrope-bold text-[28px] leading-[34px] text-accent"
+            style={TABULAR}
+          >
             {formatCurrency(estimate.estimatedNetWithdrawal, currencyCode)}
           </Text>
         </View>
+        <View className="gap-2.5 border-t border-border/70 pt-3">
         <EstimateRow
           label={t("accounts.savings.currentBalance")}
           value={estimate.balance}
@@ -361,96 +384,33 @@ export function SavingsDetailsForm({
           value={-estimate.estimatedTax}
           currencyCode={currencyCode}
         />
-        <Text className="font-sans text-[11px] leading-4 text-muted">
+        </View>
+        <FormHelp>
           {t("accounts.savings.annualManagementEstimate", {
             amount: formatCurrency(
               estimate.estimatedAnnualManagementFee,
               currencyCode,
             ),
           })}
-        </Text>
-      </View>
+        </FormHelp>
+      </FormCard>
 
-      <View className="gap-2">
-        <FieldLabel>{t("accounts.savings.notesOptional")}</FieldLabel>
-        <TextInput
-          accessibilityLabel={t("accounts.savings.notesAccessibility")}
-          multiline
-          maxLength={500}
-          onChangeText={(next) => change("notes", next)}
-          placeholder={t("accounts.savings.notesPlaceholder")}
-          placeholderTextColor={theme.muted}
-          style={[
-            styles.notes,
-            {
-              backgroundColor: theme.surface,
-              color: theme.foreground,
-              direction,
-              textAlign: "auto",
-              writingDirection: direction,
-            },
-          ]}
-          textAlignVertical="top"
-          value={value.notes}
-        />
-      </View>
-    </View>
-  );
-}
-
-function SavingsModeToggle({
-  isDetailed,
-  onChange,
-}: {
-  isDetailed: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  const { t } = useTranslation();
-  const theme = useAppThemeColors();
-
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityLabel={t("accounts.savings.detailedTracking")}
-      accessibilityHint={t("accounts.savings.detailedTrackingHint")}
-      accessibilityState={{ checked: isDetailed }}
-      className="flex-row items-center gap-4 rounded-2xl border border-border bg-surface px-4 py-4"
-      onPress={() => onChange(!isDetailed)}
-    >
-      <View className="size-11 items-center justify-center rounded-xl bg-accent/15">
-        <FilledIcon name="piggy-bank" size={23} tone="accent" />
-      </View>
-      <View className="flex-1 gap-1">
-        <Text className="font-manrope-semibold text-base text-foreground">
-          {t("accounts.savings.detailedTracking")}
-        </Text>
-        <Text className="font-sans text-xs leading-5 text-muted">
-          {isDetailed
-            ? t("accounts.savings.detailedEnabled")
-            : t("accounts.savings.detailedDisabled")}
-        </Text>
-      </View>
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        pointerEvents="none"
-      >
-        {Platform.OS === "android" ? (
-          <HeroSwitch isSelected={isDetailed} style={{ height: 28, width: 60 }}>
-            <HeroSwitch.Thumb style={{ height: 24, width: 36 }} />
-          </HeroSwitch>
-        ) : (
-          <Switch
-            thumbColor={isDetailed ? theme.accentForeground : theme.muted}
-            trackColor={{
-              false: theme.surfaceTertiary,
-              true: theme.accent,
-            }}
-            value={isDetailed}
+      <FormCard>
+        <View className="gap-2">
+          <FieldLabel>{t("accounts.savings.notesOptional")}</FieldLabel>
+          <FieldInput
+            accessibilityLabel={t("accounts.savings.notesAccessibility")}
+            multiline
+            maxLength={500}
+            onChangeText={(next) => change("notes", next)}
+            placeholder={t("accounts.savings.notesPlaceholder")}
+            style={styles.notes}
+            textAlignVertical="top"
+            value={value.notes}
           />
-        )}
-      </View>
-    </Pressable>
+        </View>
+      </FormCard>
+    </View>
   );
 }
 
@@ -462,17 +422,12 @@ function Section({
   title: string;
 }) {
   return (
-    <View className="gap-4 border-t border-border pt-4">
-      <Text className="font-manrope-bold text-sm text-foreground">{title}</Text>
-      {children}
-    </View>
+    <FormCard title={title}>{children}</FormCard>
   );
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <Text className="font-manrope-medium text-sm text-muted">{children}</Text>
-  );
+  return <FormLabel>{children}</FormLabel>;
 }
 
 function TextField({
@@ -486,17 +441,13 @@ function TextField({
   placeholder: string;
   value: string;
 }) {
-  const { direction } = useAppLocalization();
-
   return (
     <View className="gap-2">
       <FieldLabel>{label}</FieldLabel>
-      <Input
+      <FieldInput
         accessibilityLabel={label}
-        className="h-14 rounded-2xl bg-surface"
         onChangeText={onChange}
         placeholder={placeholder}
-        style={{ direction, textAlign: "auto", writingDirection: direction }}
         value={value}
       />
     </View>
@@ -514,18 +465,15 @@ function NumberField({
   placeholder: string;
   value: string;
 }) {
-  const { direction } = useAppLocalization();
-
   return (
     <View className="gap-2">
       <FieldLabel>{label}</FieldLabel>
-      <Input
+      <FieldInput
         accessibilityLabel={label}
-        className="h-14 rounded-2xl bg-surface"
         keyboardType="decimal-pad"
         onChangeText={onChange}
         placeholder={placeholder}
-        style={{ direction, textAlign: "auto", writingDirection: direction }}
+        style={TABULAR}
         value={value}
       />
     </View>
@@ -601,11 +549,11 @@ function ChoiceGroup<T extends string>({
               key={option.value}
               accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
-              className={`min-h-10 justify-center rounded-xl border px-3 py-2 ${selected ? "border-accent bg-accent/15" : "border-border bg-surface"}`}
+              className={`min-h-11 justify-center rounded-xl border-[1.5px] px-3.5 py-2 ${selected ? "border-accent bg-accent/15" : "border-transparent bg-surface-secondary"}`}
               onPress={() => onChange(option.value)}
             >
               <Text
-                className={`font-manrope-semibold text-xs ${selected ? "text-accent" : "text-foreground"}`}
+                className={`font-manrope-semibold text-[13px] ${selected ? "text-accent" : "text-foreground"}`}
               >
                 {option.label}
               </Text>
@@ -642,10 +590,9 @@ function EstimateRow({
 
 const styles = StyleSheet.create({
   notes: {
-    borderRadius: 16,
-    fontFamily: "Huninn_400Regular",
-    fontSize: 14,
+    fontSize: 15,
+    height: "auto",
     minHeight: 104,
-    padding: 14,
+    paddingVertical: 14,
   },
 });

@@ -1,18 +1,14 @@
 import { AppAlert } from "@/shared/ui/app-alert";
 import { useCollapsingHeader } from "@/shared/ui/collapsing-header";
 import {
-  EdgeToEdgeHeaderScrollView,
-  useEdgeToEdgeContentInsets,
-} from "@/shared/ui/edge-to-edge-layout";
-import {
-    BottomSafeAreaGradient,
-    TopSafeAreaGradient,
+  BottomSafeAreaGradient,
+  TopSafeAreaGradient,
 } from "@/shared/ui/safe-area-gradients";
 import { BlurTargetView } from "expo-blur";
 import { uuid } from "expo";
 import { useRouter } from "expo-router";
-import { Button, Switch as HeroSwitch, Input } from "heroui-native";
-import { useRef, useState, type ReactNode, type RefObject } from "react";
+import { Button } from "heroui-native";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Animated,
@@ -21,55 +17,81 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
-  Switch,
+  TextInput,
   View,
+  type ScrollViewInstance,
+  type TextInputInstance,
   type ViewInstance,
 } from "react-native";
+import Reanimated, {
+  Easing,
+  FadeIn,
+  LinearTransition,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
-    ACCOUNT_TYPES,
-    CARD_COMPANIES,
-    addAccountToDocument,
-    parseAccountAmount,
-    updateAccountInDocument,
-    validateAccountDraft,
-    type AccountDraft,
+  ACCOUNT_TYPES,
+  CARD_COMPANIES,
+  addAccountToDocument,
+  parseAccountAmount,
+  updateAccountInDocument,
+  validateAccountDraft,
+  type AccountDraft,
 } from "@/data/model/account-record";
-import { createDefaultSavingsDetails } from "@/data/model/savings-account";
 import {
-    selectAccountDraft,
-    selectBankAccounts,
+  selectAccountDraft,
+  selectBankAccounts,
 } from "@/data/selectors/document-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
 import { currencies } from "@/features/profile/data/currencies-data";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { useAppLocalization } from "@/localization/localization-provider";
-import { useAppThemeColors } from "@/shared/theme/app-theme";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
-import {
-    PickerModal as AccountPicker,
-    IconPicker,
-} from "@/shared/ui/icon-picker";
+import { IconPicker } from "@/shared/ui/icon-picker";
 import { ACCOUNT_COLORS, colorForeground } from "./account-options";
 import {
-    AccountCurrencyChangeSheet,
-    type CurrencyChangeRequest,
+  AccountCurrencyChangeSheet,
+  type CurrencyChangeRequest,
 } from "./components/account-currency-change-sheet";
+import {
+  CONTINUOUS,
+  ChoicePill,
+  FieldInput,
+  FormCard,
+  FormDivider,
+  FormField,
+  FormHelp,
+  FormLabel,
+  SwitchRow,
+  TABULAR,
+} from "@/shared/ui/form-ui";
 import { AccountIcon } from "./components/account-icon";
 import { CardCompanyLogo } from "./components/card-company-logo";
 import { SavingsDetailsForm } from "./components/savings-details-form";
+import {
+  createInitialAccountDraft,
+  defaultIcons,
+} from "./lib/initial-account-draft";
 
-const defaultIcons = {
-  card: "credit-card",
+
+/** The add button names the kind of account it creates through its icon. */
+const actionIcons: Record<AccountType, FilledIconName> = {
+  card: "credit-card-plus",
   cash: "cash",
   savings: "piggy-bank",
   bank: "bank",
-} as const;
+};
 
 type AccountType = (typeof ACCOUNT_TYPES)[number];
 const ACCOUNT_TYPE_OPTIONS: readonly AccountType[] = [
@@ -78,6 +100,16 @@ const ACCOUNT_TYPE_OPTIONS: readonly AccountType[] = [
   "cash",
   "savings",
 ];
+const DAYS = Array.from({ length: 31 }, (_, index) => index + 1);
+const DAY_PILL = 48;
+const DAY_GAP = 8;
+
+const SECTION_LAYOUT = LinearTransition.duration(240)
+  .easing(Easing.bezier(0.77, 0, 0.175, 1))
+  .reduceMotion(ReduceMotion.System);
+const SECTION_ENTER = FadeIn.duration(200)
+  .easing(Easing.bezier(0.23, 1, 0.32, 1))
+  .reduceMotion(ReduceMotion.System);
 
 function AccountTypeSelector({
   blurTarget,
@@ -112,85 +144,12 @@ function AccountTypeSelector({
   );
 }
 
-function OptionRow({
-  icon,
-  title,
-  description,
-  onPress,
-  hasDivider = false,
-  leading,
-}: {
-  icon: FilledIconName;
-  title: string;
-  description: string;
-  onPress: () => void;
-  hasDivider?: boolean;
-  leading?: ReactNode;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t("accounts.form.optionAccessibility", {
-        title,
-        description,
-      })}
-      onPress={onPress}
-      className={`min-h-20 flex-row items-center gap-4 py-3 ${
-        hasDivider ? "border-b border-border" : ""
-      }`}
-    >
-      {leading ?? <FilledIcon name={icon} size={26} tone="accent" />}
-      <View className="flex-1 gap-1">
-        <Text className="font-manrope-semibold text-base text-foreground">
-          {title}
-        </Text>
-        <Text className="font-sans text-sm text-muted">{description}</Text>
-      </View>
-      <FilledIcon name="chevron-right" size={24} />
-    </Pressable>
-  );
-}
-
-function PickerListScrollView({
-  contentContainerClassName,
-  children,
-}: {
-  contentContainerClassName?: string;
-  children: ReactNode;
-}) {
-  // PickerModal's header floats absolutely over the content, so the list
-  // must pad by the header's height or its top row renders underneath it.
-  // The bottom fade and, on Android, the translucent nav bar do the same
-  // at the bottom, so the last row needs matching bottom padding to be
-  // reachable and tappable above them.
-  const contentInsets = useEdgeToEdgeContentInsets();
-  return (
-    <EdgeToEdgeHeaderScrollView
-      style={{ flex: 1 }}
-      contentContainerClassName={contentContainerClassName}
-      contentContainerStyle={{
-        paddingTop: contentInsets.top + 12,
-        paddingBottom: contentInsets.bottom + 48,
-      }}
-    >
-      {children}
-    </EdgeToEdgeHeaderScrollView>
-  );
-}
-
 export function AccountCreateScreen({ editId }: { editId?: string }) {
   const { t } = useTranslation();
   const { direction } = useAppLocalization();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
-  const inputDirectionStyle = {
-    direction,
-    textAlign: "auto" as const,
-    writingDirection: direction,
-  };
   const { document, updateDocument } = useLocalData();
   const { activeProfile } = useProfiles();
   // Capture the owner for this draft; a later profile change cannot reassign it.
@@ -203,33 +162,18 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
   const [currencyChangeNote, setCurrencyChangeNote] = useState("");
   const [draft, setDraft] = useState<AccountDraft>(
     () =>
-      (editId ? selectAccountDraft(document, editId) : null) ?? {
-        name: "",
-        amount: "",
-        creditLimit: "",
-        accountNumber: "",
-        accountType: "card",
-        currencyCode: activeProfile.currencyCode.toUpperCase(),
-        icon: "credit-card",
-        iconPath: null,
-        color: ACCOUNT_COLORS[0],
-        isDefault: false,
-        isExcluded: false,
-        cardLastFour: "",
-        cardCompany: "",
-        paymentDay: null,
-        bankName: "",
-        linkedBankAccountId: null,
-        savingsDetails: createDefaultSavingsDetails(),
-      },
+      (editId ? selectAccountDraft(document, editId) : null) ??
+      createInitialAccountDraft(document, activeProfile.currencyCode),
   );
-  const [picker, setPicker] = useState<
-    "icon" | "currency" | "company" | "day" | "bank" | null
-  >(null);
+  const [picker, setPicker] = useState<"icon" | "currency" | null>(null);
+  const [showHex, setShowHex] = useState(
+    () => !ACCOUNT_COLORS.includes(draft.color.toLowerCase()),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const saving = useRef(false);
   const blurTargetRef = useRef<ViewInstance | null>(null);
+  const amountRef = useRef<TextInputInstance>(null);
   const { scrollY, headerHidden } = useCollapsingHeader();
   const accountId = useRef<string | null>(null);
   const iconChosen = useRef(!!editId);
@@ -247,6 +191,8 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
   const savingsBalance = Number.isFinite(parsedDraftBalance)
     ? parsedDraftBalance
     : 0;
+  const isNegative = draft.amount.trim().startsWith("-");
+  const isCard = draft.accountType === "card";
   const topControlsTranslateY = scrollY.interpolate({
     inputRange: [0, 56],
     outputRange: [0, -56],
@@ -257,6 +203,27 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
+
+  /** Card spending is entered as a positive amount and stored as debt. */
+  function toSavedDraft(value: AccountDraft): AccountDraft {
+    return {
+      ...value,
+      amount:
+        value.accountType === "card" &&
+        Number(value.amount.replace(",", ".")) > 0
+          ? `-${value.amount.trim()}`
+          : value.amount,
+    };
+  }
+  const isReady = (() => {
+    try {
+      validateAccountDraft(toSavedDraft(draft));
+      return !isCard || !!linkedBankAccount;
+    } catch {
+      return false;
+    }
+  })();
+
   function change<K extends keyof AccountDraft>(
     key: K,
     value: AccountDraft[K],
@@ -277,14 +244,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
 
   async function save() {
     if (saving.current) return;
-    const draftToSave: AccountDraft = {
-      ...draft,
-      amount:
-        draft.accountType === "card" &&
-        Number(draft.amount.replace(",", ".")) > 0
-          ? `-${draft.amount.trim()}`
-          : draft.amount,
-    };
+    const draftToSave = toSavedDraft(draft);
     try {
       validateAccountDraft(draftToSave);
     } catch (reason) {
@@ -329,6 +289,24 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
     }
   }
 
+  const balanceLabel = isCard
+    ? t("accounts.form.cardCurrentBalance", { currency: draft.currencyCode })
+    : draft.accountType === "savings"
+      ? t("accounts.form.currentBalance", { currency: draft.currencyCode })
+      : t("accounts.form.openingBalance", { currency: draft.currencyCode });
+  const accountNumberField = (
+    <FormField label={t("accounts.form.accountNumberOptional")}>
+      <FieldInput
+        accessibilityLabel={t("accounts.form.accountNumber")}
+        placeholder={t("accounts.form.accountNumber")}
+        autoCorrect={false}
+        maxLength={64}
+        value={draft.accountNumber}
+        onChangeText={(value) => change("accountNumber", value)}
+      />
+    </FormField>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <KeyboardAvoidingView
@@ -340,7 +318,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
             <Animated.ScrollView
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{
-                paddingBottom: 104 + insets.bottom,
+                paddingBottom: 120 + insets.bottom,
               }}
               onScroll={Animated.event(
                 [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -358,387 +336,372 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                 // ... the specified child already has a parent".
                 collapsable={false}
                 pointerEvents={isSaving ? "none" : "auto"}
-                className="gap-5 px-5"
+                className="gap-3 px-4"
               >
-                <View className="gap-2">
-                  <Text className="font-manrope-medium text-sm text-muted">
-                    {t("accounts.form.accountName")}
-                  </Text>
-                  <View className="flex-row items-center gap-3">
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t("accounts.form.chooseIcon")}
-                      onPress={() => openPicker("icon")}
-                      className="size-16 items-center justify-center rounded-2xl"
-                      style={{ backgroundColor: color }}
-                    >
-                      <AccountIcon
-                        name={draft.icon}
-                        pathData={draft.iconPath}
-                        color={colorForeground(color)}
-                        size={30}
-                      />
-                      <View
-                        className="absolute -bottom-1 rounded-full border-2 border-background bg-surface p-1"
-                        style={I18nManager.isRTL ? { left: -4 } : { right: -4 }}
+                {/* Identity: the tile is a live preview of the colour and icon. */}
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard>
+                    <View className="flex-row items-center gap-3.5">
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t("accounts.form.chooseIcon")}
+                        onPress={() => openPicker("icon")}
+                        className="size-[72px] items-center justify-center rounded-[22px]"
+                        style={({ pressed }) => ({
+                          backgroundColor: color,
+                          opacity: pressed ? 0.8 : 1,
+                          ...CONTINUOUS,
+                        })}
                       >
-                        <FilledIcon name="pencil" size={13} />
+                        <AccountIcon
+                          name={draft.icon}
+                          pathData={draft.iconPath}
+                          color={colorForeground(color)}
+                          size={34}
+                        />
+                        <View
+                          className="absolute -bottom-1 rounded-full border-2 bg-surface p-1"
+                          style={[
+                            { borderColor: theme.surface },
+                            I18nManager.isRTL ? { left: -4 } : { right: -4 },
+                          ]}
+                        >
+                          <FilledIcon name="pencil" size={13} />
+                        </View>
+                      </Pressable>
+                      <View className="min-w-0 flex-1 gap-2">
+                        <FormLabel>{t("accounts.form.accountName")}</FormLabel>
+                        <FieldInput
+                          accessibilityLabel={t("accounts.form.accountName")}
+                          placeholder={
+                            draft.accountType === "bank"
+                              ? t("accounts.form.namePlaceholders.bank")
+                              : draft.accountType === "savings"
+                                ? t("accounts.form.namePlaceholders.savings")
+                                : t("accounts.form.namePlaceholders.default")
+                          }
+                          maxLength={100}
+                          returnKeyType="next"
+                          submitBehavior="submit"
+                          onSubmitEditing={() => amountRef.current?.focus()}
+                          value={draft.name}
+                          onChangeText={(value) => change("name", value)}
+                          style={styles.nameInput}
+                        />
                       </View>
-                    </Pressable>
-                    <Input
-                      accessibilityLabel={t("accounts.form.accountName")}
-                      placeholder={
-                        draft.accountType === "bank"
-                          ? t("accounts.form.namePlaceholders.bank")
-                          : draft.accountType === "savings"
-                            ? t("accounts.form.namePlaceholders.savings")
-                            : t("accounts.form.namePlaceholders.default")
-                      }
-                      maxLength={100}
-                      value={draft.name}
-                      onChangeText={(value) => change("name", value)}
-                      containerClassName="flex-1"
-                      className="h-16 rounded-2xl bg-surface font-manrope-semibold"
-                      style={inputDirectionStyle}
-                    />
-                  </View>
-                </View>
-                {draft.accountType === "card" && (
-                  <View className="gap-2">
-                    <Text className="font-manrope-medium text-sm text-muted">
-                      {t("accounts.form.creditLimit", {
-                        currency: draft.currencyCode,
-                      })}
-                    </Text>
-                    <Input
-                      accessibilityLabel={t(
-                        "accounts.form.creditLimitAccessibility",
+                    </View>
+                    <View className="gap-2.5">
+                      <FormLabel>{t("accounts.form.accountColor")}</FormLabel>
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={styles.swatches}
+                        style={styles.bleed}
+                      >
+                        {ACCOUNT_COLORS.map((swatch) => {
+                          const selected =
+                            draft.color.toLowerCase() === swatch;
+                          return (
+                            <Pressable
+                              key={swatch}
+                              accessibilityRole="radio"
+                              accessibilityLabel={t(
+                                "accounts.form.colorAccessibility",
+                                { color: swatch },
+                              )}
+                              accessibilityState={{ checked: selected }}
+                              onPress={() => {
+                                change("color", swatch);
+                                setShowHex(false);
+                              }}
+                              style={[
+                                styles.swatchRing,
+                                {
+                                  borderColor: selected
+                                    ? theme.foreground
+                                    : "transparent",
+                                },
+                              ]}
+                            >
+                              <View
+                                style={[
+                                  styles.swatch,
+                                  {
+                                    backgroundColor: swatch,
+                                    borderColor: colorWithAlpha(
+                                      theme.foreground,
+                                      0.12,
+                                    ),
+                                  },
+                                ]}
+                              >
+                                {selected && (
+                                  <FilledIcon
+                                    name="check"
+                                    color={colorForeground(swatch)}
+                                    size={18}
+                                  />
+                                )}
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={t("accounts.form.customHexColor")}
+                          accessibilityState={{ expanded: showHex }}
+                          onPress={() => setShowHex((value) => !value)}
+                          style={[
+                            styles.swatchRing,
+                            {
+                              borderColor: showHex
+                                ? theme.foreground
+                                : "transparent",
+                            },
+                          ]}
+                        >
+                          <View
+                            style={[
+                              styles.swatch,
+                              {
+                                backgroundColor: theme.surfaceSecondary,
+                                borderColor: theme.border,
+                              },
+                            ]}
+                          >
+                            <Text className="font-manrope-bold text-[15px] text-foreground">
+                              #
+                            </Text>
+                          </View>
+                        </Pressable>
+                      </ScrollView>
+                      {showHex && (
+                        <Reanimated.View entering={SECTION_ENTER} className="gap-2">
+                          <FieldInput
+                            accessibilityLabel={t(
+                              "accounts.form.customHexColor",
+                            )}
+                            placeholder={t("accounts.form.hexPlaceholder")}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            maxLength={7}
+                            value={draft.color}
+                            onChangeText={(value) => change("color", value)}
+                          />
+                          <FormHelp>{t("accounts.form.colorHelp")}</FormHelp>
+                        </Reanimated.View>
                       )}
-                      placeholder={t("accounts.form.creditLimitPlaceholder")}
-                      keyboardType="decimal-pad"
-                      value={draft.creditLimit ?? ""}
-                      onChangeText={(value) => change("creditLimit", value)}
-                      className="h-14 rounded-2xl bg-surface font-manrope-semibold"
-                      style={inputDirectionStyle}
-                    />
-                    <Text className="font-sans text-xs leading-5 text-muted">
-                      {t("accounts.form.creditLimitHelp")}
-                    </Text>
-                  </View>
-                )}
-                <View className="gap-2">
-                  <Text className="font-manrope-medium text-sm text-muted">
-                    {draft.accountType === "card"
-                      ? t("accounts.form.cardCurrentBalance", {
-                          currency: draft.currencyCode,
-                        })
-                      : draft.accountType === "savings"
-                        ? t("accounts.form.currentBalance", {
-                            currency: draft.currencyCode,
-                          })
-                        : t("accounts.form.openingBalance", {
+                    </View>
+                  </FormCard>
+                </Reanimated.View>
+
+                {/* Balance: the one number every account needs, set large. */}
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard>
+                    <View className="gap-2.5">
+                      <FormLabel>{balanceLabel}</FormLabel>
+                      <View
+                        className="flex-row items-center gap-2 rounded-[20px] p-2"
+                        style={{
+                          backgroundColor: theme.surfaceSecondary,
+                          ...CONTINUOUS,
+                        }}
+                      >
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={t(
+                            "accounts.form.toggleNegativeBalance",
+                          )}
+                          accessibilityState={{ selected: isNegative }}
+                          onPress={() =>
+                            change(
+                              "amount",
+                              draft.amount.startsWith("-")
+                                ? draft.amount.slice(1)
+                                : `-${draft.amount}`,
+                            )
+                          }
+                          className="size-12 items-center justify-center rounded-2xl"
+                          style={({ pressed }) => ({
+                            backgroundColor: isNegative
+                              ? colorWithAlpha(theme.danger, 0.16)
+                              : theme.surface,
+                            opacity: pressed ? 0.72 : 1,
+                            ...CONTINUOUS,
+                          })}
+                        >
+                          <Text
+                            className="font-manrope-bold text-[17px]"
+                            style={{
+                              color: isNegative ? theme.danger : theme.foreground,
+                            }}
+                          >
+                            +/−
+                          </Text>
+                        </Pressable>
+                        <TextInput
+                          ref={amountRef}
+                          accessibilityLabel={t(
+                            "accounts.form.openingBalanceAccessibility",
+                          )}
+                          placeholder={t("accounts.form.amountPlaceholder")}
+                          placeholderTextColor={colorWithAlpha(
+                            theme.muted,
+                            0.6,
+                          )}
+                          selectionColor={theme.accent}
+                          keyboardType="decimal-pad"
+                          value={draft.amount}
+                          onChangeText={(value) => change("amount", value)}
+                          style={[
+                            styles.amountInput,
+                            TABULAR,
+                            {
+                              color: isNegative
+                                ? theme.danger
+                                : theme.foreground,
+                              direction,
+                              writingDirection: direction,
+                              textAlign: direction === "rtl" ? "right" : "left",
+                            },
+                          ]}
+                        />
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t("accounts.form.accountCurrency")}: ${draft.currencyCode}`}
+                          onPress={() => openPicker("currency")}
+                          className="h-12 flex-row items-center gap-1.5 rounded-2xl px-3"
+                          style={({ pressed }) => ({
+                            backgroundColor: theme.surface,
+                            opacity: pressed ? 0.72 : 1,
+                            ...CONTINUOUS,
+                          })}
+                        >
+                          <Text className="font-manrope-bold text-[15px] text-foreground">
+                            {currency?.symbol ?? draft.currencyCode}
+                          </Text>
+                          <Text className="font-manrope-semibold text-[12px] text-muted">
+                            {draft.currencyCode}
+                          </Text>
+                          <FilledIcon
+                            name="chevron-right"
+                            size={16}
+                            tone="muted"
+                            style={{ transform: [{ rotate: "90deg" }] }}
+                          />
+                        </Pressable>
+                      </View>
+                      {isCard && (
+                        <FormHelp>{t("accounts.form.cardCurrentBalanceHelp")}</FormHelp>
+                      )}
+                      {draft.accountType === "bank" && (
+                        <FormHelp>{t("accounts.form.negativeBalanceHelp")}</FormHelp>
+                      )}
+                      {!!currencyChangeNote && (
+                        <FormHelp>
+                          {currencyChangeNote}{" "}
+                          {t("accounts.form.pastTransactionsCurrency")}
+                        </FormHelp>
+                      )}
+                    </View>
+                    {isCard && (
+                      <>
+                        <FormDivider />
+                        <FormField
+                          label={t("accounts.form.creditLimit", {
                             currency: draft.currencyCode,
                           })}
-                  </Text>
-                  <View className="flex-row items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      accessibilityLabel={t(
-                        "accounts.form.toggleNegativeBalance",
-                      )}
-                      onPress={() =>
-                        change(
-                          "amount",
-                          draft.amount.startsWith("-")
-                            ? draft.amount.slice(1)
-                            : `-${draft.amount}`,
-                        )
-                      }
-                    >
-                      <Button.Label>+/−</Button.Label>
-                    </Button>
-                    <Input
-                      accessibilityLabel={t(
-                        "accounts.form.openingBalanceAccessibility",
-                      )}
-                      placeholder={t("accounts.form.amountPlaceholder")}
-                      keyboardType="decimal-pad"
-                      value={draft.amount}
-                      onChangeText={(value) => change("amount", value)}
-                      containerClassName="flex-1"
-                      className="h-14 rounded-2xl bg-surface"
-                      style={inputDirectionStyle}
-                    />
-                  </View>
-                  {draft.accountType === "card" && (
-                    <Text className="font-sans text-xs leading-5 text-muted">
-                      {t("accounts.form.cardCurrentBalanceHelp")}
-                    </Text>
-                  )}
-                  {draft.accountType === "bank" && (
-                    <Text className="font-sans text-xs leading-5 text-muted">
-                      {t("accounts.form.negativeBalanceHelp")}
-                    </Text>
-                  )}
-                </View>
-                <View className="gap-2">
-                  <Text className="font-manrope-medium text-sm text-muted">
-                    {t("accounts.form.accountNumberOptional")}
-                  </Text>
-                  <Input
-                    accessibilityLabel={t("accounts.form.accountNumber")}
-                    placeholder={t("accounts.form.accountNumber")}
-                    autoCorrect={false}
-                    maxLength={64}
-                    value={draft.accountNumber}
-                    onChangeText={(value) => change("accountNumber", value)}
-                    className="h-14 rounded-2xl bg-surface"
-                    style={inputDirectionStyle}
-                  />
-                </View>
-                {draft.accountType === "bank" && (
-                  <View className="gap-3 pt-1">
-                    <View className="flex-row items-center gap-3">
-                      <FilledIcon name="bank" size={24} tone="accent" />
-                      <Text className="font-manrope-semibold text-base text-foreground">
-                        {t("accounts.form.bankDetails")}
-                      </Text>
-                    </View>
-                    <View className="gap-2">
-                      <Text className="font-manrope-medium text-sm text-muted">
-                        {t("accounts.form.bankName")}
-                      </Text>
-                      <Input
-                        accessibilityLabel={t("accounts.form.bankName")}
-                        placeholder={t("accounts.form.bankNamePlaceholder")}
-                        maxLength={100}
-                        value={draft.bankName}
-                        onChangeText={(value) => change("bankName", value)}
-                        className="h-14 rounded-2xl bg-surface"
-                        style={inputDirectionStyle}
-                      />
-                    </View>
-                  </View>
-                )}
-                {draft.accountType === "savings" && (
-                  <SavingsDetailsForm
-                    balance={savingsBalance}
-                    currencyCode={draft.currencyCode}
-                    value={draft.savingsDetails}
-                    onChange={(savingsDetails) =>
-                      change("savingsDetails", savingsDetails)
-                    }
-                  />
-                )}
-                {draft.accountType === "card" && (
-                  <View className="gap-3 pt-1">
-                    <View className="flex-row items-center gap-3">
-                      <FilledIcon name="credit-card" size={24} tone="accent" />
-                      <Text className="font-manrope-semibold text-base text-foreground">
-                        {t("accounts.form.cardDetails")}
-                      </Text>
-                    </View>
-                    <View className="gap-2">
-                      <Text className="font-manrope-medium text-sm text-muted">
-                        {t("accounts.form.lastFourDigits")}
-                      </Text>
-                      <Input
-                        accessibilityLabel={t(
-                          "accounts.form.lastFourAccessibility",
-                        )}
-                        placeholder={t("accounts.form.lastFourPlaceholder")}
-                        keyboardType="number-pad"
-                        maxLength={4}
-                        value={draft.cardLastFour}
-                        onChangeText={(value) => change("cardLastFour", value)}
-                        className="h-14 rounded-2xl bg-surface"
-                        style={inputDirectionStyle}
-                      />
-                    </View>
-                    <View>
-                      <OptionRow
-                        icon="credit-card"
-                        title={t("accounts.form.cardCompany")}
-                        description={
-                          draft.cardCompany || t("accounts.form.selectCompany")
-                        }
-                        leading={
-                          draft.cardCompany ? (
-                            <CardCompanyLogo company={draft.cardCompany} />
-                          ) : undefined
-                        }
-                        onPress={() => openPicker("company")}
-                        hasDivider
-                      />
-                      <OptionRow
-                        icon="clock"
-                        title={t("accounts.form.monthlyPaymentDay")}
-                        description={
-                          draft.paymentDay
-                            ? t("accounts.form.paymentDay", {
-                                day: String(draft.paymentDay).padStart(2, "0"),
-                              })
-                            : t("accounts.form.chooseDay")
-                        }
-                        onPress={() => openPicker("day")}
-                        hasDivider
-                      />
-                      <OptionRow
-                        icon="bank"
-                        title={t("accounts.form.bankAccount")}
-                        description={
-                          linkedBankAccount
-                            ? `${linkedBankAccount.name} · ${linkedBankAccount.bankName}`
-                            : bankAccounts.length
-                              ? t("accounts.form.selectPayingAccount")
-                              : t("accounts.form.createBankAccountFirst")
-                        }
-                        onPress={() => openPicker("bank")}
-                      />
-                    </View>
-                    <Text className="font-sans text-xs leading-5 text-muted">
-                      {t("accounts.form.paymentHelp")}
-                      {linkedBankAccount &&
-                      linkedBankAccount.currencyCode !== draft.currencyCode
-                        ? ` ${t("accounts.form.paymentConversionHelp", {
-                            from: draft.currencyCode,
-                            to: linkedBankAccount.currencyCode,
-                          })}`
-                        : ""}
-                    </Text>
-                  </View>
-                )}
-                <OptionRow
-                  icon="currency-exchange"
-                  title={t("accounts.form.accountCurrency")}
-                  description={`${draft.currencyCode} (${currency?.symbol ?? draft.currencyCode})`}
-                  onPress={() => openPicker("currency")}
-                />
-                {!!currencyChangeNote && (
-                  <Text className="font-sans text-sm text-muted">
-                    {currencyChangeNote}{" "}
-                    {t("accounts.form.pastTransactionsCurrency")}
-                  </Text>
-                )}
-                {(
-                  [
-                    {
-                      key: "isDefault",
-                      icon: "check",
-                      title: t("accounts.form.defaultAccount"),
-                      description: t("accounts.form.defaultAccountHelp"),
-                    },
-                    {
-                      key: "isExcluded",
-                      icon: "eye-off",
-                      title: t("accounts.form.excludeAccount"),
-                      description: t("accounts.form.excludeAccountHelp"),
-                    },
-                  ] as const
-                ).map((option) => (
-                  <Pressable
-                    key={option.key}
-                    accessibilityRole="switch"
-                    accessibilityLabel={option.title}
-                    accessibilityHint={option.description}
-                    accessibilityState={{
-                      checked: draft[option.key],
-                      disabled: isSaving,
-                    }}
-                    disabled={isSaving}
-                    onPress={() => change(option.key, !draft[option.key])}
-                    className="flex-row items-center gap-4 py-2"
-                  >
-                    <FilledIcon
-                      name={option.icon}
-                      tone={option.key === "isExcluded" ? "danger" : "accent"}
-                      size={26}
-                    />
-                    <View className="flex-1 gap-1">
-                      <Text className="font-manrope-semibold text-base text-foreground">
-                        {option.title}
-                      </Text>
-                      <Text className="font-sans text-sm leading-5 text-muted">
-                        {option.description}
-                      </Text>
-                    </View>
-                    <View
-                      pointerEvents="none"
-                      accessibilityElementsHidden
-                      importantForAccessibility="no-hide-descendants"
-                      className="shrink-0"
-                    >
-                      {Platform.OS === "android" ? (
-                        <HeroSwitch
-                          isSelected={draft[option.key]}
-                          isDisabled={isSaving}
-                          style={{ width: 60, height: 28 }}
+                          help={t("accounts.form.creditLimitHelp")}
                         >
-                          <HeroSwitch.Thumb style={{ width: 36, height: 24 }} />
-                        </HeroSwitch>
-                      ) : (
-                        <Switch
-                          value={draft[option.key]}
-                          disabled={isSaving}
-                          trackColor={{
-                            false: theme.surfaceTertiary,
-                            true: theme.accent,
-                          }}
-                          thumbColor={
-                            draft[option.key]
-                              ? theme.accentForeground
-                              : theme.muted
-                          }
-                        />
-                      )}
-                    </View>
-                  </Pressable>
-                ))}
-                <View className="gap-3">
-                  <Text className="font-manrope-semibold text-base text-foreground">
-                    {t("accounts.form.accountColor")}
-                  </Text>
-                  <View className="flex-row flex-wrap gap-3">
-                    {ACCOUNT_COLORS.map((swatch) => (
-                      <Pressable
-                        key={swatch}
-                        accessibilityRole="radio"
-                        accessibilityLabel={t(
-                          "accounts.form.colorAccessibility",
-                          { color: swatch },
-                        )}
-                        accessibilityState={{
-                          checked: draft.color.toLowerCase() === swatch,
-                        }}
-                        onPress={() => change("color", swatch)}
-                        className="size-11 items-center justify-center rounded-xl border border-white/10"
-                        style={{ backgroundColor: swatch }}
-                      >
-                        {draft.color.toLowerCase() === swatch && (
-                          <FilledIcon
-                            name="check"
-                            color={colorForeground(swatch)}
-                            size={24}
+                          <FieldInput
+                            accessibilityLabel={t(
+                              "accounts.form.creditLimitAccessibility",
+                            )}
+                            placeholder={t(
+                              "accounts.form.creditLimitPlaceholder",
+                            )}
+                            keyboardType="decimal-pad"
+                            value={draft.creditLimit ?? ""}
+                            onChangeText={(value) =>
+                              change("creditLimit", value)
+                            }
+                            style={TABULAR}
                           />
-                        )}
-                      </Pressable>
-                    ))}
-                  </View>
-                  <Input
-                    accessibilityLabel={t("accounts.form.customHexColor")}
-                    placeholder={t("accounts.form.hexPlaceholder")}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={7}
-                    value={draft.color}
-                    onChangeText={(value) => change("color", value)}
-                    className="rounded-xl bg-surface"
-                    style={inputDirectionStyle}
-                  />
-                  <Text className="font-sans text-xs text-muted">
-                    {t("accounts.form.colorHelp")}
-                  </Text>
-                </View>
+                        </FormField>
+                      </>
+                    )}
+                  </FormCard>
+                </Reanimated.View>
+
+                {/* Details for the selected type only. */}
+                <Reanimated.View
+                  key={draft.accountType}
+                  entering={SECTION_ENTER}
+                  layout={SECTION_LAYOUT}
+                  className="gap-3"
+                >
+                  {draft.accountType === "bank" && (
+                    <FormCard title={t("accounts.form.bankDetails")} icon="bank">
+                      <FormField label={t("accounts.form.bankName")}>
+                        <FieldInput
+                          accessibilityLabel={t("accounts.form.bankName")}
+                          placeholder={t("accounts.form.bankNamePlaceholder")}
+                          maxLength={100}
+                          value={draft.bankName}
+                          onChangeText={(value) => change("bankName", value)}
+                        />
+                      </FormField>
+                      {accountNumberField}
+                    </FormCard>
+                  )}
+                  {isCard && (
+                    <CardDetails
+                      draft={draft}
+                      bankAccounts={bankAccounts}
+                      linkedBankAccount={linkedBankAccount}
+                      onChange={change}
+                      accountNumberField={accountNumberField}
+                    />
+                  )}
+                  {draft.accountType === "savings" && (
+                    <SavingsDetailsForm
+                      balance={savingsBalance}
+                      currencyCode={draft.currencyCode}
+                      value={draft.savingsDetails}
+                      onChange={(savingsDetails) =>
+                        change("savingsDetails", savingsDetails)
+                      }
+                    />
+                  )}
+                  {(draft.accountType === "cash" ||
+                    draft.accountType === "savings") && (
+                    <FormCard>{accountNumberField}</FormCard>
+                  )}
+                </Reanimated.View>
+
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard>
+                    <SwitchRow
+                      icon="check"
+                      title={t("accounts.form.defaultAccount")}
+                      description={t("accounts.form.defaultAccountHelp")}
+                      value={draft.isDefault}
+                      disabled={isSaving}
+                      onChange={(value) => change("isDefault", value)}
+                    />
+                    <FormDivider />
+                    <SwitchRow
+                      icon="eye-off"
+                      tone="danger"
+                      title={t("accounts.form.excludeAccount")}
+                      description={t("accounts.form.excludeAccountHelp")}
+                      value={draft.isExcluded}
+                      disabled={isSaving}
+                      onChange={(value) => change("isExcluded", value)}
+                    />
+                  </FormCard>
+                </Reanimated.View>
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
@@ -813,12 +776,22 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               <Text
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
-                className="font-sans text-sm text-danger"
+                className="px-2 text-center font-sans text-sm text-danger"
               >
                 {error}
               </Text>
             )}
-            <Pressable
+            <SaveButton
+              ready={isReady}
+              busy={isSaving}
+              icon={actionIcons[draft.accountType]}
+              label={
+                isSaving
+                  ? t("accounts.form.saving")
+                  : editId
+                    ? t("accounts.form.saveChanges")
+                    : t("accounts.form.addAccount")
+              }
               accessibilityLabel={
                 isSaving
                   ? t("accounts.form.savingAccessibility")
@@ -826,30 +799,8 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                     ? t("accounts.form.saveChanges")
                     : t("accounts.form.addAccount")
               }
-              accessibilityRole="button"
-              accessibilityState={{ busy: isSaving, disabled: isSaving }}
-              disabled={isSaving}
               onPress={save}
-              style={({ pressed }) => [
-                styles.addButton,
-                { backgroundColor: theme.accent },
-                pressed && styles.pressed,
-                isSaving && styles.disabled,
-              ]}
-            >
-              <FilledIcon
-                name="credit-card-plus"
-                size={24}
-                tone="accent-foreground"
-              />
-              <Text className="font-manrope-bold text-base text-accent-foreground">
-                {isSaving
-                  ? t("accounts.form.saving")
-                  : editId
-                    ? t("accounts.form.saveChanges")
-                    : t("accounts.form.addAccount")}
-              </Text>
-            </Pressable>
+            />
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -910,82 +861,156 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
           }}
         />
       )}
-      {picker === "company" && (
-        <AccountPicker
-          title={t("accounts.form.cardCompany")}
-          onClose={() => setPicker(null)}
+    </View>
+  );
+}
+
+/**
+ * Card details answer three questions in one place, each with one tap:
+ * which card (last digits and company), when it is paid, and from where.
+ */
+function CardDetails({
+  draft,
+  bankAccounts,
+  linkedBankAccount,
+  onChange,
+  accountNumberField,
+}: {
+  draft: AccountDraft;
+  bankAccounts: ReturnType<typeof selectBankAccounts>;
+  linkedBankAccount: ReturnType<typeof selectBankAccounts>[number] | undefined;
+  onChange: <K extends keyof AccountDraft>(
+    key: K,
+    value: AccountDraft[K],
+  ) => void;
+  accountNumberField: React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const theme = useAppThemeColors();
+  const dayStrip = useRef<ScrollViewInstance>(null);
+
+  useEffect(() => {
+    // An existing payment day starts in view; RTL scroll origins differ per OS.
+    if (!draft.paymentDay || I18nManager.isRTL) return;
+    const x = Math.max(0, (draft.paymentDay - 3) * (DAY_PILL + DAY_GAP));
+    const frame = requestAnimationFrame(() =>
+      dayStrip.current?.scrollTo({ x, animated: false }),
+    );
+    return () => cancelAnimationFrame(frame);
+    // Only on first display; later taps are already visible.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <FormCard title={t("accounts.form.cardDetails")} icon="credit-card">
+      <FormField label={t("accounts.form.lastFourDigits")}>
+        <View
+          className="h-14 flex-row items-center gap-3 rounded-2xl px-4"
+          style={{ backgroundColor: theme.surfaceSecondary, ...CONTINUOUS }}
         >
-          <PickerListScrollView contentContainerClassName="px-5">
-            {CARD_COMPANIES.map((company) => (
-              <Pressable
+          <Text
+            className="font-manrope-bold text-[18px] text-muted"
+            style={{ letterSpacing: 2 }}
+          >
+            ••••
+          </Text>
+          <TextInput
+            accessibilityLabel={t("accounts.form.lastFourAccessibility")}
+            placeholder={t("accounts.form.lastFourPlaceholder")}
+            placeholderTextColor={colorWithAlpha(theme.muted, 0.6)}
+            selectionColor={theme.accent}
+            keyboardType="number-pad"
+            maxLength={4}
+            value={draft.cardLastFour}
+            onChangeText={(value) => {
+              const digits = value.replace(/\D/g, "");
+              onChange("cardLastFour", digits);
+              // All four digits entered: put the keyboard away for the taps below.
+              if (digits.length === 4) Keyboard.dismiss();
+            }}
+            style={[styles.lastFour, TABULAR, { color: theme.foreground }]}
+          />
+        </View>
+      </FormField>
+
+      <View className="gap-2.5">
+        <FormLabel>{t("accounts.form.cardCompany")}</FormLabel>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.strip}
+          style={styles.bleed}
+        >
+          {CARD_COMPANIES.map((company) => {
+            const selected = draft.cardCompany === company;
+            return (
+              <ChoicePill
                 key={company}
-                accessibilityRole="radio"
+                selected={selected}
                 accessibilityLabel={company}
-                accessibilityState={{ checked: draft.cardCompany === company }}
-                onPress={() => {
-                  change("cardCompany", company);
-                  setPicker(null);
-                }}
-                className="min-h-16 flex-row items-center gap-4 border-b border-border py-4"
+                onPress={() => onChange("cardCompany", company)}
               >
-                <CardCompanyLogo company={company} />
-                <Text className="flex-1 font-manrope-semibold text-base text-foreground">
+                <CardCompanyLogo company={company} width={40} height={26} />
+                <Text
+                  className={`font-manrope-semibold text-[13px] ${selected ? "text-accent-foreground" : "text-foreground"}`}
+                >
                   {company}
                 </Text>
-                {draft.cardCompany === company && (
-                  <FilledIcon name="check" size={24} tone="accent" />
-                )}
-              </Pressable>
-            ))}
-          </PickerListScrollView>
-        </AccountPicker>
-      )}
-      {picker === "day" && (
-        <AccountPicker
-          title={t("accounts.form.monthlyPaymentDay")}
-          onClose={() => setPicker(null)}
+              </ChoicePill>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <View className="gap-2.5">
+        <View className="gap-0.5">
+          <FormLabel>{t("accounts.form.monthlyPaymentDay")}</FormLabel>
+          <FormHelp>{t("accounts.form.choosePaymentDay")}</FormHelp>
+        </View>
+        <ScrollView
+          ref={dayStrip}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.strip}
+          style={styles.bleed}
         >
-          <PickerListScrollView contentContainerClassName="gap-5 px-5">
-            <Text className="font-sans text-base text-muted">
-              {t("accounts.form.choosePaymentDay")}
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {Array.from({ length: 31 }, (_, index) => index + 1).map(
-                (day) => (
-                  <Pressable
-                    key={day}
-                    accessibilityRole="radio"
-                    accessibilityLabel={t("accounts.form.paymentDay", { day })}
-                    accessibilityState={{ checked: draft.paymentDay === day }}
-                    onPress={() => {
-                      change("paymentDay", day);
-                      setPicker(null);
-                    }}
-                    className={`size-12 items-center justify-center rounded-full ${draft.paymentDay === day ? "bg-accent" : "bg-surface"}`}
-                  >
-                    <Text
-                      className={`font-manrope-bold text-base ${draft.paymentDay === day ? "text-accent-foreground" : "text-foreground"}`}
-                    >
-                      {String(day).padStart(2, "0")}
-                    </Text>
-                  </Pressable>
-                ),
-              )}
-            </View>
-            <Text className="font-sans text-sm text-muted">
-              {t("accounts.form.shorterMonths")}
-            </Text>
-          </PickerListScrollView>
-        </AccountPicker>
-      )}
-      {picker === "bank" && (
-        <AccountPicker
-          title={t("accounts.form.bankAccount")}
-          onClose={() => setPicker(null)}
-        >
-          <PickerListScrollView contentContainerClassName="px-5">
-            {bankAccounts.length ? (
-              bankAccounts.map((account) => (
+          {DAYS.map((day) => {
+            const selected = draft.paymentDay === day;
+            return (
+              <ChoicePill
+                key={day}
+                selected={selected}
+                minWidth={DAY_PILL}
+                accessibilityLabel={t("accounts.form.paymentDay", { day })}
+                onPress={() => onChange("paymentDay", day)}
+              >
+                <Text
+                  className={`font-manrope-bold text-[16px] ${selected ? "text-accent-foreground" : "text-foreground"}`}
+                  style={TABULAR}
+                >
+                  {String(day).padStart(2, "0")}
+                </Text>
+              </ChoicePill>
+            );
+          })}
+        </ScrollView>
+        <FormHelp>{t("accounts.form.shorterMonths")}</FormHelp>
+      </View>
+
+      <FormDivider />
+
+      <View className="gap-2.5">
+        <FormLabel>{t("accounts.form.bankAccount")}</FormLabel>
+        {bankAccounts.length ? (
+          <View
+            className="overflow-hidden rounded-2xl"
+            style={{ backgroundColor: theme.surfaceSecondary, ...CONTINUOUS }}
+          >
+            {bankAccounts.map((account, index) => {
+              const selected = draft.linkedBankAccountId === account.id;
+              return (
                 <Pressable
                   key={account.id}
                   accessibilityRole="radio"
@@ -993,54 +1018,151 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                     "accounts.form.bankAccountAccessibility",
                     { name: account.name, bankName: account.bankName },
                   )}
-                  accessibilityState={{
-                    checked: draft.linkedBankAccountId === account.id,
-                  }}
-                  onPress={() => {
-                    change("linkedBankAccountId", account.id);
-                    setPicker(null);
-                  }}
-                  className="min-h-20 flex-row items-center gap-4 border-b border-border py-4"
+                  accessibilityState={{ checked: selected }}
+                  onPress={() => onChange("linkedBankAccountId", account.id)}
+                  className="min-h-16 flex-row items-center gap-3 px-3.5 py-3"
+                  style={({ pressed }) => ({
+                    opacity: pressed ? 0.72 : 1,
+                    borderTopWidth: index ? StyleSheet.hairlineWidth : 0,
+                    borderTopColor: theme.border,
+                    backgroundColor: selected
+                      ? colorWithAlpha(theme.accent, 0.12)
+                      : "transparent",
+                  })}
                 >
                   <View
-                    className="size-12 items-center justify-center rounded-2xl"
-                    style={{ backgroundColor: account.color }}
+                    className="size-10 items-center justify-center rounded-xl"
+                    style={{ backgroundColor: account.color, ...CONTINUOUS }}
                   >
                     <AccountIcon
                       name={account.icon}
                       pathData={account.iconPath}
                       color={colorForeground(account.color)}
-                      size={24}
+                      size={20}
                     />
                   </View>
-                  <View className="flex-1 gap-1">
-                    <Text className="font-manrope-semibold text-base text-foreground">
+                  <View className="min-w-0 flex-1 gap-0.5">
+                    <Text
+                      numberOfLines={1}
+                      className="font-manrope-semibold text-[15px] leading-[20px] text-foreground"
+                    >
                       {account.name}
                     </Text>
-                    <Text className="font-sans text-sm text-muted">
+                    <Text
+                      numberOfLines={1}
+                      className="font-sans text-[12px] leading-[16px] text-muted"
+                    >
                       {account.bankName} · {account.currencyCode}
                     </Text>
                   </View>
-                  {draft.linkedBankAccountId === account.id && (
-                    <FilledIcon name="check" size={24} tone="accent" />
-                  )}
+                  <View
+                    className="size-6 items-center justify-center rounded-full"
+                    style={{
+                      backgroundColor: selected ? theme.accent : "transparent",
+                      borderWidth: selected ? 0 : 1.5,
+                      borderColor: theme.border,
+                    }}
+                  >
+                    {selected && (
+                      <FilledIcon
+                        name="check"
+                        size={16}
+                        tone="accent-foreground"
+                      />
+                    )}
+                  </View>
                 </Pressable>
-              ))
-            ) : (
-              <View className="items-center gap-3 px-4 py-12">
-                <FilledIcon name="bank" size={36} tone="accent" />
-                <Text className="text-center font-manrope-semibold text-base text-foreground">
-                  {t("accounts.form.noBankAccounts")}
-                </Text>
-                <Text className="text-center font-sans text-sm leading-5 text-muted">
-                  {t("accounts.form.noBankAccountsHelp")}
-                </Text>
-              </View>
-            )}
-          </PickerListScrollView>
-        </AccountPicker>
-      )}
-    </View>
+              );
+            })}
+          </View>
+        ) : (
+          <View
+            className="items-center gap-2 rounded-2xl px-4 py-6"
+            style={{ backgroundColor: theme.surfaceSecondary, ...CONTINUOUS }}
+          >
+            <FilledIcon name="bank" size={28} tone="accent" />
+            <Text className="text-center font-manrope-semibold text-[15px] text-foreground">
+              {t("accounts.form.noBankAccounts")}
+            </Text>
+            <Text className="text-center font-sans text-[12px] leading-[17px] text-muted">
+              {t("accounts.form.noBankAccountsHelp")}
+            </Text>
+          </View>
+        )}
+        <FormHelp>
+          {t("accounts.form.paymentHelp")}
+          {linkedBankAccount &&
+          linkedBankAccount.currencyCode !== draft.currencyCode
+            ? ` ${t("accounts.form.paymentConversionHelp", {
+                from: draft.currencyCode,
+                to: linkedBankAccount.currencyCode,
+              })}`
+            : ""}
+        </FormHelp>
+      </View>
+
+      <FormDivider />
+      {accountNumberField}
+    </FormCard>
+  );
+}
+
+/**
+ * Dimmed until the required details are in, then fully lit: the button shows
+ * when the account is ready. It stays pressable so a tap explains what is missing.
+ */
+function SaveButton({
+  ready,
+  busy,
+  icon,
+  label,
+  accessibilityLabel,
+  onPress,
+}: {
+  ready: boolean;
+  busy: boolean;
+  icon: FilledIconName;
+  label: string;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  const theme = useAppThemeColors();
+  const emphasis = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    emphasis.set(
+      withTiming(ready ? 1 : 0, {
+        duration: 220,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [emphasis, ready]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.5 + emphasis.get() * 0.5,
+    transform: [{ scale: 0.98 + emphasis.get() * 0.02 }],
+  }));
+
+  return (
+    <Reanimated.View style={style}>
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={{ busy, disabled: busy }}
+        disabled={busy}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.addButton,
+          { backgroundColor: theme.accent },
+          pressed && styles.pressed,
+          busy && styles.disabled,
+        ]}
+      >
+        <FilledIcon name={icon} size={24} tone="accent-foreground" />
+        <Text className="font-manrope-bold text-[17px] text-accent-foreground">
+          {label}
+        </Text>
+      </Pressable>
+    </Reanimated.View>
   );
 }
 
@@ -1090,6 +1212,49 @@ const styles = StyleSheet.create({
     height: 58,
     justifyContent: "center",
     overflow: "hidden",
+  },
+  nameInput: {
+    fontSize: 17,
+  },
+  amountInput: {
+    flex: 1,
+    fontFamily: "Huninn_400Regular",
+    fontSize: 32,
+    height: 56,
+    minWidth: 0,
+    paddingHorizontal: 4,
+  },
+  lastFour: {
+    flex: 1,
+    fontFamily: "Huninn_400Regular",
+    fontSize: 20,
+    height: 56,
+    letterSpacing: 4,
+  },
+  // Horizontal rows run to the card edges so they read as scrollable.
+  bleed: {
+    marginHorizontal: -16,
+  },
+  strip: {
+    gap: DAY_GAP,
+    paddingHorizontal: 16,
+  },
+  swatches: {
+    gap: 6,
+    paddingHorizontal: 12,
+  },
+  swatchRing: {
+    borderRadius: 999,
+    borderWidth: 2,
+    padding: 2,
+  },
+  swatch: {
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    width: 40,
   },
   pressed: { opacity: 0.72 },
   disabled: { opacity: 0.5 },

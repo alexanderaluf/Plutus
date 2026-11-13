@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Animated,
+  I18nManager,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +18,13 @@ import {
   View,
   type ViewInstance,
 } from "react-native";
+import Reanimated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -59,15 +67,23 @@ import {
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 
 import { TransactionExtrasSection } from "./components/transaction-extras-section";
-import { TransactionFlowSection } from "./components/transaction-flow-section";
+import {
+  TransactionAccountCard,
+  TransactionCategoryCard,
+} from "./components/transaction-flow-section";
 import { TransactionHeroCard } from "./components/transaction-hero-card";
 import { TransactionScheduleSection } from "./components/transaction-schedule-section";
 import type { TransactionOption } from "./components/transaction-selection-section";
 import {
   applyQuickDatePreset,
+  fallbackTransactionName,
+  getTransactionTypeVisual,
+  isTransactionDraftReady,
   localizeBudgetPeriod,
   mapTransactionSaveError,
+  orderAccountsForPicker,
   parseTransactionAmount,
+  rankRootCategories,
   recordOptions,
   resolveAccountSelectionUpdate,
   resolveInitialTransactionDraft,
@@ -203,12 +219,32 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     }
   }
 
-  const transactionNamePlaceholder =
+  const typeNamePlaceholder =
     draft.type === 0
       ? t("transactions.form.namePlaceholders.expense")
       : draft.type === 1
         ? t("transactions.form.namePlaceholders.income")
         : t("transactions.form.namePlaceholders.transfer");
+  // An empty name is saved as the category (or the transfer route); the
+  // placeholder shows that name, so what gets saved is always visible.
+  const fallbackName = fallbackTransactionName({
+    type: draft.type,
+    categoryName: selectedCategory?.name,
+    fromName: selectedAccount?.name,
+    toName: destinationAccount?.name,
+    arrow: I18nManager.isRTL ? "←" : "→",
+  });
+  const transactionNamePlaceholder = fallbackName || typeNamePlaceholder;
+  const savedName = draft.name.trim() || fallbackName;
+  const pickerAccounts = orderAccountsForPicker(accounts);
+  const rootCategories = rankRootCategories(document, categories, draft.type);
+  const isReady = isTransactionDraftReady({
+    draft,
+    name: savedName,
+    hasAccount: Boolean(selectedAccount),
+    hasDestination: Boolean(destinationAccount),
+    rateLoading: currencyRateLoading,
+  });
 
   const budgetOptions: TransactionOption[] = budgets
     .filter((budget) => budget.transactionType === draft.type)
@@ -482,6 +518,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     setNotice("");
     setActionMenuOpen(false);
     Keyboard.dismiss();
+    const namedDraft: TransactionDraft = { ...draft, name: savedName };
     let pendingAttachmentPath: string | null = null;
     let attachmentCommitted = false;
     try {
@@ -492,7 +529,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             throw new Error(t("transactions.form.activeProfileChanged"));
           return saveTransactionTemplate(
             current,
-            draft,
+            namedDraft,
             id,
             profileId,
             new Date().toISOString(),
@@ -508,11 +545,11 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       pendingAttachmentPath = attachment?.relativePath ?? null;
       let preparedDraft: TransactionDraft = attachment
         ? {
-            ...draft,
+            ...namedDraft,
             receiptPath: attachment.relativePath,
             receiptAttachmentId: attachment.id,
           }
-        : draft;
+        : namedDraft;
 
       const base = (
         draft.type === 2 ? accountCurrencyCode : transactionCurrencyCode
@@ -696,33 +733,74 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   }
                   transactionCurrencyCode={transactionCurrencyCode}
                   type={draft.type}
+                  autoFocusAmount={!sourceId}
                   onChangeAmount={(value) => change("amount", value)}
                   onChangeName={(value) => change("name", value)}
                   onOpenCurrencyPicker={() => setCurrencySheetOpen(true)}
                 />
 
-                <TransactionFlowSection
-                  accounts={accounts}
-                  categories={categories}
-                  destinationAccountId={draft.destinationAccountId}
-                  disabled={isSaving}
-                  selectedAccountId={draft.accountId}
-                  selectedCategoryId={draft.categoryId}
-                  type={draft.type}
-                  onAddAccount={() => router.push("/accounts/create")}
-                  onAddCategory={() =>
-                    router.push({
-                      pathname: "/categories/create",
-                      params: { type: String(draft.type) },
-                    })
-                  }
-                  onSelectAccount={selectAccount}
-                  onSelectCategory={(value) => change("categoryId", value)}
-                  onSelectDestinationAccount={(value) =>
-                    change("destinationAccountId", value)
-                  }
-                  onSwapAccounts={swapTransferAccounts}
-                />
+                {/* What for, then from where; a transfer is a route first. */}
+                {draft.type === 2 ? (
+                  <>
+                    <TransactionAccountCard
+                    accounts={pickerAccounts}
+                    destinationAccountId={draft.destinationAccountId}
+                    disabled={isSaving}
+                    selectedAccountId={draft.accountId}
+                    type={draft.type}
+                    onAddAccount={() => router.push("/accounts/create")}
+                    onSelectAccount={selectAccount}
+                    onSelectDestinationAccount={(value) =>
+                      change("destinationAccountId", value)
+                    }
+                    onSwapAccounts={swapTransferAccounts}
+                  />
+                    <TransactionCategoryCard
+                    categories={categories}
+                    disabled={isSaving}
+                    rootCategories={rootCategories}
+                    selectedCategoryId={draft.categoryId}
+                    type={draft.type}
+                    onAddCategory={() =>
+                      router.push({
+                        pathname: "/categories/create",
+                        params: { type: String(draft.type) },
+                      })
+                    }
+                    onSelectCategory={(value) => change("categoryId", value)}
+                  />
+                  </>
+                ) : (
+                  <>
+                    <TransactionCategoryCard
+                    categories={categories}
+                    disabled={isSaving}
+                    rootCategories={rootCategories}
+                    selectedCategoryId={draft.categoryId}
+                    type={draft.type}
+                    onAddCategory={() =>
+                      router.push({
+                        pathname: "/categories/create",
+                        params: { type: String(draft.type) },
+                      })
+                    }
+                    onSelectCategory={(value) => change("categoryId", value)}
+                  />
+                    <TransactionAccountCard
+                    accounts={pickerAccounts}
+                    destinationAccountId={draft.destinationAccountId}
+                    disabled={isSaving}
+                    selectedAccountId={draft.accountId}
+                    type={draft.type}
+                    onAddAccount={() => router.push("/accounts/create")}
+                    onSelectAccount={selectAccount}
+                    onSelectDestinationAccount={(value) =>
+                      change("destinationAccountId", value)
+                    }
+                    onSwapAccounts={swapTransferAccounts}
+                  />
+                  </>
+                )}
 
                 <TransactionScheduleSection
                   activePickerMode={Platform.OS === "ios" ? datePickerMode : null}
@@ -872,6 +950,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 {notice}
               </Text>
             )}
+            <SaveEmphasis ready={isReady && !missingSource}>
             <View style={styles.splitActionRow}>
               <Pressable
                 accessibilityRole="button"
@@ -899,10 +978,18 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   Platform.OS === "ios" && pressed && styles.actionPressed,
                 ]}
               >
-                <FilledIcon name="save" size={24} tone="accent-foreground" />
+                <FilledIcon
+                  name={
+                    isEditingRecord
+                      ? "save"
+                      : getTransactionTypeVisual(draft.type).icon
+                  }
+                  size={24}
+                  tone="accent-foreground"
+                />
                 <Text
                   numberOfLines={1}
-                  className="shrink font-manrope-bold text-base text-accent-foreground"
+                  className="shrink font-manrope-bold text-[17px] text-accent-foreground"
                 >
                   {isSaving
                     ? t("transactions.form.saving")
@@ -938,6 +1025,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 />
               </Pressable>
             </View>
+            </SaveEmphasis>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -996,6 +1084,34 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       />
     </View>
   );
+}
+
+/**
+ * Dimmed until the entry can be saved, then fully lit: readiness is seen,
+ * not read. The buttons stay pressable so a tap explains what is missing.
+ */
+function SaveEmphasis({
+  ready,
+  children,
+}: {
+  ready: boolean;
+  children: React.ReactNode;
+}) {
+  const emphasis = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    emphasis.set(
+      withTiming(ready ? 1 : 0, {
+        duration: 220,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [emphasis, ready]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.5 + emphasis.get() * 0.5,
+    transform: [{ scale: 0.98 + emphasis.get() * 0.02 }],
+  }));
+  return <Reanimated.View style={style}>{children}</Reanimated.View>;
 }
 
 const styles = StyleSheet.create({

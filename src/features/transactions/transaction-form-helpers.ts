@@ -1,7 +1,11 @@
 import type { TFunction } from "i18next";
 
 import type { BackupDocument } from "@/data/model/backup-document";
-import { belongsToProfile, identity } from "@/data/model/category-record";
+import {
+  belongsToProfile,
+  createProfileMatcher,
+  identity,
+} from "@/data/model/category-record";
 import type { JsonObject } from "@/data/model/json";
 import {
   createTransactionDraft,
@@ -9,6 +13,10 @@ import {
   type TransactionType,
 } from "@/data/model/transaction-record";
 import type { Budget } from "@/data/selectors/budget-selectors";
+import {
+  categoryRootIdIn,
+  type Category,
+} from "@/data/selectors/category-selectors";
 import type { selectAccounts } from "@/data/selectors/document-selectors";
 import type { FilledIconName } from "@/shared/ui/filled-icon";
 
@@ -303,4 +311,103 @@ export function mapTransactionSaveError(
       return reason.message;
     }
   }
+}
+
+/**
+ * Top-level categories for a type, most used first. Usage counts this
+ * profile's own transactions and folds subcategories into their root, so the
+ * categories a person actually reaches for sit at their thumb. Ties keep the
+ * user's own category order.
+ */
+export function rankRootCategories(
+  document: BackupDocument,
+  categories: readonly Category[],
+  type: TransactionType,
+): Category[] {
+  const belongs = createProfileMatcher(document);
+  const ids = new Set(categories.map((category) => category.id));
+  const usage = new Map<string, number>();
+  for (const record of document.transactions) {
+    if (!belongs(record) || record.type !== type) continue;
+    const categoryId = String(record.category ?? "");
+    if (!ids.has(categoryId)) continue;
+    const rootId = categoryRootIdIn(categories, categoryId);
+    usage.set(rootId, (usage.get(rootId) ?? 0) + 1);
+  }
+  return categories
+    .map((category, index) => ({ category, index }))
+    .filter(
+      ({ category }) => category.type === type && category.parentId === null,
+    )
+    .sort(
+      (a, b) =>
+        (usage.get(b.category.id) ?? 0) - (usage.get(a.category.id) ?? 0) ||
+        a.index - b.index,
+    )
+    .map(({ category }) => category);
+}
+
+/** The profile's default account leads the picker; the rest keep their order. */
+export function orderAccountsForPicker<T extends { isDefault: boolean }>(
+  accounts: readonly T[],
+): T[] {
+  return [
+    ...accounts.filter((account) => account.isDefault),
+    ...accounts.filter((account) => !account.isDefault),
+  ];
+}
+
+/**
+ * The name a transaction gets when the user leaves it empty: its category, or
+ * the route of a transfer. Shown as the name placeholder, so it is never a
+ * surprise, and it lets amount + category be a complete entry.
+ */
+export function fallbackTransactionName({
+  type,
+  categoryName,
+  fromName,
+  toName,
+  arrow = "→",
+}: {
+  type: TransactionType;
+  categoryName?: string | null;
+  fromName?: string | null;
+  toName?: string | null;
+  arrow?: string;
+}): string {
+  // Saved names are limited to 100 characters.
+  const name =
+    type === 2
+      ? fromName && toName
+        ? `${fromName} ${arrow} ${toName}`
+        : ""
+      : (categoryName?.trim() ?? "");
+  return name.slice(0, 100).trim();
+}
+
+/** True when a save attempt would pass the record's own validation rules. */
+export function isTransactionDraftReady({
+  draft,
+  name,
+  hasAccount,
+  hasDestination,
+  rateLoading,
+}: {
+  draft: TransactionDraft;
+  name: string;
+  hasAccount: boolean;
+  hasDestination: boolean;
+  rateLoading: boolean;
+}): boolean {
+  const amount = parseTransactionAmount(draft.amount);
+  return (
+    Number.isFinite(amount) &&
+    amount > 0 &&
+    amount <= 1e12 &&
+    name.trim().length > 0 &&
+    name.trim().length <= 100 &&
+    hasAccount &&
+    (draft.type !== 2 || hasDestination) &&
+    !rateLoading
+  );
 }

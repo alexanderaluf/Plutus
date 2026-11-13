@@ -12,6 +12,7 @@ import {
 import type { TransactionType } from "@/data/model/transaction-record";
 import type { Category } from "@/data/selectors/category-selectors";
 import { useAppLocalization } from "@/localization/localization-provider";
+import { colorForeground } from "@/shared/icons/colors";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
@@ -40,6 +41,8 @@ type TransactionHeroCardProps = {
   currencyRateLoading: boolean;
   currencyRateError: string;
   currencyRateNotice: string;
+  /** New entries open with the keyboard on the amount: the first thing to type. */
+  autoFocusAmount?: boolean;
   disabled?: boolean;
   onChangeAmount: (value: string) => void;
   onChangeName: (value: string) => void;
@@ -47,8 +50,9 @@ type TransactionHeroCardProps = {
 };
 
 /**
- * Primary visual centerpiece uniting Amount, Currency, FX preview, and
- * Transaction Name inside a single mode-tinted elevated card.
+ * The page's centre of gravity: how much, in which currency, and what for.
+ * The type's colour carries the meaning (red out, green in, accent moved);
+ * the amount uses the full width and the largest type on the page.
  */
 export function TransactionHeroCard({
   type,
@@ -66,6 +70,7 @@ export function TransactionHeroCard({
   currencyRateLoading,
   currencyRateError,
   currencyRateNotice,
+  autoFocusAmount = false,
   disabled = false,
   onChangeAmount,
   onChangeName,
@@ -79,13 +84,14 @@ export function TransactionHeroCard({
   const nameInputRef = useRef<ComponentRef<typeof TextInput>>(null);
 
   const typeTone = getTransactionTypeTone(type, theme);
-  const { symbol } = getTransactionTypeVisual(type);
+  const { symbol, icon } = getTransactionTypeVisual(type);
   const parsedAmount = parseTransactionAmount(amount);
-  const hasPositiveAmount =
-    Number.isFinite(parsedAmount) && parsedAmount > 0;
+  const hasPositiveAmount = Number.isFinite(parsedAmount) && parsedAmount > 0;
   const digitCount = amount.trim().length;
-  const amountFontSize = digitCount > 13 ? 27 : digitCount > 9 ? 34 : 42;
-  const amountLineHeight = amountFontSize + 8;
+  // The number shrinks only when it would otherwise not fit one line.
+  const amountFontSize =
+    digitCount > 14 ? 30 : digitCount > 11 ? 38 : digitCount > 8 ? 46 : 54;
+  const textAlign = direction === "rtl" ? "right" : "left";
 
   return (
     <View
@@ -94,7 +100,7 @@ export function TransactionHeroCard({
         {
           backgroundColor: theme.surface,
           borderColor: hasPositiveAmount
-            ? colorWithAlpha(typeTone, theme.isDark ? 0.36 : 0.24)
+            ? colorWithAlpha(typeTone, theme.isDark ? 0.42 : 0.3)
             : theme.border,
           direction,
         },
@@ -102,188 +108,181 @@ export function TransactionHeroCard({
     >
       <LinearGradient
         colors={[
-          colorWithAlpha(typeTone, theme.isDark ? 0.14 : 0.09),
+          colorWithAlpha(typeTone, theme.isDark ? 0.16 : 0.1),
           colorWithAlpha(typeTone, theme.isDark ? 0.04 : 0.025),
           colorWithAlpha(typeTone, 0),
         ]}
-        end={{ x: 0.9, y: 1 }}
-        locations={[0, 0.55, 1]}
+        end={{ x: 0.8, y: 1 }}
+        locations={[0, 0.6, 1]}
         pointerEvents="none"
         start={{ x: 0, y: 0 }}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Hero Amount Row */}
       <Pressable
         accessible={false}
         disabled={disabled}
         onPress={() => amountInputRef.current?.focus()}
         style={styles.amountZone}
       >
-        <View
-          style={[
-            styles.signBadge,
-            {
-              backgroundColor: colorWithAlpha(
-                typeTone,
-                theme.isDark ? 0.22 : 0.12,
-              ),
-            },
-          ]}
-        >
-          {type === 2 ? (
-            <FilledIcon color={typeTone} name="swap-horizontal" size={22} />
-          ) : (
-            <Text style={[styles.signSymbol, { color: typeTone }]}>
-              {symbol}
-            </Text>
-          )}
-        </View>
-
-        <TextInput
-          ref={amountInputRef}
-          accessibilityLabel={t("transactions.form.amount")}
-          allowFontScaling
-          editable={!disabled}
-          keyboardType="decimal-pad"
-          maxLength={30}
-          placeholder="0.00"
-          placeholderTextColor={colorWithAlpha(theme.foreground, 0.22)}
-          returnKeyType="done"
-          selectionColor={typeTone}
-          value={amount}
-          onChangeText={onChangeAmount}
-          style={[
-            styles.amountInput,
-            {
-              color: theme.foreground,
-              fontSize: amountFontSize,
-              lineHeight: amountLineHeight,
-              textAlign: direction === "rtl" ? "right" : "left",
-              writingDirection: direction,
-            },
-          ]}
-        />
-
-        <Pressable
-          accessibilityLabel={t("transactions.form.currencyAccessibility", {
-            currency: transactionCurrencyCode,
-          })}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: disabled || !canChangeCurrency }}
-          disabled={disabled || !canChangeCurrency}
-          hitSlop={6}
-          onPress={() => {
-            Keyboard.dismiss();
-            onOpenCurrencyPicker();
-          }}
-          style={({ pressed }) => [
-            styles.currencyPill,
-            canChangeCurrency
-              ? {
-                  backgroundColor: colorWithAlpha(
-                    theme.accent,
-                    theme.isDark ? 0.18 : 0.1,
-                  ),
-                  borderColor: colorWithAlpha(
-                    theme.accent,
-                    theme.isDark ? 0.36 : 0.24,
-                  ),
-                  opacity: pressed ? 0.72 : 1,
-                }
-              : {
-                  backgroundColor: theme.surfaceSecondary,
-                  borderColor: colorWithAlpha(theme.border, 0.7),
-                  opacity: 0.78,
-                },
-          ]}
-        >
-          <Text
+        <View style={styles.amountMeta}>
+          <View
             style={[
-              styles.currencyCode,
+              styles.signBadge,
               {
-                color: canChangeCurrency ? theme.accent : theme.muted,
+                backgroundColor: colorWithAlpha(
+                  typeTone,
+                  theme.isDark ? 0.24 : 0.14,
+                ),
               },
             ]}
           >
-            {transactionCurrencyCode}
-          </Text>
-          {canChangeCurrency ? (
-            <FilledIcon name="currency-exchange" size={15} tone="accent" />
-          ) : null}
-        </Pressable>
-      </Pressable>
+            {type === 2 ? (
+              <FilledIcon color={typeTone} name="swap-horizontal" size={18} />
+            ) : (
+              <FilledIcon color={typeTone} name={icon} size={18} />
+            )}
+          </View>
 
-      {/* Foreign-currency conversion summary */}
-      {showConversion ? (
-        <View
-          style={[
-            styles.conversionBox,
-            {
-              backgroundColor: theme.surfaceSecondary,
-              borderColor: colorWithAlpha(theme.border, 0.7),
-            },
-          ]}
-        >
-          <Text className="font-manrope-semibold text-xs text-muted">
-            {t("transactions.form.transactionCurrency", {
-              type: t(
-                type === 1
-                  ? "transactions.common.types.income"
-                  : "transactions.common.types.expense",
-              ),
+          <Pressable
+            accessibilityLabel={t("transactions.form.currencyAccessibility", {
               currency: transactionCurrencyCode,
             })}
-          </Text>
-          {currencyRateLoading ? (
-            <Text className="font-sans text-xs text-muted">
-              {t("transactions.form.currencyRateLoading")}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: disabled || !canChangeCurrency }}
+            disabled={disabled || !canChangeCurrency}
+            hitSlop={6}
+            onPress={() => {
+              Keyboard.dismiss();
+              onOpenCurrencyPicker();
+            }}
+            style={({ pressed }) => [
+              styles.currencyPill,
+              {
+                backgroundColor: canChangeCurrency
+                  ? theme.surfaceSecondary
+                  : "transparent",
+                borderColor: canChangeCurrency
+                  ? colorWithAlpha(theme.border, 0.9)
+                  : "transparent",
+                opacity: pressed ? 0.72 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.currencyCode, { color: theme.foreground }]}>
+              {transactionCurrencyCode}
             </Text>
-          ) : null}
-          {currencyRateError ? (
+            {canChangeCurrency ? (
+              <FilledIcon
+                name="chevron-right"
+                size={15}
+                tone="muted"
+                style={{ transform: [{ rotate: "90deg" }] }}
+              />
+            ) : null}
+          </Pressable>
+        </View>
+
+        <View style={styles.amountRow}>
+          {type !== 2 ? (
             <Text
-              accessibilityRole="alert"
-              className="font-sans text-xs text-danger"
+              style={[styles.signSymbol, { color: typeTone }]}
+              accessibilityElementsHidden
+              importantForAccessibility="no"
             >
-              {currencyRateError}
+              {symbol}
             </Text>
           ) : null}
-          {currencyRateNotice ? (
-            <Text className="font-sans text-xs text-muted">
-              {currencyRateNotice}
+          <TextInput
+            ref={amountInputRef}
+            accessibilityLabel={t("transactions.form.amount")}
+            allowFontScaling
+            autoFocus={autoFocusAmount}
+            editable={!disabled}
+            keyboardType="decimal-pad"
+            maxLength={30}
+            placeholder="0.00"
+            placeholderTextColor={colorWithAlpha(theme.foreground, 0.2)}
+            returnKeyType="next"
+            selectionColor={typeTone}
+            value={amount}
+            onChangeText={onChangeAmount}
+            onSubmitEditing={() => nameInputRef.current?.focus()}
+            style={[
+              styles.amountInput,
+              {
+                color: hasPositiveAmount ? theme.foreground : theme.muted,
+                fontSize: amountFontSize,
+                lineHeight: amountFontSize + 8,
+                textAlign,
+                writingDirection: direction,
+              },
+            ]}
+          />
+        </View>
+
+        {showConversion ? (
+          <View style={styles.conversion}>
+            <Text className="font-manrope-semibold text-[12px] leading-[16px] text-muted">
+              {t("transactions.form.transactionCurrency", {
+                type: t(
+                  type === 1
+                    ? "transactions.common.types.income"
+                    : "transactions.common.types.expense",
+                ),
+                currency: transactionCurrencyCode,
+              })}
             </Text>
-          ) : null}
-          {exchangeRate ? (
-            <View className="gap-0.5 pt-0.5">
-              <Text
-                className="font-sans text-xs text-muted"
-                style={styles.tabular}
-              >
-                {t("transactions.form.exchangeRateSummary", {
-                  from: transactionCurrencyCode,
-                  rate: exchangeRate,
-                  to: accountCurrencyCode,
-                  date: exchangeRateDate ?? "",
-                })}
+            {currencyRateLoading ? (
+              <Text className="font-sans text-[12px] leading-[16px] text-muted">
+                {t("transactions.form.currencyRateLoading")}
               </Text>
-              {convertedAccountAmount !== null ? (
+            ) : null}
+            {currencyRateError ? (
+              <Text
+                accessibilityRole="alert"
+                className="font-sans text-[12px] leading-[16px] text-danger"
+              >
+                {currencyRateError}
+              </Text>
+            ) : null}
+            {currencyRateNotice ? (
+              <Text className="font-sans text-[12px] leading-[16px] text-muted">
+                {currencyRateNotice}
+              </Text>
+            ) : null}
+            {exchangeRate ? (
+              <>
+                {convertedAccountAmount !== null ? (
+                  <Text
+                    className="font-manrope-bold text-[15px] leading-[20px] text-foreground"
+                    style={styles.tabular}
+                  >
+                    {t("transactions.form.amountInAccountCurrency", {
+                      currency: accountCurrencyCode,
+                      amount: formatCurrency(
+                        convertedAccountAmount,
+                        accountCurrencyCode,
+                      ),
+                    })}
+                  </Text>
+                ) : null}
                 <Text
-                  className="font-manrope-semibold text-sm text-foreground"
+                  className="font-sans text-[12px] leading-[16px] text-muted"
                   style={styles.tabular}
                 >
-                  {t("transactions.form.amountInAccountCurrency", {
-                    currency: accountCurrencyCode,
-                    amount: formatCurrency(
-                      convertedAccountAmount,
-                      accountCurrencyCode,
-                    ),
+                  {t("transactions.form.exchangeRateSummary", {
+                    from: transactionCurrencyCode,
+                    rate: exchangeRate,
+                    to: accountCurrencyCode,
+                    date: exchangeRateDate ?? "",
                   })}
                 </Text>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+              </>
+            ) : null}
+          </View>
+        ) : null}
+      </Pressable>
 
       <View
         style={[
@@ -292,7 +291,6 @@ export function TransactionHeroCard({
         ]}
       />
 
-      {/* Transaction Name Row */}
       <Pressable
         accessible={false}
         disabled={disabled}
@@ -304,23 +302,20 @@ export function TransactionHeroCard({
             styles.nameBadge,
             {
               backgroundColor: selectedCategory
-                ? colorWithAlpha(
-                    selectedCategory.color,
-                    theme.isDark ? 0.22 : 0.14,
-                  )
+                ? selectedCategory.color
                 : theme.surfaceSecondary,
             },
           ]}
         >
           {selectedCategory ? (
             <RecordIcon
-              color={selectedCategory.color}
+              color={colorForeground(selectedCategory.color)}
               name={selectedCategory.icon}
               pathData={selectedCategory.iconPath}
-              size={18}
+              size={19}
             />
           ) : (
-            <FilledIcon name="edit-note" size={19} tone="muted" />
+            <FilledIcon name="edit-note" size={20} tone="muted" />
           )}
         </View>
 
@@ -331,21 +326,14 @@ export function TransactionHeroCard({
           editable={!disabled}
           maxLength={100}
           placeholder={namePlaceholder}
-          placeholderTextColor={colorWithAlpha(theme.foreground, 0.36)}
-          returnKeyType={hasPositiveAmount ? "done" : "next"}
+          placeholderTextColor={colorWithAlpha(theme.foreground, 0.38)}
+          returnKeyType="done"
           selectionColor={typeTone}
           value={name}
           onChangeText={onChangeName}
-          onSubmitEditing={() => {
-            if (!hasPositiveAmount) amountInputRef.current?.focus();
-          }}
           style={[
             styles.nameInput,
-            {
-              color: theme.foreground,
-              textAlign: direction === "rtl" ? "right" : "left",
-              writingDirection: direction,
-            },
+            { color: theme.foreground, textAlign, writingDirection: direction },
           ]}
         />
 
@@ -381,82 +369,83 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   amountZone: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
+    gap: 6,
+  },
+  amountMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 22,
-    paddingBottom: 18,
-    minHeight: 88,
+    justifyContent: "space-between",
   },
   signBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
     borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
   },
+  amountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 70,
+  },
   signSymbol: {
     fontFamily: "Huninn_400Regular",
-    fontSize: 22,
-    lineHeight: 24,
+    fontSize: 38,
+    lineHeight: 46,
     includeFontPadding: false,
-    textAlign: "center",
   },
   amountInput: {
     flex: 1,
     minWidth: 0,
     paddingVertical: 0,
     fontFamily: "Huninn_400Regular",
-    letterSpacing: -1.1,
+    letterSpacing: -1.2,
     fontVariant: ["tabular-nums"],
   },
   currencyPill: {
-    height: 38,
+    height: 36,
     paddingHorizontal: 12,
-    borderRadius: 19,
+    borderRadius: 18,
     borderCurve: "continuous",
     borderWidth: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
   },
   currencyCode: {
     fontFamily: "Huninn_400Regular",
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 18,
     letterSpacing: 0.6,
   },
-  conversionBox: {
-    marginHorizontal: 14,
-    marginBottom: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 18,
-    borderCurve: "continuous",
-    borderWidth: 1,
-    gap: 3,
+  conversion: {
+    gap: 2,
+    paddingTop: 2,
   },
   tabular: {
     fontVariant: ["tabular-nums"],
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    marginHorizontal: 16,
+    marginHorizontal: 18,
   },
   nameZone: {
-    minHeight: 60,
-    paddingHorizontal: 16,
+    minHeight: 64,
+    paddingHorizontal: 18,
     paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
   },
   nameBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 13,
     borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
@@ -466,8 +455,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingVertical: 4,
     fontFamily: "Huninn_400Regular",
-    fontSize: 17,
-    lineHeight: 23,
+    fontSize: 18,
+    lineHeight: 24,
     letterSpacing: -0.2,
   },
   clearButton: {

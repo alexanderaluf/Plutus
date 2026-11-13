@@ -1534,3 +1534,64 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("a new account form starts from the profile's own data", () => {
+  const {
+    createInitialAccountDraft,
+  } = require("../src/features/accounts/lib/initial-account-draft.ts");
+  const { ICON_COLORS } = require("../src/shared/icons/colors.ts");
+  const current = createDefaultBackup();
+  const banks = selectBankAccounts(current);
+  const owned = selectAccounts(current);
+  assert.ok(owned.length > 0);
+
+  const existing = createInitialAccountDraft(current, "ils");
+  assert.equal(existing.currencyCode, "ILS", "the profile currency leads");
+  assert.equal(existing.isDefault, false, "an existing default is kept");
+  assert.equal(existing.accountType, "card");
+  assert.equal(existing.icon, "credit-card");
+  if (banks.length === 1)
+    assert.equal(existing.linkedBankAccountId, banks[0].id);
+  // A colour no account of this profile uses yet.
+  assert.ok(
+    !owned.some((account) => account.color.toLowerCase() === existing.color),
+  );
+  assert.ok(ICON_COLORS.includes(existing.color));
+
+  // Only one bank account: a new card is paid from it without asking.
+  const oneBank = {
+    ...current,
+    accounts: current.accounts.filter(
+      (account) =>
+        account.accountType !== "bank" || account.uuid === banks[0].id,
+    ),
+  };
+  assert.equal(
+    createInitialAccountDraft(oneBank, "USD").linkedBankAccountId,
+    banks[0].id,
+  );
+  // Several bank accounts: the payer is the user's choice.
+  const twoBanks = {
+    ...oneBank,
+    accounts: [
+      ...oneBank.accounts,
+      {
+        ...oneBank.accounts.find((account) => account.uuid === banks[0].id),
+        uuid: "second-bank",
+        name: "Second bank",
+      },
+    ],
+  };
+  assert.equal(createInitialAccountDraft(twoBanks, "USD").linkedBankAccountId, null);
+
+  // First account of the profile: it becomes the default, and since a card
+  // cannot be saved without a bank account, the form opens on Bank.
+  const empty = { ...current, accounts: [] };
+  const first = createInitialAccountDraft(empty, "eur");
+  assert.equal(first.isDefault, true);
+  assert.equal(first.accountType, "bank");
+  assert.equal(first.icon, "bank");
+  assert.equal(first.linkedBankAccountId, null);
+  assert.equal(first.color, ICON_COLORS[0]);
+  assert.equal(first.currencyCode, "EUR");
+});

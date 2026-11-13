@@ -82,13 +82,7 @@ export function TransactionScheduleSection({
           style={({ pressed }) => [
             styles.presetPill,
             {
-              backgroundColor: isToday
-                ? colorWithAlpha(theme.accent, theme.isDark ? 0.22 : 0.13)
-                : theme.surfaceSecondary,
-              borderColor: isToday
-                ? theme.accent
-                : colorWithAlpha(theme.border, 0.75),
-              borderWidth: isToday ? 1.5 : 1,
+              backgroundColor: isToday ? theme.accent : theme.surfaceSecondary,
               opacity: pressed ? 0.72 : 1,
             },
           ]}
@@ -97,7 +91,7 @@ export function TransactionScheduleSection({
             numberOfLines={1}
             style={[
               styles.pillText,
-              { color: isToday ? theme.accent : theme.foreground },
+              { color: isToday ? theme.accentForeground : theme.foreground },
             ]}
           >
             {t("search.results.today")}
@@ -116,13 +110,7 @@ export function TransactionScheduleSection({
           style={({ pressed }) => [
             styles.presetPill,
             {
-              backgroundColor: isYesterday
-                ? colorWithAlpha(theme.accent, theme.isDark ? 0.22 : 0.13)
-                : theme.surfaceSecondary,
-              borderColor: isYesterday
-                ? theme.accent
-                : colorWithAlpha(theme.border, 0.75),
-              borderWidth: isYesterday ? 1.5 : 1,
+              backgroundColor: isYesterday ? theme.accent : theme.surfaceSecondary,
               opacity: pressed ? 0.72 : 1,
             },
           ]}
@@ -131,7 +119,7 @@ export function TransactionScheduleSection({
             numberOfLines={1}
             style={[
               styles.pillText,
-              { color: isYesterday ? theme.accent : theme.foreground },
+              { color: isYesterday ? theme.accentForeground : theme.foreground },
             ]}
           >
             {t("search.results.yesterday")}
@@ -152,19 +140,13 @@ export function TransactionScheduleSection({
           style={({ pressed }) => [
             styles.calendarPill,
             {
-              backgroundColor: isCustomDate
-                ? colorWithAlpha(theme.accent, theme.isDark ? 0.22 : 0.13)
-                : theme.surfaceSecondary,
-              borderColor: isCustomDate
-                ? theme.accent
-                : colorWithAlpha(theme.border, 0.75),
-              borderWidth: isCustomDate ? 1.5 : 1,
+              backgroundColor: isCustomDate ? theme.accent : theme.surfaceSecondary,
               opacity: pressed ? 0.72 : 1,
             },
           ]}
         >
           <FilledIcon
-            color={isCustomDate ? theme.accent : theme.muted}
+            color={isCustomDate ? theme.accentForeground : theme.muted}
             name="calendar"
             size={15}
           />
@@ -172,7 +154,7 @@ export function TransactionScheduleSection({
             numberOfLines={1}
             style={[
               styles.calendarText,
-              { color: isCustomDate ? theme.accent : theme.foreground },
+              { color: isCustomDate ? theme.accentForeground : theme.foreground },
             ]}
           >
             {formattedDate}
@@ -216,8 +198,8 @@ export function TransactionScheduleSection({
         ]}
       >
         <View className="flex-row items-center gap-2.5">
-          <FilledIcon name="clock" size={17} tone="muted" />
-          <Text className="font-manrope-medium text-sm text-muted">
+          <FilledIcon name="clock" size={18} tone="muted" />
+          <Text className="font-manrope-semibold text-[15px] text-foreground">
             {t("transactions.form.time")}
           </Text>
         </View>
@@ -257,12 +239,12 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     alignItems: "center",
     gap: 8,
-    padding: 12,
+    padding: 14,
   },
   presetPill: {
-    minHeight: 42,
-    paddingHorizontal: 13,
-    borderRadius: 16,
+    minHeight: 44,
+    paddingHorizontal: 15,
+    borderRadius: 14,
     borderCurve: "continuous",
     alignItems: "center",
     justifyContent: "center",
@@ -270,9 +252,9 @@ const styles = StyleSheet.create({
   calendarPill: {
     flexGrow: 1,
     minWidth: 112,
-    minHeight: 42,
-    paddingHorizontal: 11,
-    borderRadius: 16,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderCurve: "continuous",
     flexDirection: "row",
     alignItems: "center",
@@ -281,13 +263,13 @@ const styles = StyleSheet.create({
   },
   pillText: {
     fontFamily: "Huninn_400Regular",
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 19,
   },
   calendarText: {
     fontFamily: "Huninn_400Regular",
-    fontSize: 13.5,
-    lineHeight: 18,
+    fontSize: 14,
+    lineHeight: 19,
     fontVariant: ["tabular-nums"],
   },
   divider: {
@@ -295,8 +277,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
   },
   timeRow: {
-    minHeight: 48,
-    paddingHorizontal: 14,
+    minHeight: 52,
+    paddingHorizontal: 16,
     paddingVertical: 10,
     flexDirection: "row",
     alignItems: "center",
@@ -304,8 +286,8 @@ const styles = StyleSheet.create({
   },
   timeValue: {
     fontFamily: "Huninn_400Regular",
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 16,
+    lineHeight: 21,
     fontVariant: ["tabular-nums"],
   },
 });
