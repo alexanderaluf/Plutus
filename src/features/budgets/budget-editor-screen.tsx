@@ -4,23 +4,30 @@ import {
   EdgeToEdgeHeaderScrollView,
 } from "@/shared/ui/edge-to-edge-layout";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
-import {
-  BottomSheetScrollView,
-  BottomSheet,
-} from "@/shared/ui/app-bottom-sheet";
-import { useRef, useState, type PropsWithChildren } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "expo-router";
 import { uuid } from "expo";
 import { Button } from "heroui-native";
 
 import { useTranslation } from "react-i18next";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
+  TextInput,
   View,
 } from "react-native";
+import Reanimated, {
+  Easing,
+  FadeIn,
+  LinearTransition,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import {
@@ -35,101 +42,67 @@ import {
   selectBudgetDraft,
 } from "@/data/selectors/budget-selectors";
 import {
+  categoryDescendants,
+  type Category,
+} from "@/data/selectors/category-selectors";
+import {
   selectAccounts,
   selectCategories,
 } from "@/data/selectors/document-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
-import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
+import { TransactionCategorySheet } from "@/features/transactions/components/transaction-category-sheet";
+import type { TransactionOption } from "@/features/transactions/components/transaction-selection-section";
 import { currencies } from "@/features/profile/data/currencies-data";
-import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import { useAppLocalization } from "@/localization/localization-provider";
+import { colorForeground } from "@/shared/icons/colors";
+import { FilledIcon } from "@/shared/ui/filled-icon";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
-import { IconPicker } from "@/shared/ui/icon-picker";
-import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
-import { BudgetColorPicker } from "./components/budget-color-picker";
 import {
-  BudgetBadge,
-  BudgetField,
-  BudgetHeader,
-  BudgetOption,
-  BudgetToggle,
-  useBudgetLabels,
-} from "./components/budget-ui";
+  CONTINUOUS,
+  FieldInput,
+  FormCard,
+  FormDivider,
+  FormField,
+  FormHelp,
+  FormLabel,
+  FormTabs,
+  SwitchRow,
+  TABULAR,
+} from "@/shared/ui/form-ui";
+import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
+import { IconPicker } from "@/shared/ui/icon-picker";
+import { RecordIcon } from "@/shared/ui/record-icon";
+import { BudgetColorPicker } from "./components/budget-color-picker";
+import { BudgetHeader, useBudgetLabels } from "./components/budget-ui";
+import {
+  budgetCategoryOptions,
+  categoryAppearance,
+  fallbackBudgetName,
+} from "./lib/budget-form-helpers";
 
-type Sheet =
-  "type" | "mode" | "scope" | "period" | "categories" | "accounts" | "settings";
-const toggleId = (values: string[], id: string) =>
-  values.includes(id) ? values.filter((v) => v !== id) : [...values, id];
-
-function BudgetEditorSheet({
-  isOpen,
-  title,
-  children,
-  onClose,
-  busy = false,
-}: PropsWithChildren<{
-  isOpen: boolean;
-  title: string;
-  onClose: () => void;
-  busy?: boolean;
-}>) {
-  const insets = useSafeAreaInsets();
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
-
-  return (
-    <BottomSheet
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open && !busy) onClose();
-      }}
-    >
-      <AppBottomSheetPortal
-        isOpen={isOpen}
-        unstable_accessibilityContainerViewIsModal
-      >
-        <BottomSheet.Overlay isCloseOnPress={!busy} />
-        <BottomSheet.Content
-          containerStyle={initialPositionFix.containerStyle}
-          onChange={initialPositionFix.onChange}
-          snapPoints={["85%"]}
-          enableDynamicSizing={false}
-          enableOverDrag={false}
-          enablePanDownToClose={!busy}
-          topInset={insets.top}
-          keyboardBehavior="interactive"
-          keyboardBlurBehavior="restore"
-          android_keyboardInputMode="adjustResize"
-          contentContainerClassName="h-full px-0 pb-0 pt-2"
-          backgroundClassName="rounded-t-[28px] bg-surface"
-          handleIndicatorClassName="w-10 bg-muted/40"
-        >
-          <View className="flex-1">
-            <View className="border-b border-border px-5 pb-4">
-              <BottomSheet.Title>{title}</BottomSheet.Title>
-            </View>
-            <BottomSheetScrollView
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                gap: 10,
-                paddingHorizontal: 18,
-                paddingTop: 12,
-                paddingBottom: Math.max(insets.bottom, 16) + 24,
-              }}
-            >
-              {children}
-            </BottomSheetScrollView>
-          </View>
-        </BottomSheet.Content>
-      </AppBottomSheetPortal>
-    </BottomSheet>
-  );
+function categoryToOption(category: Category): TransactionOption {
+  return {
+    id: category.id,
+    name: category.name,
+    description: "",
+    icon: category.icon,
+    iconPath: category.iconPath,
+    color: category.color,
+  };
 }
+
+const SECTION_LAYOUT = LinearTransition.duration(240)
+  .easing(Easing.bezier(0.77, 0, 0.175, 1))
+  .reduceMotion(ReduceMotion.System);
+const SECTION_ENTER = FadeIn.duration(200)
+  .easing(Easing.bezier(0.23, 1, 0.32, 1))
+  .reduceMotion(ReduceMotion.System);
 
 export function BudgetEditorScreen({ editId }: { editId?: string }) {
   const { t, i18n } = useTranslation();
   const labels = useBudgetLabels();
+  const { direction } = useAppLocalization();
   const { document, updateDocument } = useLocalData();
   const router = useRouter(),
     insets = useSafeAreaInsets(),
@@ -140,56 +113,136 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
       ? existing
       : {
           ...budgetDefaults(),
+          // The profile currency and salary-cycle day set during onboarding.
           currencyCode: selectBudgetCurrency(document),
           cycleDay: String(document._local.monthStartDay),
         },
   );
-  const [sheet, setSheet] = useState<Sheet | null>(null);
   const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // The main category whose subcategories are open in the bottom sheet.
+  const [sheetRoot, setSheetRoot] = useState<Category | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const saving = useRef(false),
-    id = useRef(editId ?? uuid.v4());
-  const categories = selectCategories(document).filter(
-    (cat) => cat.type === draft.transactionType,
+  const saving = useRef(false);
+  const [budgetId] = useState(() => editId ?? uuid.v4());
+  // A single tracked category lends its look until the person picks one.
+  const appearanceChosen = useRef(!!editId);
+  const allCategories = useMemo(() => selectCategories(document), [document]);
+  const categoryOptions = useMemo(
+    () => budgetCategoryOptions(document, allCategories, draft.transactionType),
+    [document, allCategories, draft.transactionType],
   );
+  const categories = categoryOptions;
   const accounts = selectAccounts(document);
-  const titles: Record<Sheet, string> = {
-    type: t("budgets.form.sheetTitles.type"),
-    mode: t("budgets.form.sheetTitles.mode"),
-    scope: t("budgets.form.sheetTitles.scope"),
-    period: t("budgets.form.sheetTitles.period"),
-    categories: t("budgets.form.sheetTitles.categories"),
-    accounts: t("budgets.form.sheetTitles.accounts"),
-    settings: t("budgets.form.sheetTitles.settings"),
+  const isSelected = (category: Category) => {
+    const record = document.categories.find(
+      (item) => identity(item) === category.id,
+    );
+    return draft.categories.some((value) =>
+      record ? references(record, value) : value === category.id,
+    );
   };
-  const change = <K extends keyof BudgetDraft>(key: K, value: BudgetDraft[K]) =>
-    setDraft((current) => ({ ...current, [key]: value }));
-  function select<K extends keyof BudgetDraft>(key: K, value: BudgetDraft[K]) {
-    change(key, value);
+  const selectedCategories = categories.filter(isSelected);
+  const fallbackName = fallbackBudgetName({
+    budgetType: draft.budgetType,
+    categoryNames: selectedCategories.map((category) => category.name),
+    overallName: t("budgets.common.typeBudget", {
+      type: labels.types[draft.transactionType],
+    }),
+  });
+  const namedDraft: BudgetDraft = {
+    ...draft,
+    name: draft.name.trim() || fallbackName,
+    // Decimal keypads in some languages type a comma.
+    amount: draft.amount.trim().replace(",", "."),
+  };
+  // Ready exactly when the record's own save rules would accept it.
+  const isReady = (() => {
+    try {
+      saveBudget(document, namedDraft, budgetId, "", !!editId);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  // Same as the transaction page: main categories only; subcategories open
+  // in a bottom sheet from their parent.
+  const familyOf = (root: Category) => [
+    root,
+    ...categoryDescendants(categories, root.id),
+  ];
+  const search = query.trim().toLowerCase();
+  const visibleRoots = categories.filter(
+    (category) =>
+      category.depth === 0 &&
+      (!search ||
+        familyOf(category).some((member) =>
+          member.name.toLowerCase().includes(search),
+        )),
+  );
+  const parsedAmount = Number(draft.amount.replace(",", "."));
+  const hasAmount = Number.isFinite(parsedAmount) && parsedAmount > 0;
+  const currency = currencies.find((item) => item.code === draft.currencyCode);
+
+  function update(next: (current: BudgetDraft) => BudgetDraft) {
+    setDraft(next);
+    setError("");
   }
-  function open(value: Sheet) {
-    setQuery("");
-    setSheet(value);
+  function change<K extends keyof BudgetDraft>(key: K, value: BudgetDraft[K]) {
+    update((current) => ({ ...current, [key]: value }));
   }
+  function setCategories(ids: string[]) {
+    update((current) => {
+      const next = { ...current, categories: ids };
+      const look = appearanceChosen.current
+        ? null
+        : categoryAppearance(
+            current.budgetType,
+            categories.filter((category) => ids.includes(category.id)),
+          );
+      return look ? { ...next, ...look } : next;
+    });
+  }
+  function toggleCategory(category: Category) {
+    const record = document.categories.find(
+      (item) => identity(item) === category.id,
+    );
+    setCategories(
+      isSelected(category)
+        ? draft.categories.filter((value) =>
+            record ? !references(record, value) : value !== category.id,
+          )
+        : [...draft.categories, category.id],
+    );
+  }
+  function toggleAccount(accountId: string) {
+    change(
+      "accounts",
+      draft.accounts.includes(accountId)
+        ? draft.accounts.filter((value) => value !== accountId)
+        : [...draft.accounts, accountId],
+    );
+  }
+
   async function save() {
     if (saving.current) return;
     saving.current = true;
     setBusy(true);
     setError("");
+    Keyboard.dismiss();
     try {
       await updateDocument((current) =>
         saveBudget(
           current,
-          draft,
-          id.current,
+          namedDraft,
+          budgetId,
           new Date().toISOString(),
           !!editId,
         ),
       );
-      router.replace({ pathname: "/budgets/[id]", params: { id: id.current } });
+      router.replace({ pathname: "/budgets/[id]", params: { id: budgetId } });
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : t("budgets.form.saveError"),
@@ -199,6 +252,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
       setBusy(false);
     }
   }
+
   if (editId && !existing)
     return (
       <EdgeToEdgeLayout
@@ -214,34 +268,15 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
         </EdgeToEdgeScrollView>
       </EdgeToEdgeLayout>
     );
-  const row = (
-    key: Sheet | "currency",
-    title: string,
-    description: string,
-    current: string,
-    icon: FilledIconName,
-  ) => (
-    <Pressable
-      accessibilityRole="button"
-      disabled={busy}
-      onPress={() =>
-        key === "currency" ? setCurrencySheetOpen(true) : open(key)
-      }
-      className="flex-row items-center gap-4 py-4"
-    >
-      <FilledIcon name={icon} size={26} tone="accent" />
-      <View className="flex-1">
-        <Text className="font-manrope-semibold text-lg text-foreground">
-          {title}
-        </Text>
-        <Text className="mt-1 text-base leading-6 text-muted">
-          {description}
-        </Text>
-        <Text className="text-sm leading-6 text-muted">{current}</Text>
-      </View>
-      <FilledIcon name="chevron-right" size={24} />
-    </Pressable>
-  );
+
+  const typeDescription =
+    draft.transactionType === 0
+      ? t("budgets.form.typeDescriptions.expense")
+      : draft.transactionType === 1
+        ? t("budgets.form.typeDescriptions.income")
+        : t("budgets.form.typeDescriptions.transfer");
+  const color = /^#[a-f\d]{6}$/i.test(draft.color) ? draft.color : "#5c6bc0";
+
   return (
     <EdgeToEdgeLayout
       header={
@@ -249,6 +284,28 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
           title={editId ? t("budgets.form.editTitle") : t("budgets.form.title")}
           disabled={busy}
         />
+      }
+      // What the budget tracks stays in reach while the title scrolls away.
+      headerDock={
+        <View pointerEvents={busy ? "none" : "auto"} style={styles.typeDock}>
+          <GlassSegmentedControl
+            accessibilityLabel={t("budgets.form.budgetFor")}
+            minHeight={Platform.OS === "android" ? 52 : 48}
+            options={labels.types.map((label, index) => ({
+              label,
+              value: index as 0 | 1 | 2,
+            }))}
+            value={draft.transactionType}
+            onChange={(type) =>
+              update((current) => ({
+                ...current,
+                transactionType: type,
+                categories:
+                  current.transactionType === type ? current.categories : [],
+              }))
+            }
+          />
+        </View>
       }
       bottomFade={false}
     >
@@ -261,150 +318,509 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
             <View style={styles.fill}>
               <EdgeToEdgeHeaderScrollView
                 keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                  paddingHorizontal: 20,
-                  paddingTop: contentInsets.top + 14,
-                  paddingBottom: 104 + insets.bottom,
+                  paddingHorizontal: 16,
+                  paddingTop: contentInsets.top + 8,
+                  paddingBottom: 120 + insets.bottom,
+                  gap: 12,
                 }}
               >
-                <View className="mb-4 flex-row items-center gap-3">
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t("budgets.form.chooseIcon")}
-                    disabled={busy}
-                    onPress={() => setIconPickerOpen(true)}
-                  >
-                    <BudgetBadge budget={draft} />
-                  </Pressable>
-                  <View className="flex-1">
-                    <BudgetField
-                      editable={!busy}
-                      accessibilityLabel={t("budgets.form.name")}
-                      placeholder={t("budgets.form.namePlaceholder")}
-                      maxLength={100}
-                      value={draft.name}
-                      onChangeText={(name) => setDraft((d) => ({ ...d, name }))}
-                    />
+                {/* Hero: what it is called, and the one number that matters. */}
+                <View
+                  pointerEvents={busy ? "none" : "auto"}
+                  style={[
+                    styles.hero,
+                    {
+                      backgroundColor: c.surface,
+                      borderColor: hasAmount
+                        ? colorWithAlpha(color, 0.55)
+                        : c.border,
+                    },
+                  ]}
+                >
+                  <View className="flex-row items-center gap-3.5">
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t("budgets.form.chooseIcon")}
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setIconPickerOpen(true);
+                      }}
+                      className="size-[60px] items-center justify-center rounded-[20px]"
+                      style={({ pressed }) => ({
+                        backgroundColor: color,
+                        opacity: pressed ? 0.8 : 1,
+                        ...CONTINUOUS,
+                      })}
+                    >
+                      <RecordIcon
+                        name={draft.icon}
+                        pathData={draft.iconPath}
+                        color={colorForeground(color)}
+                        size={30}
+                      />
+                      <View
+                        className="absolute -bottom-1 rounded-full border-2 bg-surface p-1"
+                        style={{ end: -4, borderColor: c.surface }}
+                      >
+                        <FilledIcon name="pencil" size={12} />
+                      </View>
+                    </Pressable>
+                    <View className="min-w-0 flex-1 gap-1.5">
+                      <FormLabel>{t("budgets.form.name")}</FormLabel>
+                      <FieldInput
+                        accessibilityLabel={t("budgets.form.name")}
+                        placeholder={
+                          fallbackName || t("budgets.form.namePlaceholder")
+                        }
+                        maxLength={100}
+                        value={draft.name}
+                        onChangeText={(name) => change("name", name)}
+                        style={styles.nameInput}
+                      />
+                    </View>
+                  </View>
+                  <FormDivider />
+                  <View className="gap-1">
+                    <FormLabel>{t("budgets.form.amount")}</FormLabel>
+                    <View className="flex-row items-center gap-2">
+                      <TextInput
+                        accessibilityLabel={t("budgets.form.amount")}
+                        placeholder="0"
+                        placeholderTextColor={colorWithAlpha(c.foreground, 0.2)}
+                        selectionColor={color}
+                        keyboardType="decimal-pad"
+                        value={draft.amount}
+                        onChangeText={(amount) => change("amount", amount)}
+                        style={[
+                          styles.amount,
+                          TABULAR,
+                          {
+                            color: hasAmount ? c.foreground : c.muted,
+                            direction,
+                            textAlign: direction === "rtl" ? "right" : "left",
+                            writingDirection: direction,
+                          },
+                        ]}
+                      />
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t("budgets.form.currency")}: ${draft.currencyCode}`}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setCurrencySheetOpen(true);
+                        }}
+                        className="h-11 flex-row items-center gap-1.5 rounded-full px-3.5"
+                        style={({ pressed }) => ({
+                          backgroundColor: c.surfaceSecondary,
+                          opacity: pressed ? 0.72 : 1,
+                        })}
+                      >
+                        <Text className="font-manrope-bold text-[15px] text-foreground">
+                          {currency?.symbol ?? draft.currencyCode}
+                        </Text>
+                        <Text className="font-manrope-semibold text-[12px] text-muted">
+                          {draft.currencyCode}
+                        </Text>
+                        <FilledIcon
+                          name="chevron-right"
+                          size={15}
+                          tone="muted"
+                          style={{ transform: [{ rotate: "90deg" }] }}
+                        />
+                      </Pressable>
+                    </View>
+                    <FormHelp>{typeDescription}</FormHelp>
+                    <FormHelp>{t("budgets.form.currencyContribution")}</FormHelp>
                   </View>
                 </View>
-                <BudgetField
-                  editable={!busy}
-                  accessibilityLabel={t("budgets.form.amount")}
-                  placeholder={t("budgets.form.amountPlaceholder")}
-                  keyboardType="decimal-pad"
-                  value={draft.amount}
-                  onChangeText={(amount) => setDraft((d) => ({ ...d, amount }))}
-                />
-                {row(
-                  "type",
-                  t("budgets.form.budgetFor"),
-                  t("budgets.form.budgetForHelp"),
-                  t("budgets.common.current", {
-                    value: labels.types[draft.transactionType],
-                  }),
-                  "swap-horizontal",
-                )}
-                {row(
-                  "mode",
-                  t("budgets.form.mode"),
-                  t("budgets.form.modeHelp"),
-                  t("budgets.common.current", {
-                    value: labels.modes[draft.budgetMode],
-                  }),
-                  "tune",
-                )}
-                {row(
-                  "scope",
-                  t("budgets.form.scope"),
-                  t("budgets.form.scopeHelp"),
-                  t("budgets.common.current", {
-                    value: t("budgets.common.typeBudget", {
-                      type: labels.scopes[draft.budgetType],
-                    }),
-                  }),
-                  "wallet",
-                )}
-                {row(
-                  "period",
-                  t("budgets.form.period"),
-                  t("budgets.form.periodHelp"),
-                  draft.period === "Monthly" && Number(draft.cycleDay) > 1
-                    ? t("budgets.common.currentMonthlyCycle", {
-                        period: labels.periods[draft.period],
-                        day: draft.cycleDay,
-                      })
-                    : t("budgets.common.current", {
-                        value: labels.periods[draft.period],
-                      }),
-                  "clock",
-                )}
-                {draft.budgetType === "Category" &&
-                  row(
-                    "categories",
-                    draft.budgetMode === "Automatic"
-                      ? t("budgets.form.autoTrackCategories")
-                      : t("budgets.form.selectCategories"),
-                    draft.budgetMode === "Automatic"
-                      ? t("budgets.form.autoTrackCategoriesHelp")
-                      : t("budgets.form.selectCategoriesHelp"),
-                    t("budgets.common.selected", {
-                      count: draft.categories.length,
-                    }),
-                    "shopping",
-                  )}
-                {row(
-                  "accounts",
-                  t("budgets.form.filterAccounts"),
-                  t("budgets.form.filterAccountsHelp"),
-                  draft.accounts.length
-                    ? t("budgets.common.selected", {
-                        count: draft.accounts.length,
-                      })
-                    : t("budgets.common.allAccounts"),
-                  "bank",
-                )}
-                {row(
-                  "currency",
-                  t("budgets.form.currency"),
-                  t("budgets.form.currencyHelp"),
-                  draft.currencyCode,
-                  "cash",
-                )}
-                {row(
-                  "settings",
-                  t("budgets.form.additionalSettings"),
-                  t("budgets.form.additionalSettingsHelp"),
-                  draft.rolling
-                    ? t("budgets.common.rollingBudget")
-                    : t("budgets.common.fixedBudget"),
-                  "cog",
-                )}
-                <BudgetField
-                  editable={!busy}
-                  accessibilityLabel={t("budgets.form.notes")}
-                  placeholder={t("budgets.form.notesPlaceholder")}
-                  multiline
-                  maxLength={2000}
-                  value={draft.notes}
-                  onChangeText={(notes) => setDraft((d) => ({ ...d, notes }))}
-                  style={{
-                    minHeight: 120,
-                    textAlignVertical: "top",
-                    marginTop: 12,
-                  }}
-                />
-                <Text className="mt-2 font-manrope-semibold text-lg text-foreground">
-                  {t("budgets.form.colors")}
-                </Text>
-                <Text className="text-sm leading-5 text-muted">
-                  {t("budgets.form.colorsHelp")}
-                </Text>
-                <BudgetColorPicker
-                  value={draft.color}
-                  onChange={(color) =>
-                    setDraft((current) => ({ ...current, color }))
-                  }
-                />
+
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard title={t("budgets.form.period")} icon="clock">
+                    <FormHelp>{t("budgets.form.periodHelp")}</FormHelp>
+                    <View style={styles.wrap}>
+                      {BUDGET_PERIODS.map((period) => (
+                        <SelectPill
+                          key={period}
+                          selected={draft.period === period}
+                          label={labels.periods[period]}
+                          onPress={() => change("period", period)}
+                        />
+                      ))}
+                    </View>
+                    {draft.period === "Monthly" && (
+                      <Reanimated.View entering={SECTION_ENTER}>
+                        <FormField
+                          label={t("budgets.form.customMonthlyCycle")}
+                          help={t("budgets.form.shorterMonths")}
+                        >
+                          <FieldInput
+                            accessibilityLabel={t("budgets.form.startDay")}
+                            placeholder={t("budgets.form.startDayPlaceholder")}
+                            keyboardType="number-pad"
+                            maxLength={2}
+                            value={draft.cycleDay}
+                            onChangeText={(value) => change("cycleDay", value)}
+                            style={TABULAR}
+                          />
+                        </FormField>
+                      </Reanimated.View>
+                    )}
+                    {draft.period === "Custom" && (
+                      <Reanimated.View entering={SECTION_ENTER} className="gap-2">
+                        <View className="flex-row gap-2">
+                          <FieldInput
+                            accessibilityLabel={t("budgets.form.startDate")}
+                            placeholder={t("budgets.form.startDatePlaceholder")}
+                            value={draft.startDate}
+                            onChangeText={(value) => change("startDate", value)}
+                            style={[styles.flex, TABULAR]}
+                          />
+                          <FieldInput
+                            accessibilityLabel={t("budgets.form.endDate")}
+                            placeholder={t("budgets.form.endDatePlaceholder")}
+                            value={draft.endDate}
+                            onChangeText={(value) => change("endDate", value)}
+                            style={[styles.flex, TABULAR]}
+                          />
+                        </View>
+                        <FormHelp>{t("budgets.form.datesIncluded")}</FormHelp>
+                      </Reanimated.View>
+                    )}
+                  </FormCard>
+                </Reanimated.View>
+
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard title={t("budgets.form.scope")} icon="wallet">
+                    <FormTabs
+                      accessibilityLabel={t("budgets.form.scope")}
+                      value={draft.budgetType}
+                      options={(["Category", "Overall"] as const).map(
+                        (scope) => ({ value: scope, label: labels.scopes[scope] }),
+                      )}
+                      onChange={(scope) => change("budgetType", scope)}
+                    />
+                    <FormHelp>
+                      {draft.budgetType === "Category"
+                        ? t("budgets.form.scopeDescriptions.category")
+                        : t("budgets.form.scopeDescriptions.overall")}
+                    </FormHelp>
+                    {draft.budgetType === "Category" && (
+                      <Reanimated.View entering={SECTION_ENTER} className="gap-4">
+                        <FormDivider />
+                        <View className="gap-2">
+                          <FormLabel>{t("budgets.form.mode")}</FormLabel>
+                          <FormTabs
+                            accessibilityLabel={t("budgets.form.mode")}
+                            value={draft.budgetMode}
+                            options={(["Automatic", "Manual"] as const).map(
+                              (mode) => ({ value: mode, label: labels.modes[mode] }),
+                            )}
+                            onChange={(mode) => change("budgetMode", mode)}
+                          />
+                          <FormHelp>
+                            {draft.budgetMode === "Automatic"
+                              ? t("budgets.form.modeDescriptions.automatic")
+                              : t("budgets.form.modeDescriptions.manual")}
+                          </FormHelp>
+                        </View>
+                        <View className="gap-2.5">
+                          <View className="flex-row items-center justify-between gap-2">
+                            <FormLabel>
+                              {draft.budgetMode === "Automatic"
+                                ? t("budgets.form.autoTrackCategories")
+                                : t("budgets.form.selectCategories")}
+                            </FormLabel>
+                            <Text
+                              className="font-manrope-semibold text-[12px] text-muted"
+                              style={TABULAR}
+                            >
+                              {t("budgets.form.categorySelection", {
+                                selected: selectedCategories.length,
+                                total: categories.length,
+                              })}
+                            </Text>
+                          </View>
+                          {categories.length > 8 && (
+                            <View style={styles.searchBox}>
+                              <FieldInput
+                                accessibilityLabel={t(
+                                  "budgets.form.searchCategories",
+                                )}
+                                placeholder={t("budgets.form.searchCategories")}
+                                returnKeyType="search"
+                                value={query}
+                                onChangeText={setQuery}
+                                style={styles.search}
+                              />
+                              {query.length > 0 && (
+                                <Pressable
+                                  accessibilityRole="button"
+                                  accessibilityLabel={t(
+                                    "budgets.form.clearSearch",
+                                  )}
+                                  hitSlop={8}
+                                  onPress={() => setQuery("")}
+                                  style={({ pressed }) => [
+                                    styles.searchClear,
+                                    {
+                                      backgroundColor: colorWithAlpha(
+                                        c.foreground,
+                                        0.1,
+                                      ),
+                                      opacity: pressed ? 0.6 : 1,
+                                    },
+                                  ]}
+                                >
+                                  <FilledIcon
+                                    name="close"
+                                    size={14}
+                                    tone="muted"
+                                  />
+                                </Pressable>
+                              )}
+                            </View>
+                          )}
+                          {categories.length ? (
+                            <View style={styles.wrap}>
+                              {visibleRoots.map((root) => {
+                                const family = familyOf(root);
+                                const chosen = family.filter(isSelected);
+                                const hasChildren = family.length > 1;
+                                const selected = chosen.length > 0;
+                                // One chosen member shows on its parent's pill;
+                                // several show as a count.
+                                const shown =
+                                  chosen.length === 1 ? chosen[0] : root;
+                                const ink = colorForeground(shown.color);
+                                return (
+                                  <SelectPill
+                                    key={root.id}
+                                    multiple
+                                    selected={selected}
+                                    color={shown.color}
+                                    label={shown.name}
+                                    count={
+                                      chosen.length > 1
+                                        ? chosen.length
+                                        : undefined
+                                    }
+                                    onPress={() =>
+                                      hasChildren
+                                        ? setSheetRoot(root)
+                                        : toggleCategory(root)
+                                    }
+                                    trailing={
+                                      hasChildren && selected ? (
+                                        <Pressable
+                                          accessibilityRole="button"
+                                          accessibilityLabel={t(
+                                            "transactions.selection.deselect",
+                                            { name: shown.name },
+                                          )}
+                                          hitSlop={10}
+                                          onPress={() =>
+                                            setCategories(
+                                              draft.categories.filter(
+                                                (value) =>
+                                                  !family.some((member) => {
+                                                    const record =
+                                                      document.categories.find(
+                                                        (item) =>
+                                                          identity(item) ===
+                                                          member.id,
+                                                      );
+                                                    return record
+                                                      ? references(record, value)
+                                                      : value === member.id;
+                                                  }),
+                                              ),
+                                            )
+                                          }
+                                          style={({ pressed }) => [
+                                            styles.pillClear,
+                                            {
+                                              backgroundColor: colorWithAlpha(
+                                                ink,
+                                                0.18,
+                                              ),
+                                              opacity: pressed ? 0.6 : 1,
+                                            },
+                                          ]}
+                                        >
+                                          <FilledIcon
+                                            color={ink}
+                                            name="close"
+                                            size={12}
+                                          />
+                                        </Pressable>
+                                      ) : hasChildren ? (
+                                        <FilledIcon
+                                          color={c.muted}
+                                          name="chevron-right"
+                                          size={15}
+                                        />
+                                      ) : null
+                                    }
+                                  >
+                                    <RecordIcon
+                                      name={shown.icon}
+                                      pathData={shown.iconPath}
+                                      color={selected ? ink : root.color}
+                                      size={15}
+                                    />
+                                  </SelectPill>
+                                );
+                              })}
+                            </View>
+                          ) : (
+                            <FormHelp>
+                              {t("budgets.form.noCategories", {
+                                type: labels.types[
+                                  draft.transactionType
+                                ].toLocaleLowerCase(i18n.resolvedLanguage),
+                              })}
+                            </FormHelp>
+                          )}
+                          {categories.length > 0 && (
+                            <BulkActions
+                              onSelectAll={() =>
+                                setCategories(categories.map((item) => item.id))
+                              }
+                              onClear={() => setCategories([])}
+                            />
+                          )}
+                        </View>
+                        {draft.budgetMode === "Manual" ? (
+                          <SwitchRow
+                            icon="filter"
+                            title={t("budgets.form.includeSubcategories")}
+                            description={t(
+                              "budgets.form.includeSubcategoriesHelp",
+                            )}
+                            value={draft.includeSubcategories}
+                            onChange={(value) =>
+                              change("includeSubcategories", value)
+                            }
+                          />
+                        ) : (
+                          <FormHelp>
+                            {t("budgets.form.automaticIncludesDescendants")}
+                          </FormHelp>
+                        )}
+                      </Reanimated.View>
+                    )}
+                  </FormCard>
+                </Reanimated.View>
+
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard title={t("budgets.form.filterAccounts")} icon="bank">
+                    <FormHelp>{t("budgets.form.filterAccountsHelp")}</FormHelp>
+                    <View style={styles.wrap}>
+                      {accounts.map((account) => {
+                        const selected = draft.accounts.includes(account.id);
+                        return (
+                          <SelectPill
+                            key={account.id}
+                            multiple
+                            selected={selected}
+                            color={account.color}
+                            label={account.name}
+                            detail={account.currencyCode}
+                            onPress={() => toggleAccount(account.id)}
+                          >
+                            <RecordIcon
+                              name={account.icon}
+                              pathData={account.iconPath}
+                              color={
+                                selected
+                                  ? colorForeground(account.color)
+                                  : account.color
+                              }
+                              size={15}
+                            />
+                          </SelectPill>
+                        );
+                      })}
+                    </View>
+                    <FormHelp>
+                      {t("budgets.form.accountSelection", {
+                        selected: draft.accounts.length,
+                        total: accounts.length,
+                      })}
+                    </FormHelp>
+                    {accounts.length > 0 && (
+                      <BulkActions
+                        onSelectAll={() =>
+                          change(
+                            "accounts",
+                            accounts.map((account) => account.id),
+                          )
+                        }
+                        onClear={() => change("accounts", [])}
+                      />
+                    )}
+                  </FormCard>
+                </Reanimated.View>
+
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard
+                    title={t("budgets.form.additionalSettings")}
+                    icon="cog"
+                  >
+                    <SwitchRow
+                      icon="history"
+                      title={t("budgets.common.rollingBudget")}
+                      description={
+                        draft.period === "Custom"
+                          ? t("budgets.form.rollingCustomHelp")
+                          : t("budgets.form.rollingHelp")
+                      }
+                      disabled={draft.period === "Custom"}
+                      value={draft.rolling}
+                      onChange={(value) => change("rolling", value)}
+                    />
+                    <FormDivider />
+                    <SwitchRow
+                      icon="home"
+                      title={t("budgets.form.showBudget")}
+                      description={t("budgets.form.showBudgetHelp")}
+                      value={draft.showOnHome}
+                      onChange={(value) => change("showOnHome", value)}
+                    />
+                  </FormCard>
+                </Reanimated.View>
+
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard title={t("budgets.form.colors")} icon="format-paint">
+                    <FormHelp>{t("budgets.form.colorsHelp")}</FormHelp>
+                    <BudgetColorPicker
+                      value={draft.color}
+                      onChange={(value) => {
+                        appearanceChosen.current = true;
+                        change("color", value);
+                      }}
+                    />
+                  </FormCard>
+                </Reanimated.View>
+
+                <Reanimated.View layout={SECTION_LAYOUT}>
+                  <FormCard>
+                    <FormField label={t("budgets.form.notes")}>
+                      <FieldInput
+                        accessibilityLabel={t("budgets.form.notes")}
+                        placeholder={t("budgets.form.notesPlaceholder")}
+                        multiline
+                        maxLength={2000}
+                        value={draft.notes}
+                        onChangeText={(notes) => change("notes", notes)}
+                        textAlignVertical="top"
+                        style={styles.notes}
+                      />
+                    </FormField>
+                  </FormCard>
+                </Reanimated.View>
               </EdgeToEdgeHeaderScrollView>
 
               <BottomSafeAreaGradient />
@@ -420,343 +836,86 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
                   <Text
                     accessibilityRole="alert"
                     accessibilityLiveRegion="polite"
-                    className="font-sans text-sm text-danger"
+                    className="px-2 text-center font-sans text-sm text-danger"
                   >
                     {error}
                   </Text>
                 )}
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    busy
-                      ? t("budgets.form.saving")
-                      : editId
-                        ? t("budgets.form.save")
-                        : t("budgets.form.add")
-                  }
-                  accessibilityState={{ busy, disabled: busy }}
-                  disabled={busy}
-                  onPress={save}
-                  android_ripple={{
-                    color: colorWithAlpha(c.accentForeground, 0.16),
-                    borderless: false,
-                  }}
-                  style={({ pressed }) => [
-                    styles.actionButton,
-                    { backgroundColor: c.accent },
-                    busy && styles.actionDisabled,
-                    Platform.OS === "ios" && pressed && styles.actionPressed,
-                  ]}
-                >
-                  <FilledIcon
-                    name="wallet"
-                    size={24}
-                    tone="accent-foreground"
-                  />
-                  <Text
-                    numberOfLines={1}
-                    className="shrink font-manrope-bold text-base text-accent-foreground"
+                <SaveEmphasis ready={isReady}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      busy
+                        ? t("budgets.form.saving")
+                        : editId
+                          ? t("budgets.form.save")
+                          : t("budgets.form.add")
+                    }
+                    accessibilityState={{ busy, disabled: busy }}
+                    disabled={busy}
+                    onPress={save}
+                    android_ripple={{
+                      color: colorWithAlpha(c.accentForeground, 0.16),
+                      borderless: false,
+                    }}
+                    style={({ pressed }) => [
+                      styles.actionButton,
+                      { backgroundColor: c.accent },
+                      busy && styles.actionDisabled,
+                      Platform.OS === "ios" && pressed && styles.actionPressed,
+                    ]}
                   >
-                    {busy
-                      ? t("budgets.form.saving")
-                      : editId
-                        ? t("budgets.form.save")
-                        : t("budgets.form.add")}
-                  </Text>
-                </Pressable>
+                    <FilledIcon
+                      name={editId ? "check" : "wallet"}
+                      size={24}
+                      tone="accent-foreground"
+                    />
+                    <Text
+                      numberOfLines={1}
+                      className="shrink font-manrope-bold text-[17px] text-accent-foreground"
+                    >
+                      {busy
+                        ? t("budgets.form.saving")
+                        : editId
+                          ? t("budgets.form.save")
+                          : t("budgets.form.add")}
+                    </Text>
+                  </Pressable>
+                </SaveEmphasis>
               </View>
             </View>
           </KeyboardAvoidingView>
-          <BudgetEditorSheet
-            isOpen={sheet !== null}
-            title={sheet ? titles[sheet] : ""}
-            busy={busy}
-            onClose={() => setSheet(null)}
-          >
-            {sheet === "type" &&
-              labels.types.map((label, index) => (
-                <BudgetOption
-                  key={label}
-                  title={t("budgets.common.typeBudget", { type: label })}
-                  description={
-                    index === 0
-                      ? t("budgets.form.typeDescriptions.expense")
-                      : index === 1
-                        ? t("budgets.form.typeDescriptions.income")
-                        : t("budgets.form.typeDescriptions.transfer")
-                  }
-                  selected={draft.transactionType === index}
-                  onPress={() => {
-                    setDraft((current) => ({
-                      ...current,
-                      transactionType: index as 0 | 1 | 2,
-                      categories:
-                        current.transactionType === index
-                          ? current.categories
-                          : [],
-                    }));
-                  }}
-                />
-              ))}
-            {sheet === "mode" && (
-              <>
-                {(["Automatic", "Manual"] as const).map((mode) => (
-                  <BudgetOption
-                    key={mode}
-                    title={labels.modes[mode]}
-                    description={
-                      mode === "Automatic"
-                        ? t("budgets.form.modeDescriptions.automatic")
-                        : t("budgets.form.modeDescriptions.manual")
-                    }
-                    selected={draft.budgetMode === mode}
-                    onPress={() => select("budgetMode", mode)}
-                  />
-                ))}
-              </>
-            )}
-            {sheet === "scope" && (
-              <>
-                {(["Category", "Overall"] as const).map((scope) => (
-                  <BudgetOption
-                    key={scope}
-                    title={t("budgets.common.typeBudget", {
-                      type: labels.scopes[scope],
-                    })}
-                    description={
-                      scope === "Category"
-                        ? t("budgets.form.scopeDescriptions.category")
-                        : t("budgets.form.scopeDescriptions.overall")
-                    }
-                    selected={draft.budgetType === scope}
-                    onPress={() => select("budgetType", scope)}
-                  />
-                ))}
-              </>
-            )}
-            {sheet === "period" && (
-              <>
-                {BUDGET_PERIODS.map((period) => (
-                  <BudgetOption
-                    key={period}
-                    title={labels.periods[period]}
-                    description={
-                      period === "Custom"
-                        ? t("budgets.form.customDateRange")
-                        : t("budgets.form.resets", {
-                            period: labels.periods[period].toLocaleLowerCase(
-                              i18n.resolvedLanguage,
-                            ),
-                          })
-                    }
-                    selected={draft.period === period}
-                    onPress={() => select("period", period)}
-                  />
-                ))}
-                {draft.period === "Monthly" && (
-                  <>
-                    <Text className="mt-3 font-manrope-semibold text-lg text-foreground">
-                      {t("budgets.form.customMonthlyCycle")}
-                    </Text>
-                    <BudgetField
-                      accessibilityLabel={t("budgets.form.startDay")}
-                      placeholder={t("budgets.form.startDayPlaceholder")}
-                      keyboardType="number-pad"
-                      value={draft.cycleDay}
-                      maxLength={2}
-                      onChangeText={(v) => change("cycleDay", v)}
-                    />
-                    <Text className="text-sm text-muted">
-                      {t("budgets.form.shorterMonths")}
-                    </Text>
-                  </>
-                )}
-                {draft.period === "Custom" && (
-                  <>
-                    <BudgetField
-                      accessibilityLabel={t("budgets.form.startDate")}
-                      placeholder={t("budgets.form.startDatePlaceholder")}
-                      value={draft.startDate}
-                      onChangeText={(v) => change("startDate", v)}
-                    />
-                    <BudgetField
-                      accessibilityLabel={t("budgets.form.endDate")}
-                      placeholder={t("budgets.form.endDatePlaceholder")}
-                      value={draft.endDate}
-                      onChangeText={(v) => change("endDate", v)}
-                    />
-                    <Text className="text-sm text-muted">
-                      {t("budgets.form.datesIncluded")}
-                    </Text>
-                  </>
-                )}
-              </>
-            )}
-            {sheet === "categories" && (
-              <>
-                <Text className="text-muted">
-                  {t("budgets.form.categorySelection", {
-                    selected: draft.categories.length,
-                    total: categories.length,
-                  })}
-                </Text>
-                <BudgetField
-                  accessibilityLabel={t("budgets.form.searchCategories")}
-                  placeholder={t("budgets.form.searchCategories")}
-                  value={query}
-                  onChangeText={setQuery}
-                />
-                {categories
-                  .filter((cat) =>
-                    cat.name.toLowerCase().includes(query.toLowerCase()),
-                  )
-                  .map((cat) => (
-                    <BudgetOption
-                      key={cat.id}
-                      title={cat.name}
-                      description={
-                        cat.parentId
-                          ? t("budgets.form.subcategory", {
-                              parent:
-                                categories.find((p) => p.id === cat.parentId)
-                                  ?.name ?? t("budgets.form.parentCategory"),
-                            })
-                          : undefined
-                      }
-                      selected={draft.categories.some((id) =>
-                        references(
-                          document.categories.find(
-                            (r) => identity(r) === cat.id,
-                          )!,
-                          id,
-                        ),
-                      )}
-                      onPress={() =>
-                        select("categories", toggleId(draft.categories, cat.id))
-                      }
-                    >
-                      <BudgetBadge budget={cat} />
-                    </BudgetOption>
-                  ))}
-                {!categories.length && (
-                  <Text className="py-4 text-muted">
-                    {t("budgets.form.noCategories", {
-                      type: labels.types[
-                        draft.transactionType
-                      ].toLocaleLowerCase(i18n.resolvedLanguage),
-                    })}
-                  </Text>
-                )}
-                {draft.budgetMode === "Manual" ? (
-                  <BudgetToggle
-                    title={t("budgets.form.includeSubcategories")}
-                    description={t("budgets.form.includeSubcategoriesHelp")}
-                    value={draft.includeSubcategories}
-                    onChange={(v) => select("includeSubcategories", v)}
-                  />
-                ) : (
-                  <Text className="py-3 text-muted">
-                    {t("budgets.form.automaticIncludesDescendants")}
-                  </Text>
-                )}
-                <View className="flex-row gap-3">
-                  <Button
-                    variant="secondary"
-                    onPress={() =>
-                      select(
-                        "categories",
-                        categories.map((cat) => cat.id),
-                      )
-                    }
-                  >
-                    {t("budgets.form.selectAll")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onPress={() => select("categories", [])}
-                  >
-                    {t("budgets.form.clearAll")}
-                  </Button>
-                </View>
-              </>
-            )}
-            {sheet === "accounts" && (
-              <>
-                <Text className="text-muted">
-                  {t("budgets.form.accountSelection", {
-                    selected: draft.accounts.length,
-                    total: accounts.length,
-                  })}
-                </Text>
-                {accounts.map((a) => (
-                  <BudgetOption
-                    key={a.id}
-                    title={a.name}
-                    description={`${a.ownerName} · ${a.currencyCode}`}
-                    selected={draft.accounts.includes(a.id)}
-                    onPress={() =>
-                      select("accounts", toggleId(draft.accounts, a.id))
-                    }
-                    icon="bank"
-                  />
-                ))}
-                <View className="flex-row gap-3">
-                  <Button
-                    variant="secondary"
-                    onPress={() =>
-                      select(
-                        "accounts",
-                        accounts.map((a) => a.id),
-                      )
-                    }
-                  >
-                    {t("budgets.form.selectAll")}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onPress={() => select("accounts", [])}
-                  >
-                    {t("budgets.form.clearAll")}
-                  </Button>
-                </View>
-              </>
-            )}
-            {sheet === "settings" && (
-              <>
-                <BudgetToggle
-                  title={t("budgets.common.rollingBudget")}
-                  description={
-                    draft.period === "Custom"
-                      ? t("budgets.form.rollingCustomHelp")
-                      : t("budgets.form.rollingHelp")
-                  }
-                  disabled={draft.period === "Custom"}
-                  value={draft.rolling}
-                  onChange={(v) => select("rolling", v)}
-                />
-                <BudgetToggle
-                  title={t("budgets.form.showBudget")}
-                  description={t("budgets.form.showBudgetHelp")}
-                  value={draft.showOnHome}
-                  onChange={(v) => select("showOnHome", v)}
-                />
-              </>
-            )}
-          </BudgetEditorSheet>
+          {sheetRoot ? (
+            <TransactionCategorySheet
+              parent={categoryToOption(sheetRoot)}
+              options={categoryDescendants(categories, sheetRoot.id).map(
+                categoryToOption,
+              )}
+              selectedIds={selectedCategories.map((category) => category.id)}
+              onToggle={(categoryId) => {
+                const category = categories.find(
+                  (item) => item.id === categoryId,
+                );
+                if (category) toggleCategory(category);
+              }}
+              onDismiss={() => setSheetRoot(null)}
+            />
+          ) : null}
           <CurrencySelectorSheet
             currencies={currencies}
             isOpen={currencySheetOpen}
             selectedCode={draft.currencyCode}
             closeOnSelect={false}
             onOpenChange={setCurrencySheetOpen}
-            onSelect={(currency) => change("currencyCode", currency.code)}
+            onSelect={(item) => change("currencyCode", item.code)}
           />
           {iconPickerOpen && (
             <IconPicker
               selected={{ name: draft.icon, pathData: draft.iconPath }}
               onClose={() => setIconPickerOpen(false)}
               onSelect={(icon) => {
-                setDraft((current) => ({
+                appearanceChosen.current = true;
+                update((current) => ({
                   ...current,
                   icon: icon.name,
                   iconPath: icon.pathData,
@@ -770,8 +929,249 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
   );
 }
 
+/**
+ * A one-tap choice. A chosen pill is shown by colour alone: it fills with its
+ * own colour (or the accent), never a check mark, like the transaction page.
+ */
+function SelectPill({
+  selected,
+  label,
+  detail,
+  color,
+  depth = 0,
+  multiple = false,
+  count,
+  trailing,
+  onPress,
+  children,
+}: {
+  selected: boolean;
+  label: string;
+  detail?: string;
+  color?: string;
+  depth?: number;
+  multiple?: boolean;
+  count?: number;
+  trailing?: ReactNode;
+  onPress: () => void;
+  children?: ReactNode;
+}) {
+  const c = useAppThemeColors();
+  const fill = selected ? (color ?? c.accent) : c.surfaceSecondary;
+  const ink = selected
+    ? color
+      ? colorForeground(color)
+      : c.accentForeground
+    : c.foreground;
+  return (
+    <Pressable
+      accessibilityRole={multiple ? "checkbox" : "radio"}
+      accessibilityLabel={detail ? `${label}, ${detail}` : label}
+      accessibilityState={{ checked: selected }}
+      onPress={() => {
+        Keyboard.dismiss();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        styles.pill,
+        {
+          backgroundColor: fill,
+          paddingStart: children ? 7 : 16,
+          opacity: pressed ? 0.72 : 1,
+        },
+      ]}
+    >
+      {depth > 0 ? (
+        <View
+          style={[
+            styles.depthMark,
+            { backgroundColor: colorWithAlpha(ink, 0.4) },
+          ]}
+        />
+      ) : null}
+      {children ? (
+        <View
+          style={[
+            styles.pillIcon,
+            {
+              backgroundColor: selected
+                ? colorWithAlpha(ink, 0.16)
+                : color
+                  ? colorWithAlpha(color, c.isDark ? 0.28 : 0.18)
+                  : "transparent",
+            },
+          ]}
+        >
+          {children}
+        </View>
+      ) : null}
+      <Text numberOfLines={1} style={[styles.pillLabel, { color: ink }]}>
+        {label}
+      </Text>
+      {detail ? (
+        <Text
+          style={[
+            styles.pillDetail,
+            { color: selected ? colorWithAlpha(ink, 0.7) : c.muted },
+          ]}
+        >
+          {detail}
+        </Text>
+      ) : null}
+      {count ? (
+        <View
+          style={[
+            styles.countBadge,
+            { backgroundColor: colorWithAlpha(ink, 0.18) },
+          ]}
+        >
+          <Text style={[styles.countText, TABULAR, { color: ink }]}>
+            {count}
+          </Text>
+        </View>
+      ) : null}
+      {trailing}
+    </Pressable>
+  );
+}
+
+function BulkActions({
+  onSelectAll,
+  onClear,
+}: {
+  onSelectAll: () => void;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <View className="flex-row gap-2">
+      <Button size="sm" variant="secondary" onPress={onSelectAll}>
+        {t("budgets.form.selectAll")}
+      </Button>
+      <Button size="sm" variant="ghost" onPress={onClear}>
+        {t("budgets.form.clearAll")}
+      </Button>
+    </View>
+  );
+}
+
+/**
+ * Dimmed until the budget can be saved, then fully lit: readiness is seen,
+ * not read. It stays pressable so a tap explains what is missing.
+ */
+function SaveEmphasis({
+  ready,
+  children,
+}: {
+  ready: boolean;
+  children: ReactNode;
+}) {
+  const emphasis = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    emphasis.set(
+      withTiming(ready ? 1 : 0, {
+        duration: 220,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [emphasis, ready]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.5 + emphasis.get() * 0.5,
+    transform: [{ scale: 0.98 + emphasis.get() * 0.02 }],
+  }));
+  return <Reanimated.View style={style}>{children}</Reanimated.View>;
+}
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  flex: { flex: 1 },
+  typeDock: { paddingHorizontal: 12, paddingBottom: 8 },
+  hero: {
+    borderRadius: 28,
+    borderCurve: "continuous",
+    borderWidth: 1,
+    padding: 16,
+    gap: 14,
+  },
+  nameInput: { fontSize: 17, height: 50 },
+  amount: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: "Huninn_400Regular",
+    fontSize: 44,
+    lineHeight: 52,
+    letterSpacing: -1,
+    paddingVertical: 0,
+  },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pill: {
+    minHeight: 44,
+    maxWidth: "100%",
+    paddingEnd: 14,
+    paddingVertical: 6,
+    borderRadius: 22,
+    borderCurve: "continuous",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  pillIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pillLabel: {
+    fontFamily: "Huninn_400Regular",
+    fontSize: 14,
+    lineHeight: 19,
+    flexShrink: 1,
+  },
+  pillDetail: {
+    fontFamily: "Huninn_400Regular",
+    fontSize: 11,
+    letterSpacing: 0.5,
+  },
+  depthMark: { width: 3, height: 16, borderRadius: 2 },
+  pillClear: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countBadge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countText: {
+    fontFamily: "Huninn_400Regular",
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  searchBox: { justifyContent: "center" },
+  // Room at the end so typed text never runs under the clear button.
+  search: { height: 48, paddingEnd: 44 },
+  searchClear: {
+    position: "absolute",
+    end: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notes: {
+    height: "auto",
+    minHeight: 104,
+    paddingVertical: 14,
+  },
   actionDock: {
     position: "absolute",
     left: 0,

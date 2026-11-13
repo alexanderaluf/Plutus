@@ -940,6 +940,7 @@ export const he = {
       datesIncluded: "שני התאריכים נכללים בטווח.",
       categorySelection: "נבחרו {{selected}} מתוך {{total}}",
       searchCategories: "חיפוש קטגוריות",
+      clearSearch: "ניקוי החיפוש",
       subcategory: "תת־קטגוריה · {{parent}}",
       parentCategory: "קטגוריית־אב",
       noCategories:

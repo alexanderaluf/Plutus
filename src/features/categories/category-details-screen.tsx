@@ -89,20 +89,23 @@ export function CategoryDetailsScreen() {
         >
           {category && (
             <>
-              <Button
-                isIconOnly
-                variant="ghost"
-                isDisabled={isDeleting}
-                accessibilityLabel={t("categories.details.addChild")}
-                onPress={() =>
-                  router.push({
-                    pathname: "/categories/create",
-                    params: { parentId: id, type: String(category.type) },
-                  })
-                }
-              >
-                <FilledIcon name="plus" size={27} />
-              </Button>
+              {/* Subcategories cannot have subcategories of their own. */}
+              {!category.parentId && (
+                <Button
+                  isIconOnly
+                  variant="ghost"
+                  isDisabled={isDeleting}
+                  accessibilityLabel={t("categories.details.addChild")}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/categories/create",
+                      params: { parentId: id, type: String(category.type) },
+                    })
+                  }
+                >
+                  <FilledIcon name="plus" size={27} />
+                </Button>
+              )}
               <Button
                 isIconOnly
                 variant="ghost"

@@ -162,6 +162,56 @@ export function ChoicePill({
   );
 }
 
+/** Two or three exclusive choices; the chosen one fills with the accent. */
+export function FormTabs<Value extends string>({
+  value,
+  options,
+  onChange,
+  accessibilityLabel,
+}: {
+  value: Value;
+  options: readonly { value: Value; label: string }[];
+  onChange: (value: Value) => void;
+  accessibilityLabel?: string;
+}) {
+  const theme = useAppThemeColors();
+  return (
+    <View
+      accessibilityRole="tablist"
+      accessibilityLabel={accessibilityLabel}
+      className="flex-row rounded-2xl p-1"
+      style={{ backgroundColor: theme.surfaceSecondary, ...CONTINUOUS }}
+    >
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option.value)}
+            className="min-h-11 flex-1 items-center justify-center rounded-xl px-2"
+            style={({ pressed }) => ({
+              backgroundColor: selected ? theme.accent : "transparent",
+              opacity: pressed ? 0.72 : 1,
+              ...CONTINUOUS,
+            })}
+          >
+            <Text
+              numberOfLines={1}
+              className={`font-manrope-semibold text-[14px] ${
+                selected ? "text-accent-foreground" : "text-foreground"
+              }`}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export function SwitchRow({
   icon,
   tone = "accent",

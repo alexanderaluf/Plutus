@@ -732,3 +732,93 @@ test("partially migrated databases preserve legacy and custom categories", async
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("a new category starts from the profile's categories: type icon, free colour, parent family", () => {
+  const {
+    createInitialCategoryDraft,
+    defaultCategoryIcons,
+    parentOptions,
+    suggestCategoryColor,
+  } = require("../src/features/categories/lib/initial-category-draft.ts");
+  const { ICON_COLORS } = require("../src/shared/icons/colors.ts");
+  const category = (id, type, color, parentId = null) => ({
+    id,
+    name: id,
+    description: "",
+    type,
+    parentId,
+    icon: "shopping",
+    iconPath: null,
+    color,
+    isDefault: false,
+  });
+  const categories = [
+    category("food", 0, ICON_COLORS[0]),
+    category("food-out", 0, ICON_COLORS[5], "food"),
+    category("rent", 0, ICON_COLORS[1]),
+    category("salary", 1, ICON_COLORS[0]),
+  ];
+
+  // An unused colour of the same type; other types do not block a colour.
+  assert.equal(suggestCategoryColor(categories, 0, null), ICON_COLORS[2]);
+  assert.equal(suggestCategoryColor(categories, 1, null), ICON_COLORS[1]);
+  // A subcategory joins its parent's colour family.
+  assert.equal(suggestCategoryColor(categories, 0, "rent"), ICON_COLORS[1]);
+
+  const expense = createInitialCategoryDraft(categories, 0, null);
+  assert.equal(expense.icon, defaultCategoryIcons[0]);
+  assert.equal(expense.parentId, null);
+  assert.equal(expense.isDefault, false);
+  assert.equal(createInitialCategoryDraft(categories, 1, null).icon, "cash");
+  assert.equal(
+    createInitialCategoryDraft(categories, 2, null).icon,
+    "currency-exchange",
+  );
+  const child = createInitialCategoryDraft(categories, 0, "food");
+  assert.equal(child.parentId, "food");
+  assert.equal(child.color, ICON_COLORS[0]);
+  // A preset parent of another type, or a missing one, is ignored.
+  assert.equal(createInitialCategoryDraft(categories, 1, "food").parentId, null);
+  assert.equal(createInitialCategoryDraft(categories, 0, "gone").parentId, null);
+
+  // A subcategory preset as parent is ignored: it cannot be a parent.
+  assert.equal(
+    createInitialCategoryDraft(categories, 0, "food-out").parentId,
+    null,
+  );
+
+  // Only main categories of the type can be parents.
+  assert.deepEqual(
+    parentOptions(categories, 0, new Set()).map((item) => item.id),
+    ["food", "rent"],
+  );
+  // Never the edited family itself.
+  assert.deepEqual(
+    parentOptions(categories, 0, new Set(["rent"]), { editingId: "rent" }).map(
+      (item) => item.id,
+    ),
+    ["food"],
+  );
+  // A category with subcategories cannot become a subcategory.
+  assert.deepEqual(
+    parentOptions(categories, 0, new Set(["food", "food-out"]), {
+      editingId: "food",
+    }),
+    [],
+  );
+  // Older nested data keeps its current parent listed, so saving never moves it.
+  const nested = [...categories, category("tips", 0, "#123456", "food-out")];
+  assert.deepEqual(
+    parentOptions(nested, 0, new Set(["tips"]), {
+      editingId: "tips",
+      keepId: "food-out",
+    }).map((item) => item.id),
+    ["food", "food-out", "rent"],
+  );
+  // A parent whose own parent was deleted counts as a main category.
+  const orphan = [category("lonely", 0, "#654321", "deleted")];
+  assert.deepEqual(
+    parentOptions(orphan, 0, new Set()).map((item) => item.id),
+    ["lonely"],
+  );
+});

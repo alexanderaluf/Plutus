@@ -921,6 +921,7 @@ export const ru = {
       clearAll: "Очистить все",
       showBudget: "Показывать бюджет",
       searchCategories: "Поиск категорий",
+      clearSearch: "Очистить поиск",
       searchCurrencies: "Поиск валют",
       searchIcons: "Поиск значков",
       budgetForHelp: "Выберите операции, которые отслеживает этот бюджет",

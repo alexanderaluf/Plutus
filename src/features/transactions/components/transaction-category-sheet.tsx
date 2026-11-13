@@ -8,42 +8,55 @@ import { Platform, Pressable, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { colorForeground } from "@/shared/icons/colors";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
-import { FilledIcon } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
 
 import type { TransactionOption } from "./transaction-selection-section";
 
+/** A chosen row is shown by the category's own colour, never a check mark. */
 function CategoryRow({
   option,
   selected,
+  multiple,
   subtitle,
   onPress,
 }: {
   option: TransactionOption;
   selected: boolean;
+  multiple: boolean;
   subtitle?: string;
   onPress: () => void;
 }) {
   const theme = useAppThemeColors();
   return (
     <Pressable
-      accessibilityRole="radio"
+      accessibilityRole={multiple ? "checkbox" : "radio"}
       accessibilityState={{ checked: selected }}
       accessibilityLabel={option.name}
       onPress={onPress}
-      className="min-h-16 flex-row items-center gap-4 px-1 py-2"
-      style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
+      className="min-h-16 flex-row items-center gap-4 rounded-2xl px-2 py-2"
+      style={({ pressed }) => ({
+        backgroundColor: selected
+          ? colorWithAlpha(option.color, theme.isDark ? 0.24 : 0.16)
+          : "transparent",
+        opacity: pressed ? 0.68 : 1,
+        borderCurve: "continuous",
+      })}
     >
       <View
         className="size-12 items-center justify-center rounded-full"
-        style={{ backgroundColor: colorWithAlpha(option.color, 0.18) }}
+        style={{
+          backgroundColor: selected
+            ? option.color
+            : colorWithAlpha(option.color, 0.18),
+        }}
       >
         <RecordIcon
-          color={option.color}
+          color={selected ? colorForeground(option.color) : option.color}
           name={option.icon}
           pathData={option.iconPath}
           size={25}
@@ -57,31 +70,35 @@ function CategoryRow({
           <Text className="font-sans text-sm text-muted">{subtitle}</Text>
         ) : null}
       </View>
-      {selected ? (
-        <View
-          className="size-7 items-center justify-center rounded-full"
-          style={{ backgroundColor: theme.accent }}
-        >
-          <FilledIcon name="check" size={18} tone="accent-foreground" />
-        </View>
-      ) : null}
     </Pressable>
   );
 }
 
+/**
+ * A main category and its subcategories. Single choice (a transaction) picks
+ * one row and closes; multiple choice (a budget, via `selectedIds` and
+ * `onToggle`) toggles rows and stays open until dismissed.
+ */
 export function TransactionCategorySheet({
   parent,
   options,
-  selectedId,
+  selectedId = "",
+  selectedIds,
   onSelect,
+  onToggle,
   onDismiss,
 }: {
   parent: TransactionOption;
   options: TransactionOption[];
-  selectedId: string;
-  onSelect: (id: string) => void;
+  selectedId?: string;
+  selectedIds?: readonly string[];
+  onSelect?: (id: string) => void;
+  onToggle?: (id: string) => void;
   onDismiss: () => void;
 }) {
+  const multiple = Boolean(onToggle);
+  const isChosen = (id: string) =>
+    multiple ? Boolean(selectedIds?.includes(id)) : selectedId === id;
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
@@ -111,8 +128,12 @@ export function TransactionCategorySheet({
   }
 
   function select(id: string) {
+    if (onToggle) {
+      onToggle(id);
+      return;
+    }
     setIsOpen(false);
-    onSelect(selectedId === id ? "" : id);
+    onSelect?.(selectedId === id ? "" : id);
     onDismiss();
   }
 
@@ -158,7 +179,8 @@ export function TransactionCategorySheet({
             >
               <CategoryRow
                 option={parent}
-                selected={selectedId === parent.id}
+                multiple={multiple}
+                selected={isChosen(parent.id)}
                 subtitle={t("transactions.categorySheet.parentOption")}
                 onPress={() => select(parent.id)}
               />
@@ -171,7 +193,8 @@ export function TransactionCategorySheet({
                 <CategoryRow
                   key={child.id}
                   option={child}
-                  selected={selectedId === child.id}
+                  multiple={multiple}
+                  selected={isChosen(child.id)}
                   subtitle={child.description}
                   onPress={() => select(child.id)}
                 />

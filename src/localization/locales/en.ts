@@ -959,6 +959,7 @@ export const en = {
       datesIncluded: "Both dates are included.",
       categorySelection: "{{selected}} of {{total}} selected",
       searchCategories: "Search categories",
+      clearSearch: "Clear search",
       subcategory: "Subcategory · {{parent}}",
       parentCategory: "Parent category",
       noCategories:
