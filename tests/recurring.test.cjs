@@ -344,6 +344,17 @@ test("due-this-month excludes processed/skipped expenses, includes future unpaid
     { currencyCode: "ILS", amount: 3650 },
     { currencyCode: "USD", amount: 240 },
   ]);
+  // Net subtracts expenses from income inside each currency, never across.
+  assert.deepEqual(summary.yearlyNet, [
+    { currencyCode: "ILS", amount: 600 - 3650 },
+    { currencyCode: "USD", amount: -240 },
+  ]);
+  assert.equal(
+    summary.monthlyNet.find((v) => v.currencyCode === "USD").amount,
+    -20,
+  );
+  // Two unpaid daily ILS payments and one USD payment remain this month.
+  assert.equal(summary.dueCount, 3);
   const events = selectRecurringEvents(
     items,
     new Date(2026, 9, 1),
@@ -700,4 +711,59 @@ test("a new recurring form starts from the profile and borrows its category's lo
   assert.equal(withCategoryLook(draft, category, true), draft);
   assert.equal(withCategoryLook(draft, undefined, false), draft);
   assert.deepEqual([...REMINDER_OPTIONS], [null, 0, 1, 2, 7]);
+});
+
+const {
+  groupUpcoming,
+  relativeDay,
+  upcomingGroup,
+} = require("../src/features/recurring/lib/recurring-list-helpers.ts");
+
+test("the recurring list groups schedules by what needs doing and when", () => {
+  const today = new Date(2026, 10, 14, 9);
+  const at = (day, month = 10) => new Date(2026, month, day, 8);
+  assert.equal(upcomingGroup({ due: true, next: at(10) }, today), "attention");
+  // An imported schedule without a next date cannot run until edited.
+  assert.equal(upcomingGroup({ due: false, next: null }, today), "attention");
+  assert.equal(upcomingGroup({ due: false, next: at(14) }, today), "week");
+  assert.equal(upcomingGroup({ due: false, next: at(20) }, today), "week");
+  assert.equal(upcomingGroup({ due: false, next: at(21) }, today), "month");
+  assert.equal(upcomingGroup({ due: false, next: at(3, 11) }, today), "later");
+  // Seven days ahead can cross into next month and still read as "this week".
+  const late = new Date(2026, 10, 28, 9);
+  assert.equal(upcomingGroup({ due: false, next: at(2, 11) }, late), "week");
+
+  const items = [
+    { id: "later", due: false, next: at(3, 11) },
+    { id: "soon", due: false, next: at(15) },
+    { id: "due", due: true, next: at(1) },
+    { id: "month", due: false, next: at(25) },
+  ];
+  assert.deepEqual(
+    groupUpcoming(items, today).map((g) => [g.group, g.items.map((i) => i.id)]),
+    [
+      ["attention", ["due"]],
+      ["week", ["soon"]],
+      ["month", ["month"]],
+      ["later", ["later"]],
+    ],
+  );
+});
+
+test("upcoming payments read as today, tomorrow, or in N days within a week", () => {
+  const today = new Date(2026, 10, 14, 23, 30);
+  assert.deepEqual(relativeDay(new Date(2026, 10, 14, 8), today), {
+    key: "today",
+    count: 0,
+  });
+  assert.deepEqual(relativeDay(new Date(2026, 10, 15, 0, 5), today), {
+    key: "tomorrow",
+    count: 1,
+  });
+  assert.deepEqual(relativeDay(new Date(2026, 10, 20, 8), today), {
+    key: "inDays",
+    count: 6,
+  });
+  assert.equal(relativeDay(new Date(2026, 10, 21, 8), today), null);
+  assert.equal(relativeDay(new Date(2026, 10, 13, 8), today), null);
 });

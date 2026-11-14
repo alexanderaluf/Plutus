@@ -304,25 +304,34 @@ export function RecurringEditorShell({
 export function RecurringBadge({
   item,
   small = false,
+  size: requested,
+  muted = false,
 }: {
   item: { icon: string; iconPath: string | null; color: string };
   small?: boolean;
+  /** Overrides the small/regular size, in points. */
+  size?: number;
+  /** Desaturates the badge for ended or archived schedules. */
+  muted?: boolean;
 }) {
+  const size = requested ?? (small ? 22 : 54);
   return (
     <View
       style={{
-        width: small ? 22 : 54,
-        height: small ? 22 : 54,
-        borderRadius: small ? 8 : 15,
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.3),
+        borderCurve: "continuous",
         backgroundColor: item.color,
         alignItems: "center",
         justifyContent: "center",
+        opacity: muted ? 0.45 : 1,
       }}
     >
       <RecordIcon
         name={item.icon}
         pathData={item.iconPath}
-        size={small ? 14 : 29}
+        size={Math.round(size * 0.54)}
         color={colorForeground(item.color)}
       />
     </View>

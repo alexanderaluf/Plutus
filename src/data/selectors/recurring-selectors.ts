@@ -240,12 +240,23 @@ export function selectRecurringSummary(items: Recurring[], now = new Date()) {
     new Date(now.getFullYear(), now.getMonth(), 1),
     new Date(now.getFullYear(), now.getMonth() + 1, 1),
   );
+  const unpaid = month.filter((e) => e.status === "pending" && e.type === 0);
+  // Income counts up and expenses count down, so the net is what the person
+  // keeps (or spends beyond) from their scheduled money each period.
+  const signedAnnual = annual.map((r) => ({
+    ...r,
+    amount: r.type === 1 ? r.amount : -r.amount,
+  }));
   return {
     yearly: recurringTotals(annual),
     yearlyIncome: recurringTotals(annual.filter((r) => r.type === 1)),
     yearlyExpense: recurringTotals(annual.filter((r) => r.type === 0)),
+    yearlyNet: recurringTotals(signedAnnual),
     monthly: recurringTotals(
       annual.map((r) => ({ ...r, amount: r.amount / 12 })),
+    ),
+    monthlyNet: recurringTotals(
+      signedAnnual.map((r) => ({ ...r, amount: r.amount / 12 })),
     ),
     income: recurringTotals(
       annual
@@ -257,9 +268,9 @@ export function selectRecurringSummary(items: Recurring[], now = new Date()) {
         .filter((r) => r.type === 0)
         .map((r) => ({ ...r, amount: r.amount / 12 })),
     ),
-    due: recurringTotals(
-      month.filter((e) => e.status === "pending" && e.type === 0),
-    ),
+    due: recurringTotals(unpaid),
+    /** Unpaid expense payments still scheduled in the current month. */
+    dueCount: unpaid.length,
   };
 }
 

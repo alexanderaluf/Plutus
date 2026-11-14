@@ -822,3 +822,67 @@ test("a new category starts from the profile's categories: type icon, free colou
     ["lonely"],
   );
 });
+
+const {
+  buildCategoryTree,
+  sortCategories,
+  summarizeMonth,
+} = require("../src/features/categories/lib/category-list-helpers.ts");
+
+test("categories overview nests children, keeps cycles reachable and sorts by name or month amount", () => {
+  const list = [
+    { id: "food", name: "Food", parentId: null },
+    { id: "cafe", name: "Cafe", parentId: "food" },
+    { id: "bills", name: "Bills", parentId: null },
+    // An imported cycle: neither has a real root, so both stay visible.
+    { id: "a", name: "Loop A", parentId: "b" },
+    { id: "b", name: "Loop B", parentId: "a" },
+  ];
+  const { roots, children } = buildCategoryTree(list);
+  assert.deepEqual(
+    roots.map((r) => r.id),
+    ["food", "bills", "a", "b"],
+  );
+  assert.deepEqual(
+    (children.get("food") ?? []).map((c) => c.id),
+    ["cafe"],
+  );
+  const totals = new Map([
+    ["food", { count: 3, amounts: { ILS: 90 } }],
+    ["bills", { count: 1, amounts: { ILS: 400 } }],
+  ]);
+  assert.equal(sortCategories(roots, "original", totals), roots);
+  assert.deepEqual(
+    sortCategories(roots, "name", totals).map((r) => r.id),
+    ["bills", "food", "a", "b"],
+  );
+  assert.deepEqual(
+    sortCategories(roots, "amount", totals).map((r) => r.id),
+    ["bills", "food", "a", "b"],
+  );
+});
+
+test("categories month summary adds top-level totals once and shares only within one currency", () => {
+  const roots = [
+    { id: "food", name: "Food", parentId: null },
+    { id: "bills", name: "Bills", parentId: null },
+  ];
+  const totals = new Map([
+    // Food already includes its child's spending; children are not re-added.
+    ["food", { count: 3, amounts: { ILS: 100 } }],
+    ["cafe", { count: 2, amounts: { ILS: 40 } }],
+    ["bills", { count: 1, amounts: { ILS: 300 } }],
+  ]);
+  const summary = summarizeMonth(roots, totals);
+  assert.equal(summary.count, 4);
+  assert.deepEqual(summary.amounts, [{ currencyCode: "ILS", amount: 400 }]);
+  assert.equal(summary.share(totals.get("bills")), 0.75);
+
+  totals.set("bills", { count: 1, amounts: { USD: 300 } });
+  const mixed = summarizeMonth(roots, totals);
+  assert.deepEqual(
+    mixed.amounts.map((v) => v.currencyCode),
+    ["ILS", "USD"],
+  );
+  assert.equal(mixed.share(totals.get("food")), null);
+});

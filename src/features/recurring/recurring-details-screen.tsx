@@ -1,9 +1,9 @@
 import { AppAlert } from "@/shared/ui/app-alert";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Animated, Pressable, View } from "react-native";
+import { Animated, Pressable, StyleSheet, View } from "react-native";
 import Reanimated, {
   Easing,
   ReduceMotion,
@@ -14,38 +14,52 @@ import Reanimated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
 import { belongsToProfile, identity } from "@/data/model/category-record";
-import { occurrenceDate } from "@/data/model/recurring-record";
+import { dueOccurrenceCount, occurrenceDate } from "@/data/model/recurring-record";
 import {
+  recurringTotals,
+  selectRecurringRelations,
   selectRecurrings,
   selectRecurringSummary,
-  recurringTotals,
   selectTransactions,
 } from "@/data/selectors/document-selectors";
-import {
-  BudgetHeader,
-  BudgetToggle,
-} from "@/features/budgets/components/budget-ui";
+import type { Recurring } from "@/data/selectors/recurring-selectors";
+import { BudgetHeader } from "@/features/budgets/components/budget-ui";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { TransactionDetailSheet } from "@/features/transactions/transaction-detail-sheet";
+import { useAppDate } from "@/shared/lib/use-app-date";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
-import { FilledIcon } from "@/shared/ui/filled-icon";
 import {
   CollapsingHeader,
   CollapsingHeaderSpacer,
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
+import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import { CONTINUOUS, FormCard, FormDivider, SwitchRow, TABULAR } from "@/shared/ui/form-ui";
+import { i18n } from "@/localization/i18n";
+import { RecurringAmount } from "./components/recurring-card";
 import {
   BusyButtonLabel,
-  MoneyLines,
   RecurringBadge,
   RecurringScrim,
 } from "./components/recurring-ui";
-import { useAppDate } from "@/shared/lib/use-app-date";
+import { calendarDayDistance } from "./lib/recurring-list-helpers";
 import { useRecurringActions } from "./use-recurring-actions";
 import { useRecurringClock } from "./recurring-screen";
 
-/** Elapsed share of the gap between the previous and next occurrence. */
+/** History rows shown before "Show all". */
+const HISTORY_PREVIEW = 5;
+
+type Status = "upcoming" | "due" | "archived" | "ended" | "unsupported";
+
+function recurringStatus(item: Recurring): Status {
+  if (item.record.archived === true) return "archived";
+  if (!item.next) return item.archived ? "ended" : "unsupported";
+  return item.due ? "due" : "upcoming";
+}
+
+/** Elapsed share of the gap between the previous and next payment. */
 function OccurrenceProgress({
   fraction,
   trackColor,
@@ -69,12 +83,11 @@ function OccurrenceProgress({
   const fillStyle = useAnimatedStyle(() => ({
     width: `${progress.get() * 100}%`,
   }));
-
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: Math.round(fraction * 100) }}
-      className="h-[7px] w-full overflow-hidden rounded-full"
+      className="h-1.5 w-full overflow-hidden rounded-full"
       style={{ backgroundColor: trackColor }}
     >
       <Reanimated.View
@@ -85,17 +98,464 @@ function OccurrenceProgress({
   );
 }
 
+/** Tinted icon square shared by every row on this page. */
+function RowIcon({ name, color }: { name: FilledIconName; color: string }) {
+  return (
+    <View
+      className="size-10 shrink-0 items-center justify-center rounded-xl"
+      style={{ ...CONTINUOUS, backgroundColor: colorWithAlpha(color, 0.14) }}
+    >
+      <FilledIcon name={name} size={20} color={color} />
+    </View>
+  );
+}
+
+function DetailRow({
+  icon,
+  label,
+  value,
+  multiline = false,
+}: {
+  icon: FilledIconName;
+  label: string;
+  value: string;
+  multiline?: boolean;
+}) {
+  const c = useAppThemeColors();
+  return (
+    <View className="flex-row items-center gap-3.5">
+      <RowIcon name={icon} color={c.accent} />
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="text-[12px] leading-[17px] text-muted">{label}</Text>
+        <Text
+          numberOfLines={multiline ? undefined : 1}
+          selectable={multiline}
+          className="font-manrope-semibold text-[15px] leading-[20px] text-foreground"
+        >
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** Rows separated by hairlines, inside a FormCard. */
+function Rows({ children }: { children: ReactNode[] }) {
+  const rows = children.filter(Boolean);
+  return (
+    <View className="gap-3.5">
+      {rows.map((row, index) => (
+        <Fragment key={index}>
+          {index > 0 && <FormDivider />}
+          {row}
+        </Fragment>
+      ))}
+    </View>
+  );
+}
+
+function Hero({ item, now }: { item: Recurring; now: Date }) {
+  const c = useAppThemeColors(),
+    { t } = useTranslation();
+  const { formatCurrency } = useCurrencyFormat();
+  // Only a non-monthly schedule gains anything from a monthly estimate; for a
+  // monthly one it would repeat the amount.
+  const monthly =
+    item.period !== "Monthly" && item.valid
+      ? selectRecurringSummary([item], now).monthly[0]
+      : null;
+  const inactive = item.archived;
+  return (
+    <View className="items-center gap-2 px-4 pb-1">
+      <RecurringBadge item={item} size={72} muted={inactive} />
+      <Text
+        accessibilityRole="header"
+        numberOfLines={2}
+        className="mt-2 text-center font-manrope-bold text-[22px] leading-[28px] text-foreground"
+      >
+        {item.name}
+      </Text>
+      <RecurringAmount
+        amount={item.amount}
+        currencyCode={item.currencyCode}
+        type={item.type}
+        muted={inactive}
+        size="xl"
+      />
+      <View className="flex-row flex-wrap items-center justify-center gap-x-1.5">
+        <Text className="font-manrope-semibold text-[15px] text-muted">
+          {t(`recurring.periods.${item.period}`, {
+            defaultValue: String(item.period),
+          })}
+        </Text>
+        {monthly && (
+          <Text
+            className="text-[15px] text-muted"
+            style={{ ...TABULAR, color: c.muted }}
+          >
+            ·{" "}
+            {t("recurring.approxMonthly", {
+              amount: formatCurrency(monthly.amount, monthly.currencyCode),
+            })}
+          </Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * What happens next, and the one decision the person may need to make. The
+ * card's tone and buttons follow the schedule's state instead of showing
+ * disabled controls.
+ */
+function StatusCard({
+  item,
+  now,
+  busy,
+  onRestore,
+}: {
+  item: Recurring;
+  now: Date;
+  busy: boolean;
+  onRestore: () => void;
+}) {
+  const c = useAppThemeColors(),
+    { t } = useTranslation();
+  const { formatDate, formatDayMonth } = useAppDate();
+  const actions = useRecurringActions();
+  const status = recurringStatus(item);
+  const busyAction = actions.actionFor(item);
+  const disabled = busy || !!actions.busy;
+  const time = (date: Date) =>
+    date.toLocaleTimeString(i18n.resolvedLanguage, { timeStyle: "short" });
+
+  if (status === "archived" || status === "ended" || status === "unsupported") {
+    const copy = {
+      archived: { icon: "history", title: t("recurring.archived") },
+      ended: { icon: "check", title: t("recurring.ended") },
+      unsupported: { icon: "pencil", title: t("recurring.unsupported") },
+    }[status] as { icon: FilledIconName; title: string };
+    return (
+      <View
+        className="gap-4 rounded-[24px] border border-border bg-surface p-4"
+        style={CONTINUOUS}
+      >
+        <View className="flex-row items-center gap-3.5">
+          <RowIcon name={copy.icon} color={c.muted} />
+          <Text className="flex-1 font-manrope-semibold text-[15px] text-foreground">
+            {copy.title}
+          </Text>
+        </View>
+        {status === "archived" && (
+          <Button variant="secondary" isDisabled={busy} onPress={onRestore}>
+            <FilledIcon name="backup" size={20} tone="accent" />
+            <Button.Label>{t("recurring.restore")}</Button.Label>
+          </Button>
+        )}
+        {!!actions.error && (
+          <Text accessibilityRole="alert" className="text-sm text-danger">
+            {actions.error}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  const next = item.next!;
+  if (status === "due") {
+    const waiting = dueOccurrenceCount(item.record, now);
+    const when =
+      next.getFullYear() === now.getFullYear()
+        ? formatDayMonth(next)
+        : formatDate(next);
+    return (
+      <View
+        className="gap-4 rounded-[24px] p-4"
+        style={{
+          ...CONTINUOUS,
+          borderWidth: 1,
+          borderColor: colorWithAlpha(c.danger, 0.32),
+          backgroundColor: colorWithAlpha(c.danger, c.isDark ? 0.1 : 0.06),
+        }}
+      >
+        <View className="flex-row items-center gap-3.5">
+          <RowIcon name="clock" color={c.danger} />
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text className="font-manrope-bold text-[17px] text-danger">
+              {t("recurring.overdue")}
+            </Text>
+            <Text className="text-[13px] text-muted">
+              {t("recurring.dueSince", { date: `${when}, ${time(next)}` })}
+              {waiting > 1 ? ` · ${t("recurring.waiting", { count: waiting })}` : ""}
+            </Text>
+          </View>
+        </View>
+        <View className="flex-row gap-2">
+          <Button
+            variant="secondary"
+            className="flex-1"
+            isDisabled={disabled}
+            accessibilityState={{ busy: busyAction === "skip" }}
+            onPress={() => actions.skip(item)}
+          >
+            <BusyButtonLabel
+              label={t("recurring.skip")}
+              busy={busyAction === "skip"}
+              spinnerColor={c.accent}
+            />
+          </Button>
+          <Button
+            variant="primary"
+            className="flex-[2]"
+            isDisabled={disabled}
+            accessibilityState={{ busy: busyAction === "process" }}
+            onPress={() => actions.process(item)}
+          >
+            <BusyButtonLabel
+              label={t("recurring.process")}
+              busy={busyAction === "process"}
+              spinnerColor={c.accentForeground}
+            />
+          </Button>
+        </View>
+        {!!actions.error && (
+          <Text accessibilityRole="alert" className="text-sm text-danger">
+            {actions.error}
+          </Text>
+        )}
+      </View>
+    );
+  }
+
+  const days = calendarDayDistance(next, now);
+  const countdown =
+    days <= 0
+      ? t("recurring.today")
+      : days === 1
+        ? t("recurring.tomorrow")
+        : t("recurring.inDays", { count: days });
+  const index = Number(item.record.nextIndex ?? 0);
+  const previous = index > 0 ? occurrenceDate(item.record, index - 1) : null;
+  const fraction =
+    previous && next > previous
+      ? Math.min(
+          1,
+          Math.max(
+            0,
+            (now.getTime() - previous.getTime()) /
+              (next.getTime() - previous.getTime()),
+          ),
+        )
+      : null;
+  return (
+    <View
+      className="gap-4 rounded-[24px] border border-border bg-surface p-4"
+      style={CONTINUOUS}
+    >
+      <View className="flex-row items-center gap-3.5">
+        <RowIcon name="calendar" color={c.accent} />
+        <View className="min-w-0 flex-1 gap-0.5">
+          <Text className="text-[12px] leading-[17px] text-muted">
+            {t("recurring.nextPayment")}
+          </Text>
+          <Text className="font-manrope-bold text-[17px] text-foreground">
+            {formatDate(next)}
+          </Text>
+          <Text className="text-[13px] text-muted">
+            {next.toLocaleDateString(i18n.resolvedLanguage, {
+              weekday: "long",
+            })}{" "}
+            · {time(next)}
+          </Text>
+        </View>
+        <View
+          className="rounded-full px-3 py-1.5"
+          style={{ backgroundColor: colorWithAlpha(c.accent, 0.14) }}
+        >
+          <Text className="font-manrope-bold text-[13px] text-accent">
+            {countdown}
+          </Text>
+        </View>
+      </View>
+      {fraction !== null && (
+        <OccurrenceProgress
+          fraction={fraction}
+          trackColor={c.surfaceSecondary}
+          fillColor={c.accent}
+        />
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="self-center"
+        isDisabled={disabled}
+        accessibilityState={{ busy: busyAction === "skip" }}
+        onPress={() => actions.skip(item)}
+      >
+        <BusyButtonLabel
+          label={t("recurring.skipNext")}
+          busy={busyAction === "skip"}
+          spinnerColor={c.accent}
+        />
+      </Button>
+      {!!actions.error && (
+        <Text accessibilityRole="alert" className="text-sm text-danger">
+          {actions.error}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function History({
+  item,
+  onOpenTransaction,
+}: {
+  item: Recurring;
+  onOpenTransaction: (id: string) => void;
+}) {
+  const c = useAppThemeColors(),
+    { t } = useTranslation();
+  const { formatDate } = useAppDate();
+  const [expanded, setExpanded] = useState(false);
+  const entries = [...item.history].reverse();
+  const processed = item.history.filter((h) => h.status === "processed");
+  const totals = recurringTotals(
+    processed.map((h) => ({
+      amount: Number(h.amount),
+      currencyCode: String(h.currencyCode),
+    })),
+  );
+  const { formatCurrency } = useCurrencyFormat();
+  const visible = expanded ? entries : entries.slice(0, HISTORY_PREVIEW);
+  return (
+    <FormCard title={t("recurring.history")} icon="history">
+      {!entries.length ? (
+        <Text className="text-[15px] text-muted">
+          {t("recurring.noHistory")}
+        </Text>
+      ) : (
+        <>
+          <View className="flex-row gap-2">
+            <View
+              className="min-w-0 flex-1 gap-1 rounded-[18px] p-3"
+              style={{ ...CONTINUOUS, backgroundColor: c.surfaceSecondary }}
+            >
+              <Text className="text-[12px] text-muted">
+                {t("recurring.total")}
+              </Text>
+              {(totals.length
+                ? totals
+                : [{ amount: 0, currencyCode: item.currencyCode }]
+              ).map((total) => (
+                <Text
+                  key={total.currencyCode}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                  className="font-manrope-bold text-[17px] text-foreground"
+                  style={{ ...TABULAR, writingDirection: "ltr" }}
+                >
+                  {formatCurrency(total.amount, total.currencyCode)}
+                </Text>
+              ))}
+            </View>
+            <View
+              className="min-w-0 flex-1 gap-1 rounded-[18px] p-3"
+              style={{ ...CONTINUOUS, backgroundColor: c.surfaceSecondary }}
+            >
+              <Text className="text-[12px] text-muted">
+                {t("recurring.occurrences")}
+              </Text>
+              <Text
+                className="font-manrope-bold text-[17px] text-foreground"
+                style={TABULAR}
+              >
+                {processed.length}
+              </Text>
+            </View>
+          </View>
+          <View>
+            {visible.map((h, index) => {
+              const skipped = h.status === "skipped";
+              const transactionId =
+                typeof h.transactionId === "string" ? h.transactionId : null;
+              const scheduled = new Date(String(h.scheduledAt));
+              return (
+                <Fragment key={String(h.key ?? index)}>
+                  {index > 0 && (
+                    <View
+                      style={{
+                        height: StyleSheet.hairlineWidth,
+                        backgroundColor: c.border,
+                        marginStart: 52,
+                      }}
+                    />
+                  )}
+                  <Pressable
+                    accessibilityRole={transactionId ? "button" : "text"}
+                    disabled={!transactionId}
+                    onPress={() =>
+                      transactionId && onOpenTransaction(transactionId)
+                    }
+                    className="flex-row items-center gap-3 py-3"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                  >
+                    <RowIcon
+                      name={skipped ? "close" : "check"}
+                      color={skipped ? c.muted : c.success}
+                    />
+                    <View className="min-w-0 flex-1 gap-0.5">
+                      <Text
+                        className="font-manrope-semibold text-[15px]"
+                        style={{ color: skipped ? c.muted : c.foreground }}
+                      >
+                        {formatDate(scheduled)}
+                      </Text>
+                      <Text className="text-[13px] text-muted">
+                        {t(skipped ? "recurring.skipped" : "recurring.processed")}
+                      </Text>
+                    </View>
+                    <RecurringAmount
+                      amount={Number(h.amount)}
+                      currencyCode={String(h.currencyCode)}
+                      type={Number(h.type ?? item.type)}
+                      muted={skipped}
+                    />
+                    {transactionId && (
+                      <FilledIcon name="chevron-right" size={20} tone="muted" />
+                    )}
+                  </Pressable>
+                </Fragment>
+              );
+            })}
+          </View>
+          {entries.length > HISTORY_PREVIEW && (
+            <Button variant="ghost" onPress={() => setExpanded(!expanded)}>
+              <Button.Label>
+                {expanded
+                  ? t("recurring.showLess")
+                  : t("recurring.showAll", { count: entries.length })}
+              </Button.Label>
+            </Button>
+          )}
+        </>
+      )}
+    </FormCard>
+  );
+}
+
 export function RecurringDetailsScreen({ id }: { id: string }) {
   const { document, updateDocument } = useLocalData(),
-    { activeProfileId, activeProfile } = useProfiles(),
+    { activeProfileId } = useProfiles(),
     router = useRouter(),
     { t } = useTranslation(),
     c = useAppThemeColors(),
     insets = useSafeAreaInsets(),
-    { formatDateTime } = useAppDate(),
+    { formatDate, formatDateTime } = useAppDate(),
     now = useRecurringClock();
-  const item = selectRecurrings(document, now).find((r) => r.id === id),
-    actions = useRecurringActions();
+  const item = selectRecurrings(document, now).find((r) => r.id === id);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [transactionId, setTransactionId] = useState<string | null>(null);
@@ -139,298 +599,181 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
       setBusy(false);
     }
   }
-  const date = (value: string | Date) => formatDateTime(new Date(value));
-  const days = item?.next
-    ? Math.max(0, Math.ceil((item.next.getTime() - now.getTime()) / 86_400_000))
-    : 0;
-  const index = Number(item?.record.nextIndex ?? 0),
-    previous = item
-      ? occurrenceDate(item.record, Math.max(0, index - 1))
-      : null;
-  const fraction =
-    item?.next && previous && item.next > previous
-      ? Math.min(
-          1,
-          Math.max(
-            0,
-            (now.getTime() - previous.getTime()) /
-              (item.next.getTime() - previous.getTime()),
-          ),
-        )
-      : 0;
-  const busyAction = item ? actions.actionFor(item) : null;
+  const confirmDelete = () =>
+    AppAlert.alert(t("recurring.delete"), t("recurring.deleteBody"), [
+      { text: t("recurring.cancel"), style: "cancel" },
+      {
+        text: t("recurring.confirm"),
+        style: "destructive",
+        onPress: () => {
+          void change("delete");
+        },
+      },
+    ]);
+  // Optional links appear only when the person set them.
+  const relation = (
+    collection: "budgets" | "labels" | "places" | "peoples",
+    value: string | undefined,
+  ) =>
+    value
+      ? selectRecurringRelations(document, collection).find(
+          (r) => r.id === value,
+        )?.name
+      : undefined;
+  const links = item
+    ? (
+        [
+          ["budget", "piggy-bank", relation("budgets", item.budget)],
+          ["label", "tag", relation("labels", item.label)],
+          ["place", "map-marker", relation("places", item.place)],
+          ["person", "account", relation("peoples", item.person)],
+        ] as const
+      ).filter(([, , name]) => !!name)
+    : [];
+  const reminder = item
+    ? t(
+        item.reminderDays === null
+          ? "recurring.noReminder"
+          : item.reminderDays === 0
+            ? "recurring.reminderAt"
+            : "recurring.reminderBefore",
+        { count: item.reminderDays ?? 0 },
+      )
+    : "";
+  const archivedByPerson = item?.record.archived === true;
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{
-          padding: 14,
-          gap: 22,
-          paddingBottom: 120 + insets.bottom,
+          paddingHorizontal: 16,
+          paddingTop: 16,
+          gap: 16,
+          paddingBottom: 48 + insets.bottom,
         }}
         onScroll={onScroll}
         scrollEventThrottle={16}
       >
         <CollapsingHeaderSpacer />
         {!item ? (
-          <Text className="p-8 text-muted">{t("recurring.missing")}</Text>
+          <View className="items-center gap-3 px-6 py-16">
+            <FilledIcon name="magnify-close" size={48} tone="muted" />
+            <Text className="text-center text-[15px] text-muted">
+              {t("recurring.missing")}
+            </Text>
+          </View>
         ) : (
           <>
-            <View
-              style={{
-                backgroundColor: colorWithAlpha(item.color, 0.38),
-                borderColor: colorWithAlpha(item.color, 0.65),
-                borderWidth: 1,
-                borderRadius: 30,
-                padding: 20,
-                gap: 24,
-              }}
-            >
-              <View className="flex-row items-center gap-3">
-                <RecurringBadge item={item} />
-                <View className="flex-1 gap-1">
-                  <Text className="font-manrope-bold text-xl text-foreground">
-                    {item.name}
-                  </Text>
-                  <Text className="text-sm text-foreground">
-                    {t(`recurring.periods.${item.period}`, {
-                      defaultValue: String(item.period),
-                    })}{" "}
-                    ·{" "}
-                    {t(
-                      item.type === 1
-                        ? "recurring.income"
-                        : "recurring.expense",
-                    )}
-                  </Text>
-                </View>
-                <MoneyLines
-                  values={[item]}
-                  color={item.type === 1 ? c.success : c.danger}
-                />
-              </View>
-              <View className="gap-2 border-t border-border pt-5">
-                <Text className="text-sm text-foreground">
-                  {t("recurring.nextOccurrence")}
-                </Text>
-                <Text className="font-manrope-bold text-lg text-foreground">
-                  {item.next ? date(item.next) : t("recurring.ended")}
-                </Text>
-              </View>
-              <OccurrenceProgress
-                fraction={fraction}
-                trackColor={colorWithAlpha(item.color, 0.5)}
-                fillColor={c.foreground}
-              />
-              <View className="flex-row justify-between">
-                <Text className="text-sm text-foreground">
-                  {t(
-                    item.archived
-                      ? "recurring.archived"
-                      : item.due
-                        ? "recurring.overdue"
-                        : "recurring.days",
-                    { count: days },
-                  )}
-                </Text>
-                <Text className="font-manrope-bold text-foreground">
-                  {Math.round(fraction * 100)}%
-                </Text>
-              </View>
-            </View>
-            {!!(error || actions.error) && (
-              <Text accessibilityRole="alert" className="text-danger">
-                {error || actions.error}
-              </Text>
-            )}
-            {!item.archived && item.next && (
-              <View className="flex-row gap-3">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  isDisabled={busy || !!actions.busy}
-                  accessibilityState={{ busy: busyAction === "skip" }}
-                  onPress={() => actions.skip(item)}
-                >
-                  <BusyButtonLabel
-                    label={t("recurring.skip")}
-                    busy={busyAction === "skip"}
-                    spinnerColor={c.accent}
-                  />
-                </Button>
-                <Button
-                  className="flex-1"
-                  isDisabled={!item.due || busy || !!actions.busy}
-                  accessibilityState={{ busy: busyAction === "process" }}
-                  onPress={() => actions.process(item)}
-                >
-                  <BusyButtonLabel
-                    label={t("recurring.process")}
-                    busy={busyAction === "process"}
-                    spinnerColor={c.accentForeground}
-                  />
-                </Button>
-              </View>
-            )}
-            <Text className="font-manrope-semibold text-xl text-foreground">
-              {t("recurring.details")}
-            </Text>
-            <View className="overflow-hidden rounded-[28px] border border-border">
-              {(
-                [
-                  {
-                    title: t("recurring.account"),
-                    value: item.accountName,
-                    icon: "wallet",
-                  },
-                  {
-                    title: t("recurring.category"),
-                    value: item.categoryName,
-                    icon: "shopping",
-                  },
-                  {
-                    title: t("recurring.start"),
-                    value: date(item.startAt),
-                    icon: "clock",
-                  },
-                  {
-                    title: t("recurring.period"),
-                    value: t(`recurring.periods.${item.period}`, {
-                      defaultValue: String(item.period),
-                    }),
-                    icon: "swap-horizontal",
-                  },
-                  {
-                    title: t("recurring.currency"),
-                    value: item.currencyCode,
-                    icon: "currency-exchange",
-                  },
-                  {
-                    title: t("recurring.reminder"),
-                    value: t(
-                      item.reminderDays === null
-                        ? "recurring.noReminder"
-                        : item.reminderDays === 0
-                          ? "recurring.reminderAt"
-                          : "recurring.reminderBefore",
-                      { count: item.reminderDays ?? 0 },
-                    ),
-                    icon: "bell",
-                  },
-                  {
-                    title: t("recurring.end"),
-                    value: item.endAt ? date(item.endAt) : t("recurring.noEnd"),
-                    icon: "clock",
-                  },
-                ] as const
-              ).map((row) => (
-                <View
-                  key={row.title}
-                  className="flex-row items-center gap-4 border-b border-border px-5 py-4"
-                >
-                  <FilledIcon name={row.icon} tone="accent" size={25} />
-                  <View className="flex-1 gap-1">
-                    <Text className="text-sm text-muted">{row.title}</Text>
-                    <Text className="font-manrope-semibold text-base text-foreground">
-                      {row.value}
-                    </Text>
-                  </View>
-                </View>
-              ))}
-              <View className="px-5">
-                <BudgetToggle
-                  title={t("recurring.automatic")}
-                  description={t(
-                    item.automatic
-                      ? "recurring.automaticHint"
-                      : "recurring.manual",
-                  )}
-                  value={item.automatic}
-                  disabled={busy}
-                  onChange={() => {
-                    void change("automatic");
-                  }}
-                />
-              </View>
-            </View>
-            <Text className="font-manrope-semibold text-xl text-foreground">
-              {t("recurring.statistics")}
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              <View className="min-w-28 flex-1 gap-2 rounded-3xl border border-border p-4">
-                <FilledIcon name="swap-horizontal" size={25} />
-                <Text className="font-manrope-bold text-xl text-foreground">
-                  {item.history.filter((h) => h.status === "processed").length}
-                </Text>
-                <Text className="text-xs text-muted">
-                  {t("recurring.occurrences")}
-                </Text>
-              </View>
-              <View className="min-w-28 flex-1 gap-2 rounded-3xl border border-border p-4">
-                <MoneyLines
-                  emptyCurrency={activeProfile.currencyCode}
-                  values={recurringTotals(
-                    item.history
-                      .filter((h) => h.status === "processed")
-                      .map((h) => ({
-                        amount: Number(h.amount),
-                        currencyCode: String(h.currencyCode),
-                      })),
-                  )}
-                />
-                <Text className="text-xs text-muted">
-                  {t("recurring.total")}
-                </Text>
-              </View>
-              <View className="min-w-28 flex-1 gap-2 rounded-3xl border border-border p-4">
-                <MoneyLines
-                  values={selectRecurringSummary([item], now).monthly}
-                  emptyCurrency={item.currencyCode}
-                />
-                <Text className="text-xs text-muted">
-                  {t("recurring.monthly")}
-                </Text>
-              </View>
-            </View>
-            <Text className="font-manrope-semibold text-xl text-foreground">
-              {t("recurring.history")}
-            </Text>
-            {!item.history.length && (
-              <Text className="text-muted">{t("recurring.noHistory")}</Text>
-            )}
-            {[...item.history].reverse().map((h) => (
-              <Pressable
-                key={String(h.key)}
-                accessibilityRole="button"
-                disabled={!h.transactionId}
-                onPress={() => setTransactionId(String(h.transactionId))}
-                className="flex-row items-center gap-3 rounded-2xl bg-surface p-4"
+            <Hero item={item} now={now} />
+            {!!error && (
+              <View
+                className="rounded-[20px] p-3 ps-4"
+                style={{
+                  ...CONTINUOUS,
+                  backgroundColor: colorWithAlpha(c.danger, 0.1),
+                }}
               >
-                <View className="flex-1 gap-1">
-                  <Text className="font-manrope-semibold text-foreground">
-                    {date(String(h.scheduledAt))}
-                  </Text>
-                  <Text className="text-sm text-muted">
-                    {t(
-                      h.status === "skipped"
-                        ? "recurring.skipped"
-                        : "recurring.processed",
-                    )}
-                  </Text>
-                </View>
-                <MoneyLines
-                  values={[
-                    {
-                      amount: Number(h.amount),
-                      currencyCode: String(h.currencyCode),
-                    },
-                  ]}
-                />
-                {h.transactionId && (
-                  <FilledIcon name="chevron-right" size={22} />
-                )}
-              </Pressable>
-            ))}
+                <Text accessibilityRole="alert" className="text-sm text-danger">
+                  {error}
+                </Text>
+              </View>
+            )}
+            <StatusCard
+              item={item}
+              now={now}
+              busy={busy}
+              onRestore={() => {
+                void change("archive");
+              }}
+            />
+            <FormCard title={t("recurring.schedule")} icon="event-repeat">
+              <Rows>
+                {[
+                  <DetailRow
+                    key="account"
+                    icon="wallet"
+                    label={t("recurring.account")}
+                    value={item.accountName}
+                  />,
+                  <DetailRow
+                    key="category"
+                    icon="shopping"
+                    label={t("recurring.category")}
+                    value={item.categoryName}
+                  />,
+                  <DetailRow
+                    key="start"
+                    icon="calendar"
+                    label={t("recurring.start")}
+                    value={formatDateTime(new Date(item.startAt))}
+                  />,
+                  <DetailRow
+                    key="end"
+                    icon="calendar"
+                    label={t("recurring.end")}
+                    value={
+                      item.endAt
+                        ? formatDate(new Date(item.endAt))
+                        : t("recurring.noEnd")
+                    }
+                  />,
+                  <DetailRow
+                    key="reminder"
+                    icon="bell"
+                    label={t("recurring.reminder")}
+                    value={reminder}
+                  />,
+                  ...links.map(([key, icon, name]) => (
+                    <DetailRow
+                      key={key}
+                      icon={icon}
+                      label={t(`recurring.${key}`)}
+                      value={name!}
+                    />
+                  )),
+                  item.description.trim() ? (
+                    <DetailRow
+                      key="notes"
+                      icon="notes"
+                      label={t("recurring.description")}
+                      value={item.description.trim()}
+                      multiline
+                    />
+                  ) : null,
+                  <SwitchRow
+                    key="automatic"
+                    icon="swap-horizontal"
+                    title={t("recurring.automatic")}
+                    description={t("recurring.automaticHint")}
+                    value={item.automatic}
+                    disabled={busy}
+                    onChange={() => {
+                      void change("automatic");
+                    }}
+                  />,
+                ]}
+              </Rows>
+            </FormCard>
+            <History item={item} onOpenTransaction={setTransactionId} />
+            <View className="gap-2 pt-2">
+              {!archivedByPerson && (
+                <Button
+                  variant="secondary"
+                  isDisabled={busy}
+                  onPress={() => {
+                    void change("archive");
+                  }}
+                >
+                  <FilledIcon name="database-import" size={20} tone="accent" />
+                  <Button.Label>{t("recurring.archive")}</Button.Label>
+                </Button>
+              )}
+              <Button variant="danger-soft" isDisabled={busy} onPress={confirmDelete}>
+                <FilledIcon name="delete" size={20} tone="danger" />
+                <Button.Label>{t("recurring.delete")}</Button.Label>
+              </Button>
+            </View>
           </>
         )}
       </Animated.ScrollView>
@@ -446,77 +789,21 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
           horizontalPadding={0}
         >
           {item && (
-            <>
-              <Button
-                isIconOnly
-                variant="ghost"
-                isDisabled={busy}
-                accessibilityLabel={t("recurring.delete")}
-                onPress={() =>
-                  AppAlert.alert(
-                    t("recurring.delete"),
-                    t("recurring.deleteBody"),
-                    [
-                      { text: t("recurring.cancel"), style: "cancel" },
-                      {
-                        text: t("recurring.confirm"),
-                        style: "destructive",
-                        onPress: () => {
-                          void change("delete");
-                        },
-                      },
-                    ],
-                  )
-                }
-              >
-                <FilledIcon name="delete" size={26} tone="danger" />
-              </Button>
-              <Button
-                isIconOnly
-                variant="ghost"
-                isDisabled={busy}
-                accessibilityLabel={t(
-                  item.record.archived === true
-                    ? "recurring.restore"
-                    : "recurring.archive",
-                )}
-                onPress={() => {
-                  void change("archive");
-                }}
-              >
-                <FilledIcon
-                  name={
-                    item.record.archived === true ? "backup" : "database-import"
-                  }
-                  size={26}
-                />
-              </Button>
-            </>
+            <Button
+              isIconOnly
+              variant="ghost"
+              isDisabled={busy}
+              accessibilityLabel={t("recurring.edit")}
+              onPress={() =>
+                router.push({ pathname: "/recurring/[id]/edit", params: { id } })
+              }
+            >
+              <FilledIcon name="pencil" size={24} />
+            </Button>
           )}
         </BudgetHeader>
       </CollapsingHeader>
       <RecurringScrim />
-      {item && (
-        <View
-          style={{
-            position: "absolute",
-            right: 20,
-            bottom: Math.max(insets.bottom, 10),
-            zIndex: 20,
-          }}
-        >
-          <Button
-            isDisabled={busy}
-            className="h-16 rounded-3xl px-6"
-            onPress={() =>
-              router.push({ pathname: "/recurring/[id]/edit", params: { id } })
-            }
-          >
-            <FilledIcon name="pencil" size={25} tone="accent-foreground" />
-            <Button.Label>{t("recurring.edit")}</Button.Label>
-          </Button>
-        </View>
-      )}
       {transaction && (
         <TransactionDetailSheet
           transaction={transaction}

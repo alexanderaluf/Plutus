@@ -1715,11 +1715,7 @@ export const en = {
       manage: "Manage categories",
       about: "About categories",
       aboutDescription:
-        "Organize expense, income, and transfer transactions. Monthly totals include children. Open a category to view its history or manage its children.",
-      count_one: "{{count}} category",
-      count_other: "{{count}} categories",
-      originalOrder: "Use original category order",
-      alphabeticalOrder: "Sort categories alphabetically",
+        "Organize expense, income, and transfer transactions. Amounts are for the current month and each main category includes its subcategories. The bar under a category shows its share of the month's total. Open a category to see its history or manage its subcategories.",
       openWithTransactions_one:
         "Open {{name}}, {{count}} transaction this month",
       openWithTransactions_other:
@@ -1732,6 +1728,10 @@ export const en = {
       emptyDescription:
         "Create a category, then add children to organize your transactions.",
       add: "Add category",
+      sortTitle: "Sort categories",
+      sortOriginal: "Creation order",
+      sortName: "Name",
+      sortAmount: "Highest this month",
     },
     form: {
       activeProfileChanged:
