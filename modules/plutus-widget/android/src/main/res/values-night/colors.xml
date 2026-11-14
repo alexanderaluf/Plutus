@@ -1,0 +1,24 @@
+<resources>
+  <!-- Dark mode sleek obsidian palette matching the reference widget designs -->
+  <color name="plutus_widget_surface_start">#121918</color>
+  <color name="plutus_widget_surface_end">#0B0F0E</color>
+  <color name="plutus_widget_border">#253230</color>
+  <color name="plutus_widget_inner_surface">#182220</color>
+  <color name="plutus_widget_inner_border">#263532</color>
+  <color name="plutus_widget_pill_bg">#1E2B28</color>
+  <color name="plutus_widget_pill_border">#2E403C</color>
+  <color name="plutus_widget_badge_bg">#19353B</color>
+  <color name="plutus_widget_foreground">#F4F7F5</color>
+  <color name="plutus_widget_muted">#94A69E</color>
+  <color name="plutus_widget_accent">#70D2EB</color>
+  <color name="plutus_widget_progress_track">#22302D</color>
+  <color name="plutus_widget_progress_start">#34D399</color>
+  <color name="plutus_widget_progress_end">#70D2EB</color>
+  <color name="plutus_widget_income_text">#6EE7B7</color>
+  <color name="plutus_widget_income_btn_bg">#163329</color>
+  <color name="plutus_widget_income_btn_border">#235342</color>
+  <color name="plutus_widget_expense_text">#FDA4AF</color>
+  <color name="plutus_widget_expense_btn_bg">#361B1D</color>
+  <color name="plutus_widget_expense_btn_border">#592B2E</color>
+</resources>
+

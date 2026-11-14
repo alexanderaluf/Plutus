@@ -2,7 +2,12 @@ import Svg, { Path } from "react-native-svg";
 
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
+import {
+  brandMonoTree,
+  getBrandIcon,
+} from "@/shared/icons/brand-icon-registry";
 import { ICONS } from "@/shared/icons/icon-options";
+import { BrandSvg } from "@/shared/ui/brand-svg";
 
 const curatedIconNames = new Set<string>(
   ICONS.filter((icon) => !icon.name.startsWith("material:")).map(
@@ -23,6 +28,11 @@ type RecordIconProps = {
 };
 
 export function RecordIcon({ color, name, pathData, size }: RecordIconProps) {
+  // Brand logos render as one ink in the app, tinted like every other icon.
+  const brand = getBrandIcon(name);
+  if (brand)
+    return <BrandSvg color={color} size={size} tree={brandMonoTree(brand)} />;
+
   if (name.startsWith("material:") && pathData) {
     return (
       <Svg height={size} viewBox="0 -960 960 960" width={size}>

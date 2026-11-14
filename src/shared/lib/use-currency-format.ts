@@ -1,6 +1,12 @@
 import { useMemo } from "react";
 
 import { useLocalData } from "@/data/local-data-provider";
+import { i18n } from "@/localization/i18n";
+import { AppAlert } from "@/shared/ui/app-alert";
+import {
+  useAmountPrivacy,
+  useAmountPrivacyPage,
+} from "@/shared/ui/amount-privacy";
 
 import {
   formatCurrency as formatCurrencyValue,
@@ -18,18 +24,30 @@ export function useAmountsHidden() {
 export function useAmountVisibility() {
   const { document, updateDocument } = useLocalData();
   const hidden = document._local.amountsHidden;
+  const privacy = useAmountPrivacy();
+  const page = useAmountPrivacyPage();
 
   return useMemo(
     () => ({
       hidden,
       async toggle() {
-        await updateDocument((current) => ({
-          ...current,
-          _local: { ...current._local, amountsHidden: !current._local.amountsHidden },
-        }));
+        const commit = () =>
+          updateDocument((current) => ({
+            ...current,
+            _local: {
+              ...current._local,
+              amountsHidden: !current._local.amountsHidden,
+            },
+          }));
+        try {
+          if (privacy) await privacy.animate(page, !hidden, commit);
+          else await commit();
+        } catch {
+          AppAlert.alert(i18n.t("common.saveError"));
+        }
       },
     }),
-    [hidden, updateDocument],
+    [hidden, updateDocument, privacy, page],
   );
 }
 

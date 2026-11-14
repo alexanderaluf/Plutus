@@ -3,6 +3,7 @@ import {
     BACKUP_VERSION,
     DEFAULT_CATEGORIES_REVISION,
     LOCAL_SCHEMA_VERSION,
+    createDefaultNotificationPreferences,
     type BackupCollectionKey,
     type BackupDocument,
 } from "../../src/data/model/backup-document";
@@ -48,6 +49,7 @@ export function createLegacyDevelopmentBackup(): BackupDocument {
       aiExitWarningDismissed: false,
       aiFirstChatAt: null,
       aiModelKey: "E2B",
+      notifications: createDefaultNotificationPreferences(),
     },
     users: [
       {

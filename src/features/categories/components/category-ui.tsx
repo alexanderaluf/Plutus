@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, View } from "react-native";
+import { Pressable, View, type ViewInstance } from "react-native";
 import Animated from "react-native-reanimated";
 import { categoryEntrance } from "./category-motion";
 import type { Category } from "@/data/selectors/category-selectors";
@@ -64,7 +64,7 @@ export function CategoryTypeSelector({
   value,
   onChange,
 }: {
-  blurTarget?: RefObject<View | null>;
+  blurTarget?: RefObject<ViewInstance | null>;
   minHeight?: number;
   value: CategoryType;
   onChange: (value: CategoryType) => void;

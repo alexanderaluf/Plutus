@@ -1,4 +1,7 @@
-import { EdgeToEdgeLayout } from "@/shared/ui/edge-to-edge-layout";
+import {
+  EdgeToEdgeFlatList,
+  EdgeToEdgeLayout,
+} from "@/shared/ui/edge-to-edge-layout";
 import Animated from "react-native-reanimated";
 import { categoryEntrance, categoryLayout } from "./components/category-motion";
 import { CategoryDeleteSheet } from "./components/category-delete-sheet";
@@ -7,11 +10,15 @@ import { DeleteFill } from "@material-symbols-svg/react-native/rounded/icons/del
 import { ReceiptLongFill } from "@material-symbols-svg/react-native/rounded/icons/receipt-long";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlatList, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
+import { queryScopedTransactionsAsync } from "@/data/database/fast-store-client";
+import { getDocumentWindowState } from "@/data/database/month-index";
 import { useLocalData } from "@/data/local-data-provider";
+import type { BackupDocument } from "@/data/model/backup-document";
 import { categoryFamily } from "@/data/model/category-record";
+import type { JsonObject } from "@/data/model/json";
 import {
   accountPeriodRange,
   selectCategories,
@@ -37,7 +44,14 @@ export function CategoryDetailsScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { document } = useLocalData();
+  const { document, ensurePeriodLoaded } = useLocalData();
+  const windowState = getDocumentWindowState(document);
+  const isPartial = Boolean(windowState?.isPartial);
+  const [scopedState, setScopedState] = useState<{
+    doc: BackupDocument;
+    idsKey: string;
+    rows: JsonObject[];
+  } | null>(null);
   const now = useCategoryClock();
   const [selected, setSelected] = useState<string | null>(null);
   const [period, setPeriod] = useState<AccountPeriod>("Monthly");
@@ -51,12 +65,48 @@ export function CategoryDetailsScreen() {
     () => categoryFamily(document.categories, id),
     [document.categories, id],
   );
+  const familyIds = useMemo(() => [...family], [family]);
+  const idsKey = familyIds.join("\u0000");
+
+  useEffect(() => {
+    if (!isPartial || familyIds.length === 0) return;
+    let active = true;
+    void queryScopedTransactionsAsync(document, {
+      kind: "category",
+      ids: familyIds,
+    }).then((rows) => {
+      if (active && rows) {
+        setScopedState({ doc: document, idsKey, rows });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [document, isPartial, familyIds, idsKey]);
+
+  const scopedDocument = useMemo(
+    () =>
+      scopedState &&
+      scopedState.doc === document &&
+      scopedState.idsKey === idsKey
+        ? { ...document, transactions: scopedState.rows }
+        : document,
+    [scopedState, document, idsKey],
+  );
+
   const members = categories.filter((item) => family.has(item.id));
   const transactions = useMemo(
-    () => selectCategoryTransactions(document, id),
-    [document, id],
+    () => selectCategoryTransactions(scopedDocument, id),
+    [scopedDocument, id],
   );
   const { start, end } = accountPeriodRange(period, anchor ?? now);
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+  useLayoutEffect(() => {
+    if (!allTime && isPartial) {
+      void ensurePeriodLoaded?.(new Date(startTime), new Date(endTime));
+    }
+  }, [ensurePeriodLoaded, allTime, isPartial, startTime, endTime]);
   const selectedId = members.some((item) => item.id === selected)
     ? selected
     : null;
@@ -80,13 +130,14 @@ export function CategoryDetailsScreen() {
   return (
     <EdgeToEdgeLayout
       header={
-        <>
-          <CategoryHeader
-            title={category?.name ?? t("categories.details.title")}
-            disabled={isDeleting}
-          >
-            {category && (
-              <>
+        <CategoryHeader
+          title={category?.name ?? t("categories.details.title")}
+          disabled={isDeleting}
+        >
+          {category && (
+            <>
+              {/* Subcategories cannot have subcategories of their own. */}
+              {!category.parentId && (
                 <Button
                   isIconOnly
                   variant="ghost"
@@ -101,87 +152,88 @@ export function CategoryDetailsScreen() {
                 >
                   <FilledIcon name="plus" size={27} />
                 </Button>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  isDisabled={isDeleting}
-                  accessibilityLabel={t(
-                    "categories.details.deleteAccessibility",
-                  )}
-                  onPress={() => setDeleteTarget(category)}
-                >
-                  <DeleteFill color="#ef666d" size={26} />
-                </Button>
-              </>
-            )}
-          </CategoryHeader>
-          {category && (
-            <>
-              <Animated.View entering={categoryEntrance(40)}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ padding: 16, gap: 8 }}
-                >
-                  <CategoryChip
-                    selected={!selectedId}
-                    onPress={() => setSelected(null)}
-                  />
-                  {members.map((member) => (
-                    <CategoryChip
-                      key={member.id}
-                      category={member}
-                      selected={selectedId === member.id}
-                      onPress={() => setSelected(member.id)}
-                      onLongPress={
-                        member.id !== id
-                          ? () => setDeleteTarget(member)
-                          : undefined
-                      }
-                    />
-                  ))}
-                </ScrollView>
-              </Animated.View>
-              <Animated.View
-                entering={categoryEntrance(70)}
-                className="flex-row items-center px-3"
+              )}
+              <Button
+                isIconOnly
+                variant="ghost"
+                isDisabled={isDeleting}
+                accessibilityLabel={t("categories.details.deleteAccessibility")}
+                onPress={() => setDeleteTarget(category)}
               >
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("categories.details.previousPeriod")}
-                  onPress={() => movePeriod(-1)}
-                >
-                  <FilledIcon name="arrow-left" size={20} tone="muted" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="flex-1"
-                  onPress={() => setAllTime((value) => !value)}
-                >
-                  <Button.Label className="text-sm text-muted">
-                    {allTime
-                      ? t("categories.details.allHistory")
-                      : formatDateRange(start, new Date(end.getTime() - 1))}
-                  </Button.Label>
-                </Button>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("categories.details.nextPeriod")}
-                  onPress={() => movePeriod(1)}
-                >
-                  <FilledIcon name="chevron-right" size={22} tone="muted" />
-                </Button>
-              </Animated.View>
-              <Text className="px-5 pb-2 font-sans text-xs text-muted">
-                {selectedId
-                  ? t("categories.details.directTransactions")
-                  : t("categories.details.includesChildren")}
-              </Text>
+                <DeleteFill color="#ef666d" size={26} />
+              </Button>
             </>
           )}
-        </>
+        </CategoryHeader>
+      }
+      // Sub-category and period filters stay pinned while the title hides.
+      headerDock={
+        category && (
+          <View className="bg-background">
+            <Animated.View entering={categoryEntrance(40)}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ padding: 16, gap: 8 }}
+              >
+                <CategoryChip
+                  selected={!selectedId}
+                  onPress={() => setSelected(null)}
+                />
+                {members.map((member) => (
+                  <CategoryChip
+                    key={member.id}
+                    category={member}
+                    selected={selectedId === member.id}
+                    onPress={() => setSelected(member.id)}
+                    onLongPress={
+                      member.id !== id
+                        ? () => setDeleteTarget(member)
+                        : undefined
+                    }
+                  />
+                ))}
+              </ScrollView>
+            </Animated.View>
+            <Animated.View
+              entering={categoryEntrance(70)}
+              className="flex-row items-center px-3"
+            >
+              <Button
+                isIconOnly
+                variant="ghost"
+                accessibilityLabel={t("categories.details.previousPeriod")}
+                onPress={() => movePeriod(-1)}
+              >
+                <FilledIcon name="arrow-left" size={20} tone="muted" />
+              </Button>
+              <Button
+                variant="ghost"
+                className="flex-1"
+                onPress={() => setAllTime((value) => !value)}
+              >
+                <Button.Label className="text-sm text-muted">
+                  {allTime
+                    ? t("categories.details.allHistory")
+                    : formatDateRange(start, new Date(end.getTime() - 1))}
+                </Button.Label>
+              </Button>
+              <Button
+                isIconOnly
+                variant="ghost"
+                accessibilityLabel={t("categories.details.nextPeriod")}
+                onPress={() => movePeriod(1)}
+              >
+                <FilledIcon name="chevron-right" size={22} tone="muted" />
+              </Button>
+            </Animated.View>
+            <Text className="px-5 pb-2 font-sans text-xs text-muted">
+              {selectedId
+                ? t("categories.details.directTransactions")
+                : t("categories.details.includesChildren")}
+            </Text>
+          </View>
+        )
       }
       footer={
         category && (
@@ -232,9 +284,13 @@ export function CategoryDetailsScreen() {
             </Text>
           ) : (
             <>
-              <FlatList
+              <EdgeToEdgeFlatList
                 data={visible}
                 keyExtractor={(item) => item.id}
+                initialNumToRender={16}
+                maxToRenderPerBatch={14}
+                updateCellsBatchingPeriod={16}
+                windowSize={7}
                 contentContainerStyle={{
                   paddingTop: contentInsets.top + 8,
                   flexGrow: 1,

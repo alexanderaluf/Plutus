@@ -402,7 +402,7 @@ test("v13 migration preserves imported budget settings and is idempotent", async
     const migrated = JSON.parse(
       sql.prepare("SELECT document_json FROM app_document").get().document_json,
     );
-    assert.equal(migrated._local.schemaVersion, 22);
+    assert.equal(migrated._local.schemaVersion, 25);
     assert.equal(migrated._local.cloudProvider, null);
     assert.equal(migrated.budgets[0].period, "Monthly");
     assert.deepEqual(migrated.budgets[0].categories, [20]);
@@ -419,4 +419,111 @@ test("v13 migration preserves imported budget settings and is idempotent", async
   } finally {
     sql.close();
   }
+});
+
+test("budget form: categories in tree order by use, name fallback, single-category look", () => {
+  const {
+    budgetCategoryOptions,
+    categoryAppearance,
+    fallbackBudgetName,
+  } = require("../src/features/budgets/lib/budget-form-helpers.ts");
+  const category = (id, type, parentId = null, color = "#112233") => ({
+    id,
+    name: id,
+    description: "",
+    type,
+    parentId,
+    icon: "shopping",
+    iconPath: null,
+    color,
+    isDefault: false,
+  });
+  const categories = [
+    category("food", 0),
+    category("food-out", 0, "food"),
+    category("rent", 0),
+    category("salary", 1),
+    category("orphan", 0, "deleted"),
+  ];
+  const document = {
+    _local: { selectedProfileId: "me" },
+    users: [{ uuid: "me" }],
+    transactions: [
+      { uuid: "1", user: "me", type: 0, category: "rent" },
+      { uuid: "2", user: "me", type: 0, category: "rent" },
+      { uuid: "3", user: "me", type: 0, category: "food-out" },
+    ],
+  };
+  // Rent is used most, so it leads; Food keeps its subcategory under it.
+  assert.deepEqual(
+    budgetCategoryOptions(document, categories, 0).map(
+      (item) => `${item.id}:${item.depth}`,
+    ),
+    ["rent:0", "food:0", "food-out:1", "orphan:0"],
+  );
+  assert.deepEqual(
+    budgetCategoryOptions(document, categories, 1).map((item) => item.id),
+    ["salary"],
+  );
+
+  assert.equal(
+    fallbackBudgetName({
+      budgetType: "Category",
+      categoryNames: ["Food", " Rent "],
+      overallName: "Expense budget",
+    }),
+    "Food, Rent",
+  );
+  assert.equal(
+    fallbackBudgetName({
+      budgetType: "Overall",
+      categoryNames: ["Food"],
+      overallName: "Expense budget",
+    }),
+    "Expense budget",
+  );
+  assert.equal(
+    fallbackBudgetName({
+      budgetType: "Category",
+      categoryNames: [],
+      overallName: "Expense budget",
+    }),
+    "",
+  );
+  assert.ok(
+    fallbackBudgetName({
+      budgetType: "Category",
+      categoryNames: Array.from({ length: 20 }, () => "Category name"),
+      overallName: "",
+    }).length <= 100,
+  );
+
+  const food = { ...categories[0], icon: "food", color: "#ABCDEF" };
+  assert.deepEqual(categoryAppearance("Category", [food]), {
+    icon: "food",
+    iconPath: null,
+    color: "#ABCDEF",
+  });
+  assert.equal(categoryAppearance("Category", [food, categories[2]]), null);
+  assert.equal(categoryAppearance("Overall", [food]), null);
+});
+
+test("budget readiness and save accept a comma decimal once normalized", () => {
+  const current = normalizeBackupDocument(createDefaultBackup());
+  const base = {
+    ...budgetDefaults(),
+    name: "Groceries",
+    budgetType: "Overall",
+    currencyCode: "USD",
+  };
+  assert.throws(() =>
+    saveBudget(current, { ...base, amount: "12,5" }, "comma", "now"),
+  );
+  const saved = saveBudget(
+    current,
+    { ...base, amount: "12,5".replace(",", ".") },
+    "comma",
+    "now",
+  );
+  assert.equal(saved.budgets.at(-1).amount, 12.5);
 });

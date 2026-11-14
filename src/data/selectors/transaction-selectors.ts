@@ -2,10 +2,12 @@ import { i18n } from "@/localization/i18n";
 import type { Transaction } from "@/features/home/types";
 import type { FilledIconName } from "@/shared/ui/filled-icon";
 import type { BackupDocument } from "../model/backup-document";
+import { parseRecordTimestampMs } from "../database/month-index";
 import type { JsonObject, JsonValue } from "../model/json";
 import { identity, createProfileMatcher } from "../model/category-record";
 import { formatAppDate } from "../model/onboarding";
-import { finishProjection, sortProjection } from "./cooperative";
+import { sortProjection } from "./cooperative";
+import { memoizeForDocument } from "./document-memo";
 
 const colors = ["#70d2eb", "#b89cf5", "#f2c66d", "#ef8175"];
 function text(value: JsonValue | undefined, fallback = "") {
@@ -32,10 +34,10 @@ function transactionDate(
   document: BackupDocument,
   unknownDate: string,
 ) {
-  const date = new Date(text(record.date, text(record.createdAt)));
-  return Number.isNaN(date.getTime())
+  const timestamp = parseRecordTimestampMs(record);
+  return !Number.isFinite(timestamp)
     ? unknownDate
-    : formatAppDate(date, document._local.dateFormat);
+    : formatAppDate(new Date(timestamp), document._local.dateFormat);
 }
 
 /** Alias lookup retains the first match, just like references + Array.find. */
@@ -66,11 +68,152 @@ export type TransactionIndexEntry = {
   timestamp: number;
 };
 
-/** Only dates/identities are indexed. Formatting and relation projection stay lazy. */
+/**
+ * Only dates/identities are indexed. Formatting and relation projection stay
+ * lazy. Built once per committed document and shared by every screen; callers
+ * must treat the returned array as read-only.
+ */
 export function createTransactionIndex(
   document: BackupDocument,
 ): TransactionIndexEntry[] {
-  return finishProjection(iterateTransactionIndex(document));
+  return memoizeForDocument(document, "transaction-index", () =>
+    buildTransactionIndex(document),
+  );
+}
+
+/**
+ * `new Date(date ?? createdAt).getTime()` for every transaction by document
+ * position (NaN when unparseable). Date-string parsing dominates history
+ * scans, so it happens exactly once per committed document and is shared by
+ * the index, account totals and any other date-bounded projection.
+ */
+export function transactionTimestamps(document: BackupDocument) {
+  return memoizeForDocument(document, "transaction-timestamps", () =>
+    Float64Array.from(document.transactions, (record) =>
+      parseRecordTimestampMs(record),
+    ),
+  );
+}
+
+/** Same ordering as `iterateTransactionIndex`, using the engine's native sort. */
+function buildTransactionIndex(document: BackupDocument) {
+  const belongs = createProfileMatcher(document);
+  const timestamps = transactionTimestamps(document);
+  const entries: TransactionIndexEntry[] = [];
+  for (let position = 0; position < document.transactions.length; position++) {
+    const record = document.transactions[position];
+    if (!belongs(record)) continue;
+    const index = entries.length;
+    const timestamp = timestamps[position];
+    entries.push({
+      id: recordId(record, index),
+      record,
+      index,
+      timestamp: Number.isFinite(timestamp) ? timestamp : -Infinity,
+    });
+  }
+  // Newest first; equal timestamps keep document order (explicitly, so the
+  // result never depends on the engine's sort stability).
+  return entries.sort((a, b) =>
+    a.timestamp === b.timestamp
+      ? a.index - b.index
+      : a.timestamp > b.timestamp
+        ? -1
+        : 1,
+  );
+}
+
+export type MonthSlice = { key: string; first: number; last: number };
+
+/**
+ * Per-calendar-month partitions of the shared index (`YYYY-MM` → slice
+ * bounds). Built in one linear pass after the sort; a month lookup is O(1).
+ */
+export function selectTransactionMonths(
+  document: BackupDocument,
+): Map<string, MonthSlice> {
+  return memoizeForDocument(document, "transaction-months", () => {
+    const index = createTransactionIndex(document);
+    const months = new Map<string, MonthSlice>();
+    let current: MonthSlice | undefined;
+    for (let position = 0; position < index.length; position++) {
+      const { timestamp } = index[position];
+      if (!Number.isFinite(timestamp)) break;
+      const date = new Date(timestamp);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+      if (current?.key !== key) {
+        current = { key, first: position, last: position + 1 };
+        months.set(key, current);
+      } else current.last = position + 1;
+    }
+    return months;
+  });
+}
+
+/**
+ * Candidate profile-owned records for [start, end), in original document order.
+ *
+ * Returns the indexed period plus every record the index could not date (they
+ * sort to the tail and are normally absent). Callers keep their own date
+ * checks, so the result is exactly what filtering all of `document.transactions`
+ * with the profile matcher would accept, while touching only one period.
+ */
+export function selectPeriodTransactionCandidates(
+  document: BackupDocument,
+  start: Date,
+  end: Date,
+): JsonObject[] {
+  return memoizeForDocument(
+    document,
+    `period:${start.getTime()}:${end.getTime()}`,
+    () => {
+      const index = createTransactionIndex(document);
+      const candidates = selectTransactionPeriod(index, start, end);
+      for (
+        let position = index.length - 1;
+        position >= 0 && index[position].timestamp === -Infinity;
+        position--
+      )
+        candidates.push(index[position]);
+      return candidates
+        .sort((a, b) => a.index - b.index)
+        .map((entry) => entry.record);
+    },
+  );
+}
+
+/** O(1) lookup of an indexed entry by its row id, built once per document. */
+export function selectTransactionEntry(
+  document: BackupDocument,
+  id: string,
+): TransactionIndexEntry | undefined {
+  return memoizeForDocument(document, "transaction-ids", () => {
+    const byId = new Map<string, TransactionIndexEntry>();
+    for (const entry of createTransactionIndex(document))
+      if (!byId.has(entry.id)) byId.set(entry.id, entry);
+    return byId;
+  }).get(id);
+}
+
+/** Projects a single transaction instead of every record in the document. */
+export function selectTransaction(
+  document: BackupDocument,
+  id: string,
+): Transaction | undefined {
+  const entry = selectTransactionEntry(document, id);
+  return entry
+    ? selectTransactionProjector(document, i18n.resolvedLanguage)(entry)
+    : undefined;
+}
+
+/** Shared relation maps per document and language. */
+export function selectTransactionProjector(
+  document: BackupDocument,
+  language = i18n.resolvedLanguage,
+) {
+  return memoizeForDocument(document, `projector:${language ?? ""}`, () =>
+    createTransactionProjector(document, language),
+  );
 }
 
 export function* iterateTransactionIndex(document: BackupDocument) {
@@ -81,9 +224,7 @@ export function* iterateTransactionIndex(document: BackupDocument) {
     const record = document.transactions[position];
     if (!belongs(record)) continue;
     const index = entries.length;
-    const timestamp = new Date(
-      text(record.date, text(record.createdAt)),
-    ).getTime();
+    const timestamp = parseRecordTimestampMs(record);
     entries.push({
       id: recordId(record, index),
       record,
@@ -238,7 +379,10 @@ export function createTransactionProjector(
 
 /** Compatibility projection for screens that explicitly request all transactions. */
 export function selectTransactions(document: BackupDocument): Transaction[] {
-  return createTransactionIndex(document).map(
-    createTransactionProjector(document),
+  return memoizeForDocument(
+    document,
+    `all-transactions:${i18n.resolvedLanguage ?? ""}`,
+    () =>
+      createTransactionIndex(document).map(selectTransactionProjector(document)),
   );
 }

@@ -1,3 +1,5 @@
+import { aiSettingsEn, aiSettingsHe, aiSettingsRu } from "./ai-settings";
+
 const baseEn = {
   title: "Plutus AI",
   selectModel: "Choose model",
@@ -11,6 +13,13 @@ const baseEn = {
     "Delete this model from your device? You can download it again later.",
   cancel: "Cancel",
   newChat: "New chat",
+  history: {
+    title: "Chats", close: "Close chats", pinned: "Pinned", recent: "Recent",
+    empty: "Your ChatGPT chats are saved here when you send the first message.",
+    options: "Options for {{title}}", pin: "Pin", unpin: "Unpin", rename: "Rename", save: "Save name", delete: "Delete",
+    deleteTitle: "Delete chat?", deleteMessage: "“{{title}}” will be removed from this phone and from future backups.",
+    actionFailed: "The chat could not be updated. Try again.", saveFailed: "This chat could not be saved to your chat history.",
+  },
   modelInfo: "Model information",
   modelDetails:
     "Google's instruction-tuned Gemma 4 model runs privately on this device. It can reason about your finances and use the same Plutus AI tools and prompts. The model supports text, image and audio input; this chat currently uses text and voice. The LiteRT-LM file supports up to 32K tokens of context; this app loads 4K–8K based on available memory.",
@@ -97,6 +106,13 @@ const baseHe = {
     "למחוק את המודל מהמכשיר? אפשר להוריד אותו שוב מאוחר יותר.",
   cancel: "ביטול",
   newChat: "שיחה חדשה",
+  history: {
+    title: "שיחות", close: "סגירת השיחות", pinned: "מוצמדות", recent: "אחרונות",
+    empty: "שיחות ChatGPT נשמרות כאן כשאתם שולחים את ההודעה הראשונה.",
+    options: "אפשרויות עבור {{title}}", pin: "הצמדה", unpin: "ביטול הצמדה", rename: "שינוי שם", save: "שמירת השם", delete: "מחיקה",
+    deleteTitle: "למחוק את השיחה?", deleteMessage: "“{{title}}” תימחק מהטלפון ומגיבויים עתידיים.",
+    actionFailed: "לא ניתן לעדכן את השיחה. יש לנסות שוב.", saveFailed: "לא ניתן לשמור את השיחה בהיסטוריית השיחות.",
+  },
   modelInfo: "מידע על המודל",
   modelDetails:
     "Gemma 4 של Google פועל באופן פרטי במכשיר. הוא משתמש באותם כלים והנחיות של Plutus AI לניתוח הכספים. המודל תומך בטקסט, תמונות וקול; הצ׳אט הזה משתמש כעת בטקסט ובקול. הקובץ תומך בעד 32K טוקנים, והאפליקציה טוענת 4K–8K בהתאם לזיכרון הפנוי.",
@@ -183,6 +199,13 @@ const baseRu = {
     "Удалить модель с устройства? Позже её можно скачать снова.",
   cancel: "Отмена",
   newChat: "Новый чат",
+  history: {
+    title: "Чаты", close: "Закрыть чаты", pinned: "Закреплённые", recent: "Недавние",
+    empty: "Чаты ChatGPT сохраняются здесь после отправки первого сообщения.",
+    options: "Действия для «{{title}}»", pin: "Закрепить", unpin: "Открепить", rename: "Переименовать", save: "Сохранить название", delete: "Удалить",
+    deleteTitle: "Удалить чат?", deleteMessage: "«{{title}}» будет удалён с телефона и из будущих резервных копий.",
+    actionFailed: "Не удалось изменить чат. Повторите попытку.", saveFailed: "Не удалось сохранить этот чат в истории.",
+  },
   modelInfo: "О модели",
   modelDetails:
     "Gemma 4 от Google работает локально на устройстве. Она использует те же инструменты и инструкции Plutus AI для анализа финансов. Модель поддерживает текст, изображения и аудио; этот чат сейчас использует текст и голос. Файл LiteRT-LM поддерживает до 32K токенов контекста; приложение загружает 4K–8K в зависимости от памяти.",
@@ -1211,6 +1234,6 @@ const extrasRu = {
   },
 } as const;
 
-export const localAIEn = { ...baseEn, ...extrasEn } as const;
-export const localAIHe = { ...baseHe, ...extrasHe } as const;
-export const localAIRu = { ...baseRu, ...extrasRu } as const;
+export const localAIEn = { ...baseEn, ...extrasEn, ...aiSettingsEn } as const;
+export const localAIHe = { ...baseHe, ...extrasHe, ...aiSettingsHe } as const;
+export const localAIRu = { ...baseRu, ...extrasRu, ...aiSettingsRu } as const;

@@ -333,7 +333,7 @@ Transactions are the atomic ledger entries recording money movement.
 | `accountCurrencyCode` | `string`         | ISO 4217 3-letter code                      | Currency of the source account.                                     |
 | `fromAccount`         | `string \| null` | Account UUID                                | Origin account (for Transfers only).                                |
 | `toAccount`           | `string \| null` | Account UUID                                | Target destination account (for Transfers only).                    |
-| `category`            | `string \| null` | Category UUID                               | Assigned category (only subcategories or leaf nodes allowed).       |
+| `category`            | `string \| null` | Category UUID                               | Assigned category (a parent or any of its subcategories).          |
 | `categoryName`        | `string`         | Cached display string                       | Denormalized category name.                                         |
 | `budget`              | `string \| null` | Budget UUID                                 | Optional budget tracking assignment.                                |
 | `label`               | `string \| null` | Label UUID                                  | Primary label/tag.                                                  |

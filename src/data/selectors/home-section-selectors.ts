@@ -34,11 +34,68 @@ export type HomeCategoryRow = {
   depth: number;
   last: boolean;
 };
+/** Starts one day's group; `timestamp` is null for records without a date. */
+export type HomeDateRow = {
+  kind: "date";
+  id: string;
+  timestamp: number | null;
+};
+export type HomeTransactionRow = {
+  kind: "transaction";
+  id: string;
+  entry: TransactionIndexEntry;
+  /** First and last transaction of its day, so each day is its own card. */
+  first: boolean;
+  last: boolean;
+};
+
 export type HomeRow =
-  | { kind: "transaction"; id: string; entry: TransactionIndexEntry }
+  | HomeDateRow
+  | HomeTransactionRow
   | HomeCategoryRow
   | { kind: "budget"; id: string; budget: Budget }
   | { kind: "recurring"; id: string; event: RecurringEvent };
+
+function localDayKey(timestamp: number) {
+  if (!Number.isFinite(timestamp)) return "unknown";
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * Groups newest-first transactions by local calendar day: a date row opens
+ * every day, and each day's transactions keep their newest-first order.
+ */
+export function createHomeTransactionRows(
+  entries: TransactionIndexEntry[],
+): (HomeDateRow | HomeTransactionRow)[] {
+  const rows: (HomeDateRow | HomeTransactionRow)[] = [];
+  let previousDay: string | null = null;
+  let previousRow: HomeTransactionRow | null = null;
+  for (const entry of entries) {
+    const day = localDayKey(entry.timestamp);
+    const first = day !== previousDay;
+    if (first) {
+      if (previousRow) previousRow.last = true;
+      rows.push({
+        kind: "date",
+        id: day,
+        timestamp: Number.isFinite(entry.timestamp) ? entry.timestamp : null,
+      });
+      previousDay = day;
+    }
+    previousRow = {
+      kind: "transaction",
+      id: entry.id,
+      entry,
+      first,
+      last: false,
+    };
+    rows.push(previousRow);
+  }
+  if (previousRow) previousRow.last = true;
+  return rows;
+}
 
 /** Flatten the hierarchy so even a large family is windowed one row at a time. */
 export function createHomeCategoryRows(

@@ -20,6 +20,7 @@ import {
   type ImportedBackup,
 } from "@/data/backup/backup-service";
 import { useLocalData } from "@/data/local-data-provider";
+import { getDocumentWindowState } from "@/data/database/month-index";
 import { BACKUP_COLLECTION_KEYS } from "@/data/model/backup-document";
 import { cloneBackupDocument } from "@/data/model/normalize-backup";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
@@ -107,15 +108,20 @@ function confirmRestore(imported: ImportedBackup, t: TFunction) {
 
 export function BackupManagement() {
   const { t, i18n } = useTranslation();
-  const { document, replaceDocument } = useLocalData();
+  const { document, loadFullDocument, replaceDocument } = useLocalData();
   const [selectedFormat, setSelectedFormat] =
     useState<BackupFormat>("zip");
   const [busyAction, setBusyAction] = useState<
     "save" | "share" | "restore" | null
   >(null);
   const isBusy = busyAction !== null;
+  const windowState = getDocumentWindowState(document);
   const recordCount = BACKUP_COLLECTION_KEYS.reduce(
-    (total, collection) => total + document[collection].length,
+    (total, collection) =>
+      total +
+      (collection === "transactions" && windowState
+        ? windowState.totalTransactionCount
+        : document[collection].length),
     0,
   );
   const numberFormatter = new Intl.NumberFormat(
@@ -125,13 +131,14 @@ export function BackupManagement() {
   async function handleExport(destination: "save" | "share") {
     try {
       setBusyAction(destination);
+      const canonical = loadFullDocument ? await loadFullDocument() : document;
       if (destination === "save") {
-        const saved = await saveBackup(document, selectedFormat);
+        const saved = await saveBackup(canonical, selectedFormat);
         if (saved) {
           AppAlert.alert(t("backup.savedTitle"), t("backup.savedDescription"));
         }
       } else {
-        await shareBackup(document, selectedFormat);
+        await shareBackup(canonical, selectedFormat);
       }
     } catch (error) {
       AppAlert.alert(
@@ -146,11 +153,12 @@ export function BackupManagement() {
   async function handleImport() {
     try {
       setBusyAction("restore");
-      const imported = await pickAndImportBackup(document);
+      const canonical = loadFullDocument ? await loadFullDocument() : document;
+      const imported = await pickAndImportBackup(canonical);
       if (!imported || !(await confirmRestore(imported, t))) return;
 
       if (imported.format !== "csv") {
-        const previousDocument = cloneBackupDocument(document);
+        const previousDocument = cloneBackupDocument(canonical);
         stageAttachments(imported.attachments ?? []);
         try {
           await replaceDocument(imported.document);

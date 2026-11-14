@@ -1,50 +1,42 @@
-import { useEffect, useMemo, useState } from "react";
-import type { BackupDocument } from "@/data/model/backup-document";
-import { createHomeDataLoader } from "@/data/selectors/home-data-loader";
-import type { HomeSection } from "@/data/selectors/home-section-selectors";
+import { useMemo } from "react";
 
-function useProjection<T>(
-  request: { load: (signal: AbortSignal) => Promise<T>; scope?: object } | null,
-  keepPrevious = false,
-) {
-  const [result, setResult] = useState<{
-    request: typeof request;
-    data?: T;
-    error?: Error;
-  } | null>(null);
-  useEffect(() => {
-    if (!request) return;
-    const controller = new AbortController();
-    void request.load(controller.signal).then(
-      (data) => {
-        if (!controller.signal.aborted) setResult({ request, data });
-      },
-      (reason: unknown) => {
-        if (!controller.signal.aborted)
-          setResult((current) => ({
-            request,
-            ...(keepPrevious && current?.request?.scope === request.scope
-              ? { data: current?.data }
-              : {}),
-            error:
-              reason instanceof Error
-                ? reason
-                : new Error("Could not prepare home data."),
-          }));
-      },
-    );
-    return () => controller.abort();
-  }, [request, keepPrevious]);
-  if (result?.request === request) return result;
-  // A clock refresh may reuse this document/currency's overview while updating
-  // it. Never retain another document/profile/section's rows.
-  return keepPrevious &&
-    result?.data !== undefined &&
-    result.request?.scope === request?.scope
-    ? result
-    : null;
+import type { BackupDocument } from "@/data/model/backup-document";
+import { financialMonth } from "@/data/model/financial-month";
+import { finishProjection } from "@/data/selectors/cooperative";
+import { iterateHomeOverview } from "@/data/selectors/document-selectors";
+import { memoizeForDocument } from "@/data/selectors/document-memo";
+import {
+  iterateHomeSection,
+  type HomeSection,
+} from "@/data/selectors/home-section-selectors";
+import {
+  createTransactionIndex,
+  transactionRecordsInPeriod,
+} from "@/data/selectors/transaction-selectors";
+
+type Attempt<T> = { value?: T; error?: Error };
+
+function attempt<T>(work: () => T): Attempt<T> {
+  try {
+    return { value: work() };
+  } catch (reason) {
+    return {
+      error:
+        reason instanceof Error
+          ? reason
+          : new Error("Could not prepare home data."),
+    };
+  }
 }
 
+/**
+ * Home projections, computed synchronously from the shared per-document index.
+ *
+ * Every result is cached per committed document (and clock/currency), so
+ * returning to Home, switching sections or re-rendering never recomputes, and a
+ * save produces the new numbers in the same render as the new document — no
+ * loading state, no empty flash. The index restricts work to the visible month.
+ */
 export function useHomeData(
   document: BackupDocument,
   currency: string,
@@ -52,47 +44,72 @@ export function useHomeData(
   section: HomeSection,
   retry: number,
 ) {
-  // Retrying discards a failed projection/cache without changing stored data.
-  const loader = useMemo(
-    () => ({ generation: retry, ...createHomeDataLoader(document) }),
+  const nowTime = now.getTime();
+  const monthStartDay = document._local.monthStartDay;
+  const indexed = useMemo(
+    () => attempt(() => createTransactionIndex(document)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [document, retry],
   );
-  const indexRequest = useMemo(
-    () => ({ load: (signal: AbortSignal) => loader.loadIndex(signal) }),
-    [loader],
-  );
-  const index = useProjection(indexRequest);
-  const overviewScope = useMemo(
-    () => ({ loader, currency }),
-    [loader, currency],
-  );
-  const overviewRequest = useMemo(
-    () => ({
-      scope: overviewScope,
-      load: (signal: AbortSignal) => loader.loadOverview(currency, now, signal),
-    }),
-    [loader, currency, now, overviewScope],
-  );
-  const overview = useProjection(overviewRequest, true);
-  const indexReady = !!index?.data;
-  const sectionRequest = useMemo(
+  const index = indexed.value;
+  const overview = useMemo(
     () =>
-      section === "transactions" || !indexReady
-        ? null
-        : {
-            load: (signal: AbortSignal) =>
-              loader.loadSection(section, now, signal),
-          },
-    [loader, now, section, indexReady],
+      !index
+        ? ({} as Attempt<never>)
+        : attempt(() =>
+            memoizeForDocument(
+              document,
+              `home-overview:${currency}:${nowTime}`,
+              () => {
+                const clock = new Date(nowTime);
+                const { start } = financialMonth(clock, monthStartDay);
+                return finishProjection(
+                  iterateHomeOverview(
+                    document,
+                    currency,
+                    clock,
+                    transactionRecordsInPeriod(
+                      index,
+                      start,
+                      new Date(nowTime + 1),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+    // A retry re-attempts a failed build; failures are never cached.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [document, currency, nowTime, monthStartDay, index, retry],
   );
-  const data = useProjection(sectionRequest);
+  const sectionData = useMemo(
+    () =>
+      section === "transactions" || !index
+        ? null
+        : attempt(() =>
+            memoizeForDocument(
+              document,
+              `home-section:${section}:${nowTime}`,
+              () =>
+                finishProjection(
+                  iterateHomeSection(
+                    document,
+                    new Date(nowTime),
+                    section,
+                    index,
+                  ),
+                ),
+            ),
+          ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [document, nowTime, index, section, retry],
+  );
   return {
-    index: index?.data,
-    overview: overview?.data,
-    overviewRefreshing:
-      !!overview?.data && overview.request !== overviewRequest,
-    sectionData: data?.data,
-    pending: section === "transactions" ? !index : !data,
-    error: index?.error ?? data?.error ?? overview?.error,
+    index,
+    overview: overview.value,
+    overviewRefreshing: false,
+    sectionData: sectionData?.value,
+    pending: false,
+    error: indexed.error ?? overview.error ?? sectionData?.error,
   };
 }

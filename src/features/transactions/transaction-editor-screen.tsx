@@ -1,28 +1,56 @@
-import { AppAlert } from "@/shared/ui/app-alert";
-import {
-  TopSafeAreaGradient,
-  BottomSafeAreaGradient,
-} from "@/shared/ui/safe-area-gradients";
-import { formatAppDate } from "@/data/model/onboarding";
-import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import type { DateTimePickerProps } from "@expo/ui/community/datetime-picker";
+
+type ImagePickerModule = typeof import("expo-image-picker");
+let cachedDateTimePicker: ComponentType<DateTimePickerProps> | null = null;
+function LazyDateTimePicker(props: DateTimePickerProps) {
+  if (!cachedDateTimePicker) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedDateTimePicker = require("@expo/ui/community/datetime-picker")
+      .DateTimePicker as ComponentType<DateTimePickerProps>;
+  }
+  const Picker = cachedDateTimePicker;
+  return <Picker {...props} />;
+}
+let cachedImagePicker: ImagePickerModule | null = null;
+function getImagePicker(): ImagePickerModule {
+  if (!cachedImagePicker) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedImagePicker = require("expo-image-picker") as ImagePickerModule;
+  }
+  return cachedImagePicker;
+}
+import { uuid } from "expo";
 import { BlurTargetView } from "expo-blur";
-import * as ImagePicker from "expo-image-picker";
-import { uuid } from "expo-modules-core";
+import { useLazySheetMount, usePostFrameReady } from "@/shared/lib/use-post-frame-ready";
+import { useCalendars } from "expo-localization";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Button, Input } from "heroui-native";
-import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
-import { useEffect, useRef, useState } from "react";
+import { Button } from "heroui-native";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Animated,
-  Image,
+  I18nManager,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   View,
+  type ViewInstance,
 } from "react-native";
+import Reanimated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -31,13 +59,9 @@ import {
   persistAttachment,
 } from "@/data/attachments/attachment-store";
 import { useLocalData } from "@/data/local-data-provider";
-import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
-import { belongsToProfile, identity } from "@/data/model/category-record";
 import { convertCurrency } from "@/data/model/exchange-rate";
 import { transactionSnapshot } from "@/data/model/transaction-conversion";
-import type { JsonObject } from "@/data/model/json";
 import {
-  createTransactionDraft,
   saveTransaction,
   saveTransactionTemplate,
   transactionDraftFromRecord,
@@ -47,187 +71,145 @@ import {
 import {
   selectAccounts,
   selectAppPreferences,
-  selectBudgets,
+  selectBudgetOptions,
   selectCategories,
-  selectCategoryRootId,
-  selectTopLevelCategories,
 } from "@/data/selectors/document-selectors";
 import { selectExchangeRates } from "@/data/selectors/exchange-rate-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
-import { currencies } from "@/features/profile/data/currencies-data";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { useAppLocalization } from "@/localization/localization-provider";
-import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
+import { AppAlert } from "@/shared/ui/app-alert";
+import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
+import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { Text } from "@/shared/ui/app-text";
-import { DateTimePopover } from "@/shared/ui/date-time-popover";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
+import {
+  BottomSafeAreaGradient,
+  TopSafeAreaGradient,
+} from "@/shared/ui/safe-area-gradients";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
 
-import { TransactionCategorySheet } from "./components/transaction-category-sheet";
+import { TransactionExtrasSection } from "./components/transaction-extras-section";
 import {
-  TransactionSelectionSection,
-  type TransactionOption,
-} from "./components/transaction-selection-section";
+  TransactionAccountCard,
+  TransactionCategoryCard,
+} from "./components/transaction-flow-section";
+import { TransactionHeroCard } from "./components/transaction-hero-card";
+import { TransactionScheduleSection } from "./components/transaction-schedule-section";
+import type { TransactionOption } from "./components/transaction-selection-section";
+import {
+  applyQuickDatePreset,
+  fallbackTransactionName,
+  getTransactionTypeVisual,
+  isTransactionDraftReady,
+  localizeBudgetPeriod,
+  mapTransactionSaveError,
+  orderAccountsForPicker,
+  parseTransactionAmount,
+  rankRootCategories,
+  recordOptions,
+  resolveAccountSelectionUpdate,
+  resolveInitialTransactionDraft,
+  resolveUses24HourClock,
+} from "./transaction-form-helpers";
 
 type SaveMode = "transaction" | "another" | "template";
 type DatePickerMode = "date" | "time" | null;
-type ExpandedSection =
-  | "account"
-  | "destination"
-  | "category"
-  | "budget"
-  | "label"
-  | "loan"
-  | "place"
-  | "person";
-
-function recordOptions(
-  records: JsonObject[],
-  profileId: string,
-  document: ReturnType<typeof useLocalData>["document"],
-  fallbackIcon: string,
-  fallbackColor: string,
-  fallbackName: string,
-): TransactionOption[] {
-  return records
-    .filter(
-      (record) =>
-        identity(record) && belongsToProfile(document, record, profileId),
-    )
-    .map((record) => ({
-      id: identity(record),
-      name: typeof record.name === "string" ? record.name : fallbackName,
-      description:
-        typeof record.description === "string" ? record.description : "",
-      icon: typeof record.icon === "string" ? record.icon : fallbackIcon,
-      iconPath: typeof record.iconPath === "string" ? record.iconPath : null,
-      color:
-        typeof record.color === "string" && /^#[a-f\d]{6}$/i.test(record.color)
-          ? record.color
-          : fallbackColor,
-    }));
-}
-
-function formatTransactionTime(value: Date, locale?: string) {
-  return value.toLocaleTimeString(locale, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export function TransactionEditorScreen({ editId }: { editId?: string }) {
-  const { formatCurrency } = useCurrencyFormat();
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const calendars = useCalendars();
+  const uses24Hour = resolveUses24HourClock(calendars[0]?.uses24hourClock);
   const { direction } = useAppLocalization();
   const router = useRouter();
-  const params = useLocalSearchParams<{ copyId?: string; budgetId?: string }>();
+  const params = useLocalSearchParams<{
+    copyId?: string;
+    budgetId?: string;
+    type?: string;
+  }>();
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
   const { document, ensureExchangeRates, updateDocument } = useLocalData();
   const { activeProfile } = useProfiles();
   const [profileId] = useState(activeProfile.id);
+
   const typeOptions = [
     { label: t("transactions.common.types.expense"), value: 0 as const },
     { label: t("transactions.common.types.income"), value: 1 as const },
     { label: t("transactions.common.types.transfer"), value: 2 as const },
   ];
+
   const sourceId = editId ?? params.copyId;
   const [sourceDraft] = useState(() =>
     sourceId ? transactionDraftFromRecord(document, sourceId) : null,
   );
-  const accounts = selectAccounts(document);
-  const categories = selectCategories(document);
-  const topLevelCategories = selectTopLevelCategories(document);
-  const budgets = selectBudgets(document);
+  const [isEditingRecord, setIsEditingRecord] = useState(Boolean(editId));
+
+  const accounts = useMemo(() => selectAccounts(document), [document]);
+  const categories = useMemo(() => selectCategories(document), [document]);
+  const budgets = useMemo(() => selectBudgetOptions(document), [document]);
+  const preferences = useMemo(
+    () => selectAppPreferences(document),
+    [document],
+  );
   const presetBudget =
     !sourceId && params.budgetId
       ? budgets.find((budget) => budget.id === params.budgetId)
       : null;
   const defaultAccount =
     accounts.find((account) => account.isDefault) ?? accounts[0];
-  const [draft, setDraft] = useState<TransactionDraft>(() => {
-    if (sourceDraft)
-      return params.copyId
-        ? {
-            ...sourceDraft,
-            conversionSnapshot: null,
-            receiptPath: null,
-            receiptAttachmentId: null,
-          }
-        : sourceDraft;
-    if (presetBudget) {
-      const eligibleAccounts = accounts.filter(
-        (account) =>
-          account.currencyCode === presetBudget.currencyCode &&
-          (!presetBudget.accounts.length ||
-            presetBudget.accounts.includes(account.id)),
-      );
-      const account =
-        eligibleAccounts.find((candidate) => candidate.isDefault) ??
-        eligibleAccounts[0];
 
-      return {
-        ...createTransactionDraft(),
-        type: presetBudget.transactionType,
-        budgetId: presetBudget.id,
-        accountId: account?.id ?? "",
-        currencyCode: presetBudget.currencyCode,
-        accountCurrencyCode: account?.currencyCode ?? presetBudget.currencyCode,
-      };
-    }
-    return {
-      ...createTransactionDraft(),
-      accountId: defaultAccount?.id ?? "",
-      currencyCode:
-        defaultAccount?.currencyCode ??
-        activeProfile.currencyCode.toUpperCase(),
-      accountCurrencyCode:
-        defaultAccount?.currencyCode ??
-        activeProfile.currencyCode.toUpperCase(),
-    };
-  });
-  const transactionNamePlaceholder =
-    draft.type === 0
-      ? t("transactions.form.namePlaceholders.expense")
-      : draft.type === 1
-        ? t("transactions.form.namePlaceholders.income")
-        : t("transactions.form.namePlaceholders.transfer");
-  const [expanded, setExpanded] = useState<Record<ExpandedSection, boolean>>({
-    account: true,
-    destination: true,
-    category: true,
-    budget: true,
-    label: false,
-    loan: false,
-    place: false,
-    person: false,
-  });
+  const [draft, setDraft] = useState<TransactionDraft>(() =>
+    resolveInitialTransactionDraft({
+      sourceDraft,
+      isCopy: Boolean(params.copyId),
+      presetBudget,
+      accounts,
+      defaultAccount,
+      paramType: params.type,
+      activeProfileCurrencyCode: activeProfile.currencyCode,
+    }),
+  );
+
   const [pendingReceipt, setPendingReceipt] = useState<{
     uri: string;
     mimeType: string;
   } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<DatePickerMode>(null);
+  const postFrameReady = usePostFrameReady();
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
-  const actionSheetInitialPositionFix =
-    useBottomSheetInitialPositionFix(actionMenuOpen);
+  const actionMenuMounted = useLazySheetMount(Boolean(sourceId) && actionMenuOpen);
+  const { bindSheet: bindActionSheet, ...actionSheetInitialPositionFix } =
+    useBottomSheetInitialPositionFix(actionMenuMounted ? actionMenuOpen : false);
   const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
   const [currencyRateLoading, setCurrencyRateLoading] = useState(false);
   const [currencyRateError, setCurrencyRateError] = useState("");
   const [currencyRateNotice, setCurrencyRateNotice] = useState("");
-  const [categorySheetParentId, setCategorySheetParentId] = useState<
-    string | null
-  >(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
+
   const saving = useRef(false);
   const currencyRequest = useRef(0);
   const transactionId = useRef(editId ?? uuid.v4());
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const [scrollY] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    let wasHidden = false;
+    const listener = scrollY.addListener(({ value }) => {
+      const hidden = value >= 40;
+      if (hidden !== wasHidden) {
+        wasHidden = hidden;
+        setHeaderHidden(hidden);
+      }
+    });
+    return () => scrollY.removeListener(listener);
+  }, [scrollY]);
+
   const occurredAt = new Date(draft.occurredAt);
   const safeOccurredAt = Number.isFinite(occurredAt.getTime())
     ? occurredAt
@@ -235,13 +217,20 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   const selectedAccount = accounts.find(
     (account) => account.id === draft.accountId,
   );
+  const destinationAccount = accounts.find(
+    (account) => account.id === draft.destinationAccountId,
+  );
+  const selectedCategory =
+    categories.find((category) => category.id === draft.categoryId) ?? null;
+
   const transactionCurrencyCode =
     draft.currencyCode ||
     selectedAccount?.currencyCode ||
     activeProfile.currencyCode.toUpperCase();
   const accountCurrencyCode =
     selectedAccount?.currencyCode ?? draft.accountCurrencyCode;
-  const enteredAmount = Number(draft.amount.replace(",", "."));
+
+  const enteredAmount = parseTransactionAmount(draft.amount);
   let convertedAccountAmount: number | null = null;
   if (
     Number.isFinite(enteredAmount) &&
@@ -259,145 +248,119 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       convertedAccountAmount = null;
     }
   }
-  const accountOptions: TransactionOption[] = accounts.map((account) => ({
-    id: account.id,
-    name: account.name,
-    description: t("transactions.common.accountDescription", {
-      institution: account.institution,
-      currency: account.currencyCode,
-    }),
-    icon: account.icon,
-    iconPath: account.iconPath,
-    color: account.color,
-  }));
-  const destinationOptions = accountOptions.filter((option) => {
-    const account = accounts.find((item) => item.id === option.id);
-    return (
-      option.id !== draft.accountId &&
-      (!selectedAccount ||
-        account?.currencyCode === selectedAccount.currencyCode)
-    );
+
+  const typeNamePlaceholder =
+    draft.type === 0
+      ? t("transactions.form.namePlaceholders.expense")
+      : draft.type === 1
+        ? t("transactions.form.namePlaceholders.income")
+        : t("transactions.form.namePlaceholders.transfer");
+  // An empty name is saved as the category (or the transfer route); the
+  // placeholder shows that name, so what gets saved is always visible.
+  const fallbackName = fallbackTransactionName({
+    type: draft.type,
+    categoryName: selectedCategory?.name,
+    fromName: selectedAccount?.name,
+    toName: destinationAccount?.name,
+    arrow: I18nManager.isRTL ? "←" : "→",
   });
-  const categoryOptions: TransactionOption[] = topLevelCategories
-    .filter((category) => category.type === draft.type)
-    .map((category) => ({
-      id: category.id,
-      name: category.name,
-      description: category.description,
-      icon: category.icon,
-      iconPath: category.iconPath,
-      color: category.color,
-    }));
-  const selectedCategoryRootId = selectCategoryRootId(
-    document,
-    draft.categoryId,
+  const transactionNamePlaceholder = fallbackName || typeNamePlaceholder;
+  const savedName = draft.name.trim() || fallbackName;
+  const pickerAccounts = useMemo(
+    () => orderAccountsForPicker(accounts),
+    [accounts],
   );
-  const categorySheetParent = categorySheetParentId
-    ? categories.find((category) => category.id === categorySheetParentId)
-    : undefined;
-  const categorySheetParentOption = categorySheetParent
-    ? {
-        id: categorySheetParent.id,
-        name: categorySheetParent.name,
-        description: categorySheetParent.description,
-        icon: categorySheetParent.icon,
-        iconPath: categorySheetParent.iconPath,
-        color: categorySheetParent.color,
-      }
-    : null;
-  const categorySheetChildren: TransactionOption[] = categorySheetParent
-    ? categories
-        .filter((category) => {
-          const visited = new Set<string>();
-          let parentId = category.parentId;
-          let isDescendant = false;
-          while (parentId && !visited.has(parentId)) {
-            if (parentId === categorySheetParent.id) {
-              isDescendant = true;
-              break;
-            }
-            visited.add(parentId);
-            parentId =
-              categories.find((candidate) => candidate.id === parentId)
-                ?.parentId ?? null;
-          }
-          return (
-            isDescendant &&
-            !categories.some((candidate) => candidate.parentId === category.id)
-          );
-        })
-        .map((category) => ({
-          id: category.id,
-          name: category.name,
-          description:
-            categories.find((candidate) => candidate.id === category.parentId)
-              ?.name ?? category.description,
-          icon: category.icon,
-          iconPath: category.iconPath,
-          color: category.color,
-        }))
-    : [];
-  function localizeBudgetPeriod(period: string) {
-    switch (period.toLowerCase()) {
-      case "daily":
-        return t("transactions.common.periods.daily");
-      case "weekly":
-        return t("transactions.common.periods.weekly");
-      case "monthly":
-        return t("transactions.common.periods.monthly");
-      case "yearly":
-        return t("transactions.common.periods.yearly");
-      case "custom":
-        return t("transactions.common.periods.custom");
-      default:
-        return period;
-    }
-  }
-  const budgetOptions: TransactionOption[] = budgets
-    .filter((budget) => budget.transactionType === draft.type)
-    .map((budget) => ({
-      id: budget.id,
-      name: budget.name,
-      description: t("transactions.common.budgetDescription", {
-        period: localizeBudgetPeriod(budget.period),
-        currency: budget.currencyCode,
-      }),
-      icon: budget.icon,
-      iconPath: budget.iconPath,
-      color: budget.color,
-    }));
-  const labelOptions = recordOptions(
-    document.labels,
-    profileId,
-    document,
-    "check",
-    "#70d2eb",
-    t("transactions.common.untitledOption"),
+  const rootCategories = useMemo(
+    () => rankRootCategories(document, categories, draft.type),
+    [document, categories, draft.type],
   );
-  const loanOptions = recordOptions(
-    document.loans,
-    profileId,
-    document,
-    "credit-card",
-    "#f2c66d",
-    t("transactions.common.untitledOption"),
+  const isReady = isTransactionDraftReady({
+    draft,
+    name: savedName,
+    hasAccount: Boolean(selectedAccount),
+    hasDestination: Boolean(destinationAccount),
+    rateLoading: currencyRateLoading,
+  });
+
+  const emptyOptions = useMemo<TransactionOption[]>(() => [], []);
+  const budgetOptions = useMemo<TransactionOption[]>(
+    () =>
+      postFrameReady
+        ? budgets
+            .filter((budget) => budget.transactionType === draft.type)
+            .map((budget) => ({
+              id: budget.id,
+              name: budget.name,
+              description: t("transactions.common.budgetDescription", {
+                period: localizeBudgetPeriod(budget.period, t),
+                currency: budget.currencyCode,
+              }),
+              icon: budget.icon,
+              iconPath: budget.iconPath,
+              color: budget.color,
+            }))
+        : emptyOptions,
+    [budgets, draft.type, emptyOptions, postFrameReady, t],
   );
-  const placeOptions = recordOptions(
-    document.places,
-    profileId,
-    document,
-    "home",
-    "#78d6a3",
-    t("transactions.common.untitledOption"),
+
+  const untitledOption = t("transactions.common.untitledOption");
+  const labelOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.labels,
+            profileId,
+            document,
+            "check",
+            "#70d2eb",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
   );
-  const personOptions = recordOptions(
-    document.peoples,
-    profileId,
-    document,
-    "account",
-    "#b89cf5",
-    t("transactions.common.untitledOption"),
+  const loanOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.loans,
+            profileId,
+            document,
+            "credit-card",
+            "#f2c66d",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
   );
+  const placeOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.places,
+            profileId,
+            document,
+            "home",
+            "#78d6a3",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
+  );
+  const personOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.peoples,
+            profileId,
+            document,
+            "account",
+            "#b89cf5",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
+  );
+
   const topControlsTranslateY = scrollY.interpolate({
     inputRange: [0, 56],
     outputRange: [0, -56],
@@ -408,6 +371,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     outputRange: [1, 0],
     extrapolate: "clamp",
   });
+
   const receiptUri =
     pendingReceipt?.uri ??
     (() => {
@@ -419,17 +383,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       }
     })();
 
-  useEffect(() => {
-    let wasHidden = false;
-    const listener = scrollY.addListener(({ value }) => {
-      const hidden = value >= 40;
-      if (hidden !== wasHidden) {
-        wasHidden = hidden;
-        setHeaderHidden(hidden);
-      }
-    });
-    return () => scrollY.removeListener(listener);
-  }, [scrollY]);
+  const missingSource = Boolean(sourceId) && !sourceDraft;
 
   function change<K extends keyof TransactionDraft>(
     key: K,
@@ -438,11 +392,6 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     setDraft((current) => ({ ...current, [key]: value }));
     setError("");
     setNotice("");
-  }
-
-  function toggleSection(section: ExpandedSection) {
-    Keyboard.dismiss();
-    setExpanded((current) => ({ ...current, [section]: !current[section] }));
   }
 
   function changeType(type: TransactionType) {
@@ -467,6 +416,32 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     setCurrencyRateLoading(false);
     setCurrencyRateError("");
     setCurrencyRateNotice("");
+    setError("");
+    setNotice("");
+  }
+
+  function selectAccount(accountId: string) {
+    const account = accounts.find((item) => item.id === accountId);
+    currencyRequest.current += 1;
+    setCurrencyRateLoading(false);
+    setCurrencyRateError("");
+    setCurrencyRateNotice("");
+    setDraft((current) =>
+      resolveAccountSelectionUpdate(current, account, accounts),
+    );
+    setError("");
+    setNotice("");
+  }
+
+  function swapTransferAccounts() {
+    if (!selectedAccount || !destinationAccount) return;
+    setDraft((current) => ({
+      ...current,
+      accountId: destinationAccount.id,
+      destinationAccountId: selectedAccount.id,
+      currencyCode: destinationAccount.currencyCode,
+      accountCurrencyCode: destinationAccount.currencyCode,
+    }));
     setError("");
     setNotice("");
   }
@@ -550,82 +525,31 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   function updateDateTime(mode: Exclude<DatePickerMode, null>, selected: Date) {
     if (Platform.OS === "android") setDatePickerMode(null);
     const next = new Date(safeOccurredAt);
-    if (mode === "date")
+    if (mode === "date") {
       next.setFullYear(
         selected.getFullYear(),
         selected.getMonth(),
         selected.getDate(),
       );
-    else next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-    change("occurredAt", next.toISOString());
+    } else {
+      next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+    }
+    const now = new Date();
+    change(
+      "occurredAt",
+      (next.getTime() > now.getTime() ? now : next).toISOString(),
+    );
   }
 
-  function transactionSaveError(reason: unknown) {
-    if (!(reason instanceof Error)) return t("transactions.form.saveError");
-    switch (reason.message) {
-      case "This transaction has an invalid amount.":
-        return t("transactions.form.validation.invalidAmount");
-      case "Enter a transaction name (up to 100 characters).":
-        return t("transactions.form.validation.name");
-      case "Enter an amount greater than zero and no more than one trillion.":
-        return t("transactions.form.validation.amount");
-      case "Choose a valid transaction type.":
-        return t("transactions.form.validation.type");
-      case "Choose a valid date and time.":
-        return t("transactions.form.validation.dateTime");
-      case "Choose an account in this profile.":
-        return t("transactions.form.validation.account");
-      case "Choose a different destination account.":
-        return t("transactions.form.validation.destinationAccount");
-      case "Transfer accounts must use the same currency.":
-        return t("transactions.form.validation.transferCurrency");
-      case "Choose the transaction currency again to load its current exchange rate.":
-        return t("transactions.form.validation.exchangeRate");
-      case "Choose a category for this transaction type.":
-        return t("transactions.form.validation.category");
-      case "This transaction no longer exists.":
-        return t("transactions.form.validation.missing");
-      case "This transaction has already been saved.":
-        return t("transactions.form.validation.alreadySaved");
-      case "This transaction belongs to another profile.":
-        return t("transactions.form.validation.wrongProfile");
-      case "This account has an invalid balance. Edit the account before saving a transaction.":
-        return t("transactions.form.validation.invalidAccountBalance");
-      case "This template has already been saved.":
-        return t("transactions.form.validation.templateAlreadySaved");
-    }
-    const subcategoryMatch = /^Choose a subcategory of (.+)\.$/.exec(
-      reason.message,
-    );
-    if (subcategoryMatch)
-      return t("transactions.form.validation.subcategory", {
-        name: subcategoryMatch[1],
-      });
-    const relationMatch =
-      /^Choose a valid (budget|label|loan|place|person) in this profile\.$/.exec(
-        reason.message,
-      );
-    if (relationMatch) {
-      const relationLabels: Record<string, string> = {
-        budget: t("transactions.common.fields.budget"),
-        label: t("transactions.common.fields.label"),
-        loan: t("transactions.common.fields.loan"),
-        place: t("transactions.common.fields.place"),
-        person: t("transactions.common.fields.payee"),
-      };
-      return t("transactions.form.validation.relation", {
-        relation: relationLabels[relationMatch[1]].toLocaleLowerCase(
-          i18n.resolvedLanguage,
-        ),
-      });
-    }
-    return reason.message;
+  function handleQuickDatePreset(preset: "today" | "yesterday") {
+    const next = applyQuickDatePreset(safeOccurredAt, preset);
+    change("occurredAt", next.toISOString());
   }
 
   async function pickReceipt() {
     Keyboard.dismiss();
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const result = await getImagePicker().launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: false,
         quality: 0.9,
@@ -662,6 +586,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     setNotice("");
     setActionMenuOpen(false);
     Keyboard.dismiss();
+    const namedDraft: TransactionDraft = { ...draft, name: savedName };
     let pendingAttachmentPath: string | null = null;
     let attachmentCommitted = false;
     try {
@@ -672,7 +597,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             throw new Error(t("transactions.form.activeProfileChanged"));
           return saveTransactionTemplate(
             current,
-            draft,
+            namedDraft,
             id,
             profileId,
             new Date().toISOString(),
@@ -688,11 +613,12 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
       pendingAttachmentPath = attachment?.relativePath ?? null;
       let preparedDraft: TransactionDraft = attachment
         ? {
-            ...draft,
+            ...namedDraft,
             receiptPath: attachment.relativePath,
             receiptAttachmentId: attachment.id,
           }
-        : draft;
+        : namedDraft;
+
       const base = (
         draft.type === 2 ? accountCurrencyCode : transactionCurrencyCode
       ).toUpperCase();
@@ -734,7 +660,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         preparedDraft = {
           ...preparedDraft,
           conversionSnapshot: snapshot,
-          ...(!editId && base !== accountCurrencyCode
+          ...(!isEditingRecord && base !== accountCurrencyCode
             ? {
                 exchangeRate: snapshot.rates[accountCurrencyCode],
                 exchangeRateDate: snapshot.date,
@@ -744,8 +670,10 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             : {}),
         };
       }
+
       const id = transactionId.current;
       const now = new Date().toISOString();
+      const editingNow = isEditingRecord;
       await updateDocument((current) => {
         if (current._local.selectedProfileId !== profileId)
           throw new Error(t("transactions.form.activeProfileChanged"));
@@ -755,7 +683,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           id,
           profileId,
           now,
-          !!editId,
+          editingNow,
         );
         return attachment
           ? {
@@ -779,6 +707,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
 
       if (mode === "another") {
         transactionId.current = uuid.v4();
+        setIsEditingRecord(false);
         setPendingReceipt(null);
         setDraft((current) => ({
           ...current,
@@ -793,7 +722,8 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         setNotice(t("transactions.form.savedAddNext"));
         return;
       }
-      if (editId && router.canGoBack()) router.back();
+
+      if (editingNow && router.canGoBack()) router.back();
       else router.dismissTo("/");
     } catch (reason) {
       if (pendingAttachmentPath && !attachmentCommitted) {
@@ -801,7 +731,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           deleteAttachment(pendingAttachmentPath);
         } catch {}
       }
-      const message = transactionSaveError(reason);
+      const message = mapTransactionSaveError(reason, t);
       setError(message);
       AppAlert.alert(t("transactions.form.saveErrorTitle"), message);
     } finally {
@@ -810,10 +740,8 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     }
   }
 
-  const missingSource = !!sourceId && !sourceDraft;
-
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.fill}
@@ -824,9 +752,10 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
               contentContainerStyle={{
                 paddingBottom: 148 + insets.bottom,
               }}
+              keyboardDismissMode="on-drag"
               keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
               scrollEventThrottle={16}
+              showsVerticalScrollIndicator={false}
               onScroll={Animated.event(
                 [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                 { useNativeDriver: true },
@@ -834,6 +763,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
             >
               <View style={[styles.headerSpace, { height: 56 + insets.top }]} />
               <View style={styles.selectorSpace} />
+
               <View
                 // Toggling pointerEvents flips whether Fabric can flatten this
                 // view away. Unflattening it mid-save reparents every child at
@@ -841,457 +771,170 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 // ... the specified child already has a parent".
                 collapsable={false}
                 pointerEvents={isSaving ? "none" : "auto"}
-                className="gap-4 px-5"
+                style={[styles.formStack, { direction }]}
               >
                 {missingSource ? (
-                  <View className="rounded-2xl bg-danger/10 p-4">
-                    <Text className="font-manrope-semibold text-danger">
+                  <View className="rounded-2xl border border-danger/30 bg-danger/10 p-4">
+                    <Text className="font-manrope-semibold text-sm text-danger">
                       {t("transactions.form.unavailable")}
                     </Text>
                   </View>
                 ) : null}
 
-                <Input
-                  accessibilityLabel={t("transactions.form.name")}
-                  placeholder={transactionNamePlaceholder}
-                  maxLength={100}
-                  value={draft.name}
-                  onChangeText={(value) => change("name", value)}
-                  className="h-16 rounded-2xl bg-surface px-4 font-manrope-semibold"
-                  style={{
-                    direction,
-                    textAlign: "auto",
-                    writingDirection: direction,
-                  }}
+                <TransactionHeroCard
+                  accountCurrencyCode={accountCurrencyCode}
+                  amount={draft.amount}
+                  canChangeCurrency={draft.type !== 2 && Boolean(selectedAccount)}
+                  convertedAccountAmount={convertedAccountAmount}
+                  currencyRateError={currencyRateError}
+                  currencyRateLoading={currencyRateLoading}
+                  currencyRateNotice={currencyRateNotice}
+                  disabled={isSaving}
+                  exchangeRate={draft.exchangeRate}
+                  exchangeRateDate={draft.exchangeRateDate}
+                  name={draft.name}
+                  namePlaceholder={transactionNamePlaceholder}
+                  selectedCategory={selectedCategory}
+                  showConversion={
+                    Boolean(selectedAccount) &&
+                    transactionCurrencyCode !== accountCurrencyCode
+                  }
+                  transactionCurrencyCode={transactionCurrencyCode}
+                  type={draft.type}
+                  autoFocusAmount={!sourceId}
+                  onChangeAmount={(value) => change("amount", value)}
+                  onChangeName={(value) => change("name", value)}
+                  onOpenCurrencyPicker={() => setCurrencySheetOpen(true)}
                 />
 
-                <View className="relative">
-                  <Input
-                    accessibilityLabel={t("transactions.form.amount")}
-                    placeholder={t("transactions.form.amountPlaceholder")}
-                    keyboardType="decimal-pad"
-                    maxLength={30}
-                    value={draft.amount}
-                    onChangeText={(value) => change("amount", value)}
-                    className="h-16 rounded-2xl bg-surface font-manrope-semibold"
-                    style={{
-                      direction,
-                      paddingStart: 16,
-                      paddingEnd: 96,
-                      textAlign: "auto",
-                      writingDirection: direction,
-                    }}
+                {/* What for, then from where; a transfer is a route first. */}
+                {draft.type === 2 ? (
+                  <>
+                    <TransactionAccountCard
+                    accounts={pickerAccounts}
+                    destinationAccountId={draft.destinationAccountId}
+                    disabled={isSaving}
+                    selectedAccountId={draft.accountId}
+                    type={draft.type}
+                    onAddAccount={() => router.push("/accounts/create")}
+                    onSelectAccount={selectAccount}
+                    onSelectDestinationAccount={(value) =>
+                      change("destinationAccountId", value)
+                    }
+                    onSwapAccounts={swapTransferAccounts}
                   />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t(
-                      "transactions.form.currencyAccessibility",
-                      { currency: transactionCurrencyCode },
-                    )}
-                    accessibilityState={{
-                      disabled:
-                        isSaving || draft.type === 2 || !selectedAccount,
-                    }}
-                    disabled={isSaving || draft.type === 2 || !selectedAccount}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setCurrencySheetOpen(true);
-                    }}
-                    className="absolute top-0 h-16 flex-row items-center gap-1 px-3"
-                    style={{ end: 4 }}
-                  >
-                    <Text className="font-manrope-bold text-sm text-accent">
-                      {transactionCurrencyCode}
-                    </Text>
-                    {draft.type !== 2 ? (
-                      <FilledIcon
-                        name="currency-exchange"
-                        size={18}
-                        tone="accent"
-                      />
-                    ) : null}
-                  </Pressable>
-                </View>
+                    <TransactionCategoryCard
+                    categories={categories}
+                    disabled={isSaving}
+                    rootCategories={rootCategories}
+                    selectedCategoryId={draft.categoryId}
+                    type={draft.type}
+                    onAddCategory={() =>
+                      router.push({
+                        pathname: "/categories/create",
+                        params: { type: String(draft.type) },
+                      })
+                    }
+                    onSelectCategory={(value) => change("categoryId", value)}
+                  />
+                  </>
+                ) : (
+                  <>
+                    <TransactionCategoryCard
+                    categories={categories}
+                    disabled={isSaving}
+                    rootCategories={rootCategories}
+                    selectedCategoryId={draft.categoryId}
+                    type={draft.type}
+                    onAddCategory={() =>
+                      router.push({
+                        pathname: "/categories/create",
+                        params: { type: String(draft.type) },
+                      })
+                    }
+                    onSelectCategory={(value) => change("categoryId", value)}
+                  />
+                    <TransactionAccountCard
+                    accounts={pickerAccounts}
+                    destinationAccountId={draft.destinationAccountId}
+                    disabled={isSaving}
+                    selectedAccountId={draft.accountId}
+                    type={draft.type}
+                    onAddAccount={() => router.push("/accounts/create")}
+                    onSelectAccount={selectAccount}
+                    onSelectDestinationAccount={(value) =>
+                      change("destinationAccountId", value)
+                    }
+                    onSwapAccounts={swapTransferAccounts}
+                  />
+                  </>
+                )}
 
-                {selectedAccount &&
-                transactionCurrencyCode !== accountCurrencyCode ? (
-                  <View className="gap-2 rounded-2xl bg-surface-secondary p-4">
-                    <Text className="font-manrope-semibold text-sm text-foreground">
-                      {t("transactions.form.transactionCurrency", {
-                        type: t(
-                          draft.type === 1
-                            ? "transactions.common.types.income"
-                            : "transactions.common.types.expense",
-                        ),
-                        currency: transactionCurrencyCode,
-                      })}
-                    </Text>
-                    {currencyRateLoading ? (
-                      <Text className="font-sans text-sm text-muted">
-                        {t("transactions.form.currencyRateLoading")}
-                      </Text>
-                    ) : null}
-                    {currencyRateError ? (
-                      <Text
-                        accessibilityRole="alert"
-                        className="font-sans text-sm text-danger"
-                      >
-                        {currencyRateError}
-                      </Text>
-                    ) : null}
-                    {currencyRateNotice ? (
-                      <Text className="font-sans text-sm text-muted">
-                        {currencyRateNotice}
-                      </Text>
-                    ) : null}
-                    {draft.exchangeRate ? (
-                      <>
-                        <Text className="font-sans text-sm text-muted">
-                          {t("transactions.form.exchangeRateSummary", {
-                            from: transactionCurrencyCode,
-                            rate: draft.exchangeRate,
-                            to: accountCurrencyCode,
-                            date: draft.exchangeRateDate ?? "",
-                          })}
-                        </Text>
-                        {convertedAccountAmount !== null ? (
-                          <Text className="font-manrope-bold text-base text-foreground">
-                            {t("transactions.form.amountInAccountCurrency", {
-                              currency: accountCurrencyCode,
-                              amount: formatCurrency(
-                                convertedAccountAmount,
-                                accountCurrencyCode,
-                              ),
-                            })}
-                          </Text>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                <Input
-                  accessibilityLabel={t("transactions.form.description")}
-                  placeholder={t("transactions.form.descriptionPlaceholder")}
-                  maxLength={300}
-                  value={draft.description}
-                  onChangeText={(value) => change("description", value)}
-                  className="h-16 rounded-2xl bg-surface px-4"
-                  style={{
-                    direction,
-                    textAlign: direction === "rtl" ? "right" : "left",
-                    writingDirection: direction,
+                {postFrameReady ? (
+                  <>
+                <TransactionScheduleSection
+                  activePickerMode={Platform.OS === "ios" ? datePickerMode : null}
+                  date={safeOccurredAt}
+                  dateFormat={preferences.dateFormat}
+                  disabled={isSaving}
+                  onDismissPicker={(mode) => {
+                    if (datePickerMode === mode) setDatePickerMode(null);
                   }}
+                  onOpenPicker={(mode) => setDatePickerMode(mode)}
+                  onQuickPreset={handleQuickDatePreset}
+                  onUpdateDateTime={updateDateTime}
                 />
-
-                <View className="flex-row gap-3">
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t("transactions.form.changeDate", {
-                      date: formatAppDate(
-                        safeOccurredAt,
-                        selectAppPreferences(document).dateFormat,
-                      ),
-                    })}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setDatePickerMode("date");
-                    }}
-                    className="h-20 flex-1 justify-center gap-1 rounded-2xl bg-surface px-4"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
-                  >
-                    <View className="flex-row items-center gap-2">
-                      <FilledIcon name="clock" size={17} tone="muted" />
-                      <Text className="font-manrope-medium text-xs text-muted">
-                        {t("transactions.form.date")}
-                      </Text>
-                    </View>
-                    <Text className="font-manrope-semibold text-base text-foreground">
-                      {formatAppDate(
-                        safeOccurredAt,
-                        selectAppPreferences(document).dateFormat,
-                      )}
-                    </Text>
-                    <DateTimePopover
-                      accentColor={theme.accent}
-                      isDark={theme.isDark}
-                      isPresented={datePickerMode === "date"}
-                      maximumDate={new Date()}
-                      mode="date"
-                      title={t("transactions.form.date")}
-                      value={safeOccurredAt}
-                      onDismiss={() => {
-                        if (datePickerMode === "date") setDatePickerMode(null);
-                      }}
-                      onValueChange={(value) => updateDateTime("date", value)}
-                    />
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t("transactions.form.changeTime", {
-                      time: formatTransactionTime(
-                        safeOccurredAt,
-                        i18n.resolvedLanguage,
-                      ),
-                    })}
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setDatePickerMode("time");
-                    }}
-                    className="h-20 flex-1 justify-center gap-1 rounded-2xl bg-surface px-4"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
-                  >
-                    <View className="flex-row items-center gap-2">
-                      <FilledIcon name="clock" size={17} tone="muted" />
-                      <Text className="font-manrope-medium text-xs text-muted">
-                        {t("transactions.form.time")}
-                      </Text>
-                    </View>
-                    <Text className="font-manrope-semibold text-base text-foreground">
-                      {formatTransactionTime(
-                        safeOccurredAt,
-                        i18n.resolvedLanguage,
-                      )}
-                    </Text>
-                    <DateTimePopover
-                      accentColor={theme.accent}
-                      isDark={theme.isDark}
-                      isPresented={datePickerMode === "time"}
-                      maximumDate={new Date()}
-                      mode="time"
-                      title={t("transactions.form.time")}
-                      value={safeOccurredAt}
-                      onDismiss={() => {
-                        if (datePickerMode === "time") setDatePickerMode(null);
-                      }}
-                      onValueChange={(value) => updateDateTime("time", value)}
-                    />
-                  </Pressable>
-                </View>
 
                 {Platform.OS === "android" && datePickerMode ? (
-                  <DateTimePicker
+                  <LazyDateTimePicker
                     accentColor={theme.accent}
                     display="default"
+                    is24Hour={uses24Hour}
                     maximumDate={new Date()}
                     mode={datePickerMode}
                     presentation="dialog"
                     value={safeOccurredAt}
+                    onDismiss={() => setDatePickerMode(null)}
                     onValueChange={(_, selected) =>
                       updateDateTime(datePickerMode, selected)
                     }
-                    onDismiss={() => setDatePickerMode(null)}
                   />
                 ) : null}
 
-                <TransactionSelectionSection
-                  title={
-                    draft.type === 2
-                      ? t("transactions.common.fields.transferFrom")
-                      : t("transactions.common.fields.account")
-                  }
-                  placeholder={t("transactions.form.selectAccount")}
-                  icon="credit-card"
-                  options={accountOptions}
-                  selectedId={draft.accountId}
-                  expanded={expanded.account}
-                  compactOptions
+                <TransactionExtrasSection
+                  budgetId={draft.budgetId}
+                  budgetOptions={budgetOptions}
+                  description={draft.description}
                   disabled={isSaving}
-                  onToggle={() => toggleSection("account")}
-                  onSelect={(accountId) => {
-                    const account = accounts.find(
-                      (item) => item.id === accountId,
-                    );
-                    const currencyCode =
-                      account?.currencyCode ?? transactionCurrencyCode;
-                    currencyRequest.current += 1;
-                    setCurrencyRateLoading(false);
-                    setCurrencyRateError("");
-                    setCurrencyRateNotice("");
+                  labelId={draft.labelId}
+                  labelOptions={labelOptions}
+                  loanId={draft.loanId}
+                  loanOptions={loanOptions}
+                  personId={draft.personId}
+                  personOptions={personOptions}
+                  placeId={draft.placeId}
+                  placeOptions={placeOptions}
+                  receiptUri={receiptUri}
+                  type={draft.type}
+                  onAddBudget={() => router.push("/budgets/create")}
+                  onChangeDescription={(value) => change("description", value)}
+                  onPickReceipt={pickReceipt}
+                  onRemoveReceipt={() => {
+                    setPendingReceipt(null);
                     setDraft((current) => ({
                       ...current,
-                      accountId,
-                      currencyCode,
-                      accountCurrencyCode: currencyCode,
-                      exchangeRate: null,
-                      exchangeRateDate: null,
-                      exchangeRateFetchedAt: null,
-                      exchangeRateSource: null,
-                      conversionSnapshot: null,
-                      destinationAccountId:
-                        current.destinationAccountId === accountId
-                          ? ""
-                          : current.destinationAccountId,
+                      receiptPath: null,
+                      receiptAttachmentId: null,
                     }));
-                    setError("");
                   }}
-                  onAdd={() => router.push("/accounts/create")}
+                  onSelectBudget={(value) => change("budgetId", value)}
+                  onSelectLabel={(value) => change("labelId", value)}
+                  onSelectLoan={(value) => change("loanId", value)}
+                  onSelectPerson={(value) => change("personId", value)}
+                  onSelectPlace={(value) => change("placeId", value)}
                 />
-
-                {draft.type === 2 ? (
-                  <TransactionSelectionSection
-                    title={t("transactions.common.fields.transferTo")}
-                    placeholder={t(
-                      "transactions.form.selectDestinationAccount",
-                    )}
-                    icon="credit-card"
-                    options={destinationOptions}
-                    selectedId={draft.destinationAccountId}
-                    expanded={expanded.destination}
-                    compactOptions
-                    disabled={isSaving}
-                    onToggle={() => toggleSection("destination")}
-                    onSelect={(value) => change("destinationAccountId", value)}
-                    onAdd={() => router.push("/accounts/create")}
-                  />
+                  </>
                 ) : null}
-
-                <TransactionSelectionSection
-                  title={t("transactions.common.fields.category")}
-                  placeholder={t("transactions.form.selectCategory")}
-                  icon="chart-donut-variant"
-                  options={categoryOptions}
-                  selectedId={selectedCategoryRootId}
-                  expanded={expanded.category}
-                  compactOptions
-                  disabled={isSaving}
-                  optional
-                  onToggle={() => toggleSection("category")}
-                  onSelect={(value) => {
-                    const hasChildren = categories.some(
-                      (category) => category.parentId === value,
-                    );
-                    if (value && hasChildren) setCategorySheetParentId(value);
-                    else change("categoryId", value);
-                  }}
-                  onAdd={() =>
-                    router.push({
-                      pathname: "/categories/create",
-                      params: { type: String(draft.type) },
-                    })
-                  }
-                />
-
-                <TransactionSelectionSection
-                  title={t("transactions.common.fields.budget")}
-                  placeholder={t("transactions.form.selectBudget")}
-                  icon="wallet"
-                  options={budgetOptions}
-                  selectedId={draft.budgetId}
-                  expanded={expanded.budget}
-                  compactOptions
-                  disabled={isSaving}
-                  optional
-                  onToggle={() => toggleSection("budget")}
-                  onSelect={(value) => change("budgetId", value)}
-                  onAdd={() => router.push("/budgets/create")}
-                />
-
-                <TransactionSelectionSection
-                  title={t("transactions.common.fields.label")}
-                  placeholder={t("transactions.form.selectLabel")}
-                  icon="check"
-                  options={labelOptions}
-                  selectedId={draft.labelId}
-                  expanded={expanded.label}
-                  disabled={isSaving}
-                  optional
-                  onToggle={() => toggleSection("label")}
-                  onSelect={(value) => change("labelId", value)}
-                />
-
-                <TransactionSelectionSection
-                  title={t("transactions.common.fields.loan")}
-                  placeholder={t("transactions.form.selectLoan")}
-                  icon="credit-card"
-                  options={loanOptions}
-                  selectedId={draft.loanId}
-                  expanded={expanded.loan}
-                  disabled={isSaving}
-                  optional
-                  onToggle={() => toggleSection("loan")}
-                  onSelect={(value) => change("loanId", value)}
-                />
-
-                <TransactionSelectionSection
-                  title={t("transactions.common.fields.place")}
-                  placeholder={t("transactions.form.selectPlace")}
-                  icon="home"
-                  options={placeOptions}
-                  selectedId={draft.placeId}
-                  expanded={expanded.place}
-                  disabled={isSaving}
-                  optional
-                  onToggle={() => toggleSection("place")}
-                  onSelect={(value) => change("placeId", value)}
-                />
-
-                <TransactionSelectionSection
-                  title={t("transactions.common.fields.payee")}
-                  placeholder={t("transactions.form.selectPerson")}
-                  icon="account"
-                  options={personOptions}
-                  selectedId={draft.personId}
-                  expanded={expanded.person}
-                  disabled={isSaving}
-                  optional
-                  onToggle={() => toggleSection("person")}
-                  onSelect={(value) => change("personId", value)}
-                />
-
-                <View className="gap-3 pb-3">
-                  <Text className="font-manrope-semibold text-base text-foreground">
-                    {t("transactions.form.receiptOptional")}
-                  </Text>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      receiptUri
-                        ? t("transactions.form.replaceReceiptAccessibility")
-                        : t("transactions.form.addReceiptAccessibility")
-                    }
-                    onPress={pickReceipt}
-                    className="min-h-52 overflow-hidden rounded-2xl border border-border bg-surface"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
-                  >
-                    {receiptUri ? (
-                      <Image
-                        resizeMode="cover"
-                        source={{ uri: receiptUri }}
-                        style={StyleSheet.absoluteFill}
-                      />
-                    ) : (
-                      <View className="flex-1 items-center justify-center gap-2 px-6 py-10">
-                        <FilledIcon name="camera" size={42} tone="accent" />
-                        <Text className="text-center font-manrope-semibold text-base text-accent">
-                          {t("transactions.form.addReceipt")}
-                        </Text>
-                        <Text className="text-center font-sans text-sm text-muted">
-                          {t("transactions.form.receiptHint")}
-                        </Text>
-                      </View>
-                    )}
-                  </Pressable>
-                  {receiptUri ? (
-                    <Button
-                      variant="danger-soft"
-                      className="self-start"
-                      onPress={() => {
-                        setPendingReceipt(null);
-                        setDraft((current) => ({
-                          ...current,
-                          receiptPath: null,
-                          receiptAttachmentId: null,
-                        }));
-                      }}
-                    >
-                      <FilledIcon name="close" size={18} tone="danger" />
-                      <Button.Label>
-                        {t("transactions.form.removeReceipt")}
-                      </Button.Label>
-                    </Button>
-                  ) : null}
-                </View>
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
@@ -1330,7 +973,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 numberOfLines={1}
                 className="flex-1 font-manrope-bold text-xl text-foreground"
               >
-                {editId
+                {isEditingRecord
                   ? t("transactions.form.editTitle")
                   : t("transactions.form.title")}
               </Text>
@@ -1379,13 +1022,14 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 {notice}
               </Text>
             )}
+            <SaveEmphasis ready={isReady && !missingSource}>
             <View style={styles.splitActionRow}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={
                   isSaving
                     ? t("transactions.form.savingAccessibility")
-                    : editId
+                    : isEditingRecord
                       ? t("transactions.form.saveChangesAccessibility")
                       : t("transactions.form.addAccessibility")
                 }
@@ -1406,14 +1050,22 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   Platform.OS === "ios" && pressed && styles.actionPressed,
                 ]}
               >
-                <FilledIcon name="save" size={24} tone="accent-foreground" />
+                <FilledIcon
+                  name={
+                    isEditingRecord
+                      ? "save"
+                      : getTransactionTypeVisual(draft.type).icon
+                  }
+                  size={24}
+                  tone="accent-foreground"
+                />
                 <Text
                   numberOfLines={1}
-                  className="shrink font-manrope-bold text-base text-accent-foreground"
+                  className="shrink font-manrope-bold text-[17px] text-accent-foreground"
                 >
                   {isSaving
                     ? t("transactions.form.saving")
-                    : editId
+                    : isEditingRecord
                       ? t("transactions.form.saveChanges")
                       : t("transactions.form.add")}
                 </Text>
@@ -1445,10 +1097,12 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 />
               </Pressable>
             </View>
+            </SaveEmphasis>
           </View>
         </View>
       </KeyboardAvoidingView>
 
+      {actionMenuMounted ? (
       <BottomSheet isOpen={actionMenuOpen} onOpenChange={setActionMenuOpen}>
         <AppBottomSheetPortal
           isOpen={actionMenuOpen}
@@ -1456,10 +1110,10 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         >
           <BottomSheet.Overlay />
           <BottomSheet.Content
+            ref={bindActionSheet}
             containerStyle={actionSheetInitialPositionFix.containerStyle}
             onChange={actionSheetInitialPositionFix.onChange}
             topInset={insets.top}
-            bottomInset={insets.bottom}
             contentContainerClassName="px-5 pb-0 pt-2"
             backgroundClassName="rounded-t-[28px] bg-surface"
           >
@@ -1494,28 +1148,52 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           </BottomSheet.Content>
         </AppBottomSheetPortal>
       </BottomSheet>
+      ) : null}
+
       <CurrencySelectorSheet
-        currencies={currencies}
         isOpen={currencySheetOpen}
         selectedCode={transactionCurrencyCode}
         onOpenChange={setCurrencySheetOpen}
         onSelect={(currency) => void selectCurrency(currency.code)}
       />
-      {categorySheetParentOption ? (
-        <TransactionCategorySheet
-          parent={categorySheetParentOption}
-          options={categorySheetChildren}
-          selectedId={draft.categoryId}
-          onSelect={(value) => change("categoryId", value)}
-          onDismiss={() => setCategorySheetParentId(null)}
-        />
-      ) : null}
     </View>
   );
 }
 
+/**
+ * Dimmed until the entry can be saved, then fully lit: readiness is seen,
+ * not read. The buttons stay pressable so a tap explains what is missing.
+ */
+function SaveEmphasis({
+  ready,
+  children,
+}: {
+  ready: boolean;
+  children: React.ReactNode;
+}) {
+  const emphasis = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    emphasis.set(
+      withTiming(ready ? 1 : 0, {
+        duration: 220,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [emphasis, ready]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.5 + emphasis.get() * 0.5,
+    transform: [{ scale: 0.98 + emphasis.get() * 0.02 }],
+  }));
+  return <Reanimated.View style={style}>{children}</Reanimated.View>;
+}
+
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  formStack: {
+    gap: 14,
+    paddingHorizontal: 16,
+  },
   headerSpace: { height: 56 },
   selectorSpace: { height: 84 },
   headerClip: {

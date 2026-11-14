@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ComponentType,
   type PropsWithChildren,
@@ -45,40 +46,37 @@ export function LocalizationProvider({ children }: PropsWithChildren) {
   const language = previewLanguage ?? document._local.appLanguage;
   const isRTL = language === "he";
   const direction: AppDirection = isRTL ? "rtl" : "ltr";
-  const [isLanguageReady, setIsLanguageReady] = useState(
-    i18n.resolvedLanguage === language,
-  );
+
+  // Bundled resources + initImmediate: false let i18next switch language
+  // synchronously without hiding the initial tree behind an async loading gate.
+  if (i18n.resolvedLanguage !== language) {
+    void i18n.changeLanguage(language);
+  }
 
   useEffect(() => {
-    let active = true;
-
-    async function applyLanguage() {
-      if (i18n.resolvedLanguage !== language) {
-        await i18n.changeLanguage(language);
-      }
-      if (active) setIsLanguageReady(true);
-
-      if (Platform.OS !== "web" && I18nManager.isRTL !== isRTL) {
-        I18nManager.allowRTL(true);
-        I18nManager.swapLeftAndRightInRTL(true);
-        I18nManager.forceRTL(isRTL);
-      }
+    if (i18n.resolvedLanguage !== language) {
+      void i18n.changeLanguage(language);
     }
-
-    void applyLanguage();
-    return () => {
-      active = false;
-    };
+    if (Platform.OS !== "web" && I18nManager.isRTL !== isRTL) {
+      I18nManager.allowRTL(true);
+      I18nManager.swapLeftAndRightInRTL(true);
+      I18nManager.forceRTL(isRTL);
+    }
   }, [isRTL, language]);
 
-  if (!isLanguageReady) return null;
+  const contextValue = useMemo(
+    () => ({ direction, isRTL, language, setPreviewLanguage }),
+    [direction, isRTL, language],
+  );
+  const containerStyle = useMemo(
+    () => ({ direction, flex: 1 }),
+    [direction],
+  );
 
   return (
     <I18nextProvider i18n={i18n}>
-      <LocalizationContext.Provider
-        value={{ direction, isRTL, language, setPreviewLanguage }}
-      >
-        <DirectionalView dir={direction} style={{ direction, flex: 1 }}>
+      <LocalizationContext.Provider value={contextValue}>
+        <DirectionalView dir={direction} style={containerStyle}>
           {children}
         </DirectionalView>
       </LocalizationContext.Provider>

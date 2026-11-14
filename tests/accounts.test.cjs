@@ -109,26 +109,27 @@ const validSavingsDetails = () => ({
 const add = (document, changes = {}, id = "test-account") =>
   addAccountToDocument(document, draft(changes), "alex-personal", id, now);
 
-test("generated Material catalog contains every installed rounded symbol", () => {
-  const metadata = JSON.parse(
-    fs.readFileSync(
-      path.resolve(
-        __dirname,
-        "../node_modules/@material-symbols-svg/react-native/dist/metadata/icon-index.json",
-      ),
-      "utf8",
-    ),
-  );
+function readMaterialCatalog() {
   const source = fs.readFileSync(
     path.join(sourceRoot, "shared/icons/material-rounded-filled-icons.ts"),
     "utf8",
   );
   const assignment = source.indexOf("= [");
   const end = source.lastIndexOf("];");
-  const icons = JSON.parse(source.slice(assignment + 2, end + 1));
-  assert.equal(icons.length, 3903);
-  assert.ok(icons.length <= Object.keys(metadata).length);
-  assert.equal(new Set(icons.map((icon) => icon.name)).size, icons.length);
+  return JSON.parse(source.slice(assignment + 2, end + 1));
+}
+
+function productionDefaultCategories() {
+  const {
+    createDefaultBackup: createProductionDefaultBackup,
+  } = require("../src/data/model/default-backup.ts");
+  return createProductionDefaultBackup().categories;
+}
+
+test("generated Material catalog contains exactly the picker and default-category icons", () => {
+  const icons = readMaterialCatalog();
+  const names = icons.map((icon) => icon.name);
+  assert.equal(new Set(names).size, names.length);
   assert.ok(
     icons.every(
       (icon) =>
@@ -137,47 +138,46 @@ test("generated Material catalog contains every installed rounded symbol", () =>
         /^[Mm]/.test(icon.pathData),
     ),
   );
-  const trailingNames = icons.slice(-68).map((icon) => icon.name);
-  assert.ok(trailingNames.every((name) => /^\d/.test(name) || name === "abc"));
-  for (const name of ["10k", "18_up_rating", "360", "9mp", "abc"]) {
-    assert.ok(trailingNames.includes(name));
-  }
+  const expected = new Set(
+    [
+      ...ACCOUNT_ICON_GROUPS.flatMap((group) => group.icons).map(
+        (icon) => icon.name,
+      ),
+      ...productionDefaultCategories().map((category) => String(category.icon)),
+    ]
+      .filter((name) => name.startsWith("material:"))
+      .map((name) => name.slice("material:".length)),
+  );
+  assert.deepEqual([...names].sort(), [...expected].sort());
+  // Resolution and utility glyphs such as 4K/5K never reach the picker.
+  assert.ok(names.every((name) => !/^\d/.test(name)));
 });
 
-test("suggested icon categories contain 20 valid choices each", () => {
-  const expectedTitles = [
-    "Money & accounts",
-    "Everyday spending",
-    "Goals & interests",
-    "Entertainment",
-    "Food",
-    "Groceries",
-    "Subscriptions",
-    "Transportation",
-    "Travel",
-    "Rent",
-    "Health",
-    "Education",
-    "Utilities",
-    "Other",
-    "More",
-  ];
+test("icon picker has one section per default category", () => {
+  const categories = productionDefaultCategories();
+  const categoryKeys = categories.map((category) =>
+    String(category.name).toLowerCase(),
+  );
+  assert.equal(ACCOUNT_ICON_GROUPS[0].key, "accounts");
   assert.deepEqual(
-    ACCOUNT_ICON_GROUPS.map((group) => group.title),
-    expectedTitles,
+    ACCOUNT_ICON_GROUPS.map((group) => group.key).sort(),
+    ["accounts", ...categoryKeys].sort(),
   );
-  assert.ok(ACCOUNT_ICON_GROUPS.every((group) => group.icons.length >= 20));
+  assert.ok(ACCOUNT_ICON_GROUPS.every((group) => group.icons.length >= 12));
 
-  const source = fs.readFileSync(
-    path.join(sourceRoot, "shared/icons/material-rounded-filled-icons.ts"),
-    "utf8",
-  );
-  const assignment = source.indexOf("= [");
-  const end = source.lastIndexOf("];");
+  // Every default category's own icon is offered in its matching section.
+  for (const category of categories) {
+    const group = ACCOUNT_ICON_GROUPS.find(
+      (item) => item.key === String(category.name).toLowerCase(),
+    );
+    assert.ok(
+      group.icons.some((icon) => icon.name === category.icon),
+      `${category.name} section offers ${category.icon}`,
+    );
+  }
+
   const materialNames = new Set(
-    JSON.parse(source.slice(assignment + 2, end + 1)).map(
-      (icon) => `material:${icon.name}`,
-    ),
+    readMaterialCatalog().map((icon) => `material:${icon.name}`),
   );
   assert.deepEqual(
     ACCOUNT_ICON_GROUPS.flatMap((group) =>
@@ -186,7 +186,7 @@ test("suggested icon categories contain 20 valid choices each", () => {
           (icon) =>
             icon.name.startsWith("material:") && !materialNames.has(icon.name),
         )
-        .map((icon) => `${group.title}: ${icon.name}`),
+        .map((icon) => `${group.key}: ${icon.name}`),
     ),
     [],
   );
@@ -406,7 +406,7 @@ test("JSON backup round trip preserves all new account options and unknown field
   );
   assert.deepEqual(restored.accounts, next.accounts);
   assert.deepEqual(restored.unknown, next.unknown);
-  assert.equal(restored._local.schemaVersion, 22);
+  assert.equal(restored._local.schemaVersion, 25);
   assert.equal(restored._local.themeMode, "dark");
   assert.equal(restored._local.accentColor, "violet");
   assert.equal(
@@ -1486,7 +1486,7 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     );
     await migrateLocalDatabase(database);
     const migrated = await readDocument(database);
-    assert.equal(migrated._local.schemaVersion, 22);
+    assert.equal(migrated._local.schemaVersion, 25);
     assert.equal(migrated._local.themeMode, "system");
     assert.equal(migrated._local.accentColor, "cyan");
     assert.equal(migrated.accounts[0].accountType, "bank");
@@ -1497,7 +1497,7 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     assert.deepEqual(migrated.importedUnknown, { keep: true });
     assert.equal(
       (await database.getFirstAsync("PRAGMA user_version")).user_version,
-      22,
+      25,
     );
     const next = storeExchangeRates(add(migrated), rateTable());
     await writeDocument(database, next);
@@ -1533,4 +1533,65 @@ test("SQLite v2 migration preserves imported fields without reseeding, survives 
     assert.ok(path.basename(directory).startsWith("budget-accounts-test-"));
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("a new account form starts from the profile's own data", () => {
+  const {
+    createInitialAccountDraft,
+  } = require("../src/features/accounts/lib/initial-account-draft.ts");
+  const { ICON_COLORS } = require("../src/shared/icons/colors.ts");
+  const current = createDefaultBackup();
+  const banks = selectBankAccounts(current);
+  const owned = selectAccounts(current);
+  assert.ok(owned.length > 0);
+
+  const existing = createInitialAccountDraft(current, "ils");
+  assert.equal(existing.currencyCode, "ILS", "the profile currency leads");
+  assert.equal(existing.isDefault, false, "an existing default is kept");
+  assert.equal(existing.accountType, "card");
+  assert.equal(existing.icon, "credit-card");
+  if (banks.length === 1)
+    assert.equal(existing.linkedBankAccountId, banks[0].id);
+  // A colour no account of this profile uses yet.
+  assert.ok(
+    !owned.some((account) => account.color.toLowerCase() === existing.color),
+  );
+  assert.ok(ICON_COLORS.includes(existing.color));
+
+  // Only one bank account: a new card is paid from it without asking.
+  const oneBank = {
+    ...current,
+    accounts: current.accounts.filter(
+      (account) =>
+        account.accountType !== "bank" || account.uuid === banks[0].id,
+    ),
+  };
+  assert.equal(
+    createInitialAccountDraft(oneBank, "USD").linkedBankAccountId,
+    banks[0].id,
+  );
+  // Several bank accounts: the payer is the user's choice.
+  const twoBanks = {
+    ...oneBank,
+    accounts: [
+      ...oneBank.accounts,
+      {
+        ...oneBank.accounts.find((account) => account.uuid === banks[0].id),
+        uuid: "second-bank",
+        name: "Second bank",
+      },
+    ],
+  };
+  assert.equal(createInitialAccountDraft(twoBanks, "USD").linkedBankAccountId, null);
+
+  // First account of the profile: it becomes the default, and since a card
+  // cannot be saved without a bank account, the form opens on Bank.
+  const empty = { ...current, accounts: [] };
+  const first = createInitialAccountDraft(empty, "eur");
+  assert.equal(first.isDefault, true);
+  assert.equal(first.accountType, "bank");
+  assert.equal(first.icon, "bank");
+  assert.equal(first.linkedBankAccountId, null);
+  assert.equal(first.color, ICON_COLORS[0]);
+  assert.equal(first.currencyCode, "EUR");
 });

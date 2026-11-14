@@ -3,11 +3,7 @@ import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
-import Animated, {
-  Easing,
-  FadeInDown,
-  ReduceMotion,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
@@ -27,6 +23,7 @@ type ProfileSettingsPageProps = {
   onOpenBackup: () => void;
   onOpenConverter: () => void;
   onOpenLanguage: () => void;
+  onOpenSecurity: () => void;
   onOpenTheme: () => void;
 };
 
@@ -42,7 +39,7 @@ function SettingsRow({
 
   function handlePress() {
     if (item.id === "local-ai") {
-      router.push("/ai");
+      router.push("/settings/ai");
       return;
     }
     if (onPress) {
@@ -93,12 +90,14 @@ function SettingsGroup({
   onOpenBackup,
   onOpenConverter,
   onOpenLanguage,
+  onOpenSecurity,
   onOpenTheme,
 }: {
   items: SettingsItem[];
   onOpenBackup?: () => void;
   onOpenConverter?: () => void;
   onOpenLanguage?: () => void;
+  onOpenSecurity?: () => void;
   onOpenTheme?: () => void;
 }) {
   return (
@@ -116,7 +115,9 @@ function SettingsGroup({
                   ? onOpenBackup
                   : item.id === "converter"
                     ? onOpenConverter
-                    : undefined
+                    : item.id === "security"
+                      ? onOpenSecurity
+                      : undefined
           }
         />
       ))}
@@ -124,25 +125,23 @@ function SettingsGroup({
   );
 }
 
-function createRevealAnimation(delay: number) {
-  return FadeInDown.duration(420)
-    .delay(delay)
-    .easing(Easing.bezier(0.22, 1, 0.36, 1))
-    .reduceMotion(ReduceMotion.System);
+function createRevealAnimation(_delay: number) {
+  return undefined;
 }
 
 export function ProfileSettingsPage({
   onOpenBackup,
   onOpenConverter,
   onOpenLanguage,
+  onOpenSecurity,
   onOpenTheme,
 }: ProfileSettingsPageProps) {
   const { t } = useTranslation();
   const primarySettings: SettingsItem[] = [
     {
       id: "local-ai",
-      title: t("localAI.title"),
-      description: t("localAI.privacyTitle"),
+      title: t("localAI.settings.title"),
+      description: t("localAI.settings.description"),
       icon: "smart-toy",
       iconBackground: "#a8b6f3",
     },
@@ -178,7 +177,7 @@ export function ProfileSettingsPage({
       id: "security",
       title: t("settings.items.security.title"),
       description: t("settings.items.security.description"),
-      icon: "notifications-active",
+      icon: "lock",
       iconBackground: "#9bd59b",
     },
     {
@@ -248,6 +247,7 @@ export function ProfileSettingsPage({
           items={primarySettings}
           onOpenBackup={onOpenBackup}
           onOpenLanguage={onOpenLanguage}
+          onOpenSecurity={onOpenSecurity}
           onOpenTheme={onOpenTheme}
         />
       </Animated.View>

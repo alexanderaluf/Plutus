@@ -142,7 +142,11 @@ export function expensePieLayout(
     const side = arcs
       .filter((arc) => arc.right === right)
       .sort((a, b) => a.edge.y - b.edge.y);
-    const span = Math.max(outer * 1.4, (side.length - 1) * (labelHeight + 10));
+    // Spread labels along the ring, but never past the chart's own height.
+    const span = Math.min(
+      Math.max(outer * 1.4, (side.length - 1) * (labelHeight + 10)),
+      height - labelHeight,
+    );
     return side.map((arc, index) => {
       const x = right ? width - inset - labelWidth : inset;
       const labelCenter =

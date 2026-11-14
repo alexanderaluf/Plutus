@@ -2,9 +2,19 @@ import {
   EdgeToEdgeLayout,
   EdgeToEdgeScrollView,
 } from "@/shared/ui/edge-to-edge-layout";
+import { queryScopedTransactionsAsync } from "@/data/database/fast-store-client";
+import { getDocumentWindowState } from "@/data/database/month-index";
 import { useLocalData } from "@/data/local-data-provider";
+import type { BackupDocument } from "@/data/model/backup-document";
+import { budgetDraft } from "@/data/model/budget-record";
+import type { JsonObject } from "@/data/model/json";
+import { budgetPeriodRange } from "@/data/selectors/budget-selectors";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
-import { belongsToProfile, identity } from "@/data/model/category-record";
+import {
+  belongsToProfile,
+  categoryFamily,
+  identity,
+} from "@/data/model/category-record";
 import { selectBudgets } from "@/data/selectors/document-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
@@ -17,7 +27,7 @@ import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-i
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Animated, I18nManager, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -40,20 +50,80 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
   const { formatCurrency } = useCurrencyFormat();
   const { formatDate, formatDateRange } = useAppDate();
   const { t } = useTranslation();
-  const { document, updateDocument } = useLocalData(),
+  const { document, ensurePeriodLoaded, updateDocument } = useLocalData(),
     now = useCategoryClock();
   const router = useRouter(),
     insets = useSafeAreaInsets(),
     c = useAppThemeColors();
+  const windowState = getDocumentWindowState(document);
+  const isPartial = Boolean(windowState?.isPartial);
+  const [scopedState, setScopedState] = useState<{
+    doc: BackupDocument;
+    id: string;
+    rows: JsonObject[];
+  } | null>(null);
+  const rawRecord = useMemo(
+    () =>
+      document.budgets.find(
+        (b) => identity(b) === id && belongsToProfile(document, b),
+      ),
+    [document, id],
+  );
+  const draft = useMemo(
+    () => (rawRecord ? budgetDraft(rawRecord) : null),
+    [rawRecord],
+  );
+  useLayoutEffect(() => {
+    if (!isPartial || !draft) return;
+    const { start, end } = budgetPeriodRange(draft, now);
+    void ensurePeriodLoaded?.(start, end);
+  }, [isPartial, draft, now, ensurePeriodLoaded]);
+  useEffect(() => {
+    if (!isPartial || !draft) return;
+    const catIds = draft.categories.length
+      ? draft.includeSubcategories
+        ? [
+            ...new Set(
+              draft.categories.flatMap((cid) => [
+                ...categoryFamily(document.categories, cid),
+              ]),
+            ),
+          ]
+        : draft.categories
+      : [];
+    const scope = catIds.length
+      ? ({ kind: "category", ids: catIds } as const)
+      : draft.accounts.length
+        ? ({ kind: "account", ids: draft.accounts } as const)
+        : null;
+    if (!scope) return;
+    let active = true;
+    void queryScopedTransactionsAsync(document, scope).then((rows) => {
+      if (active && rows) {
+        setScopedState({ doc: document, id, rows });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [isPartial, draft, document, id]);
+  const scopedDocument = useMemo(
+    () =>
+      scopedState && scopedState.doc === document && scopedState.id === id
+        ? { ...document, transactions: scopedState.rows }
+        : document,
+    [scopedState, document, id],
+  );
   const budget = useMemo(
-    () => selectBudgets(document, now).find((b) => b.id === id),
-    [document, now, id],
+    () => selectBudgets(scopedDocument, now).find((b) => b.id === id),
+    [scopedDocument, now, id],
   );
   const [sheet, setSheet] = useState<"delete" | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [showOnHome, setShowOnHome] = useState(() => budget?.showOnHome ?? false);
-  const deleteSheetInitialPositionFix = useBottomSheetInitialPositionFix(
+  const { bindSheet: bindDeleteSheet, ...deleteSheetInitialPositionFix } =
+    useBottomSheetInitialPositionFix(
     sheet === "delete",
   );
   const saving = useRef(false);
@@ -305,10 +375,10 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
         >
           <BottomSheet.Overlay isCloseOnPress={!busy} />
           <BottomSheet.Content
+            ref={bindDeleteSheet}
             containerStyle={deleteSheetInitialPositionFix.containerStyle}
             onChange={deleteSheetInitialPositionFix.onChange}
             topInset={insets.top}
-            bottomInset={insets.bottom}
             enablePanDownToClose={!busy}
             enableHandlePanningGesture={!busy}
             enableContentPanningGesture={!busy}

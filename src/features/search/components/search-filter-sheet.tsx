@@ -288,7 +288,8 @@ export function SearchFilterSheet({
 }: SearchFilterSheetProps) {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const [draft, setDraft] = useState(filters);
   const [minText, setMinText] = useState(amountText(filters.minAmount));
   const [maxText, setMaxText] = useState(amountText(filters.maxAmount));
@@ -330,6 +331,7 @@ export function SearchFilterSheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["88%"]}

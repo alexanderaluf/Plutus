@@ -1,7 +1,14 @@
 import { BlurTargetView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useAmountVisibility } from "@/shared/lib/use-currency-format";
 import { useTranslation } from "react-i18next";
@@ -13,7 +20,8 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
-  type ViewToken,
+  type ViewInstance,
+  type ListViewToken,
 } from "react-native";
 import Reanimated, {
   Easing,
@@ -25,11 +33,13 @@ import Reanimated, {
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
+  createHomeTransactionRows,
   type HomeRow,
   type HomeSection,
 } from "@/data/selectors/home-section-selectors";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { Text } from "@/shared/ui/app-text";
+import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 import {
@@ -51,6 +61,7 @@ import {
   RecurringHomeRow,
 } from "./components/recurring-home-section";
 import { IndexedTransactionRow } from "./components/transaction-list";
+import { TransactionDateHeader } from "./components/transaction-date-header";
 import { TransactionMonthSelector } from "./components/transaction-month-selector";
 import { financialMonth } from "@/data/model/financial-month";
 import {
@@ -82,7 +93,7 @@ export function HomeScreen() {
   const router = useRouter();
   const { i18n, t } = useTranslation();
   const { activeProfile } = useProfiles();
-  const { document } = useLocalData();
+  const { document, ensurePeriodLoaded } = useLocalData();
   const [transactionPage, setTransactionPage] = useState({
     key: "",
     limit: TRANSACTION_PAGE_SIZE,
@@ -110,7 +121,7 @@ export function HomeScreen() {
   >(null);
   const [selectorTop, setSelectorTop] = useState<number | null>(null);
   const [isSelectorSticky, setIsSelectorSticky] = useState(false);
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
   const sectionOpacity = useSharedValue(1);
   const sectionStyle = useAnimatedStyle(() => ({
@@ -136,12 +147,31 @@ export function HomeScreen() {
     document._local.monthStartDay,
     monthOffset,
   );
+  const { start: prevPrefetchStart, end: prevPrefetchEnd } = financialMonth(
+    now,
+    document._local.monthStartDay,
+    monthOffset - 1,
+  );
+  const prevPrefetchStartTime = prevPrefetchStart.getTime();
+  const prevPrefetchEndTime = prevPrefetchEnd.getTime();
   const projectTransaction = useMemo(
     () => createTransactionProjector(document, i18n.resolvedLanguage),
     [document, i18n.resolvedLanguage],
   );
   const monthStartTime = monthStart.getTime();
   const monthEndTime = monthEnd.getTime();
+  useLayoutEffect(() => {
+    void ensurePeriodLoaded?.(
+      new Date(monthStartTime),
+      new Date(monthEndTime),
+    );
+  }, [ensurePeriodLoaded, monthStartTime, monthEndTime]);
+  useEffect(() => {
+    void ensurePeriodLoaded?.(
+      new Date(prevPrefetchStartTime),
+      new Date(prevPrefetchEndTime),
+    );
+  }, [ensurePeriodLoaded, prevPrefetchStartTime, prevPrefetchEndTime]);
   const pageKey = `${activeProfile.id}:${monthStartTime}:${monthEndTime}`;
   const revealScope = section === "transactions" ? pageKey : activeProfile.id;
   // A new section/month visit resets reveal history, but pagination does not.
@@ -150,7 +180,7 @@ export function HomeScreen() {
     [section, revealScope],
   );
   const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken<HomeRow>[] }) => {
+    ({ viewableItems }: { viewableItems: ListViewToken[] }) => {
       rowFade.update(viewableItems);
     },
     [rowFade],
@@ -186,11 +216,7 @@ export function HomeScreen() {
   const rows = useMemo<HomeRow[]>(() => {
     if (isSectionPending) return EMPTY_ROWS;
     if (section === "transactions")
-      return transactions.map((entry) => ({
-        kind: "transaction",
-        id: entry.id,
-        entry,
-      }));
+      return createHomeTransactionRows(transactions);
     return sectionData?.rows.slice(0, sectionLimit) ?? EMPTY_ROWS;
   }, [isSectionPending, section, transactions, sectionData, sectionLimit]);
   const totalRows =
@@ -239,16 +265,30 @@ export function HomeScreen() {
         style={[
           item.kind !== "category" &&
             item.kind !== "transaction" &&
+            item.kind !== "date" &&
             styles.rowGap,
         ]}
       >
-        {item.kind === "transaction" ? (
-          <IndexedTransactionRow
-            entry={item.entry}
-            project={projectTransaction}
-            showBorder={index < transactions.length - 1}
-            onPress={onTransactionPress}
+        {item.kind === "date" ? (
+          <TransactionDateHeader
+            timestamp={item.timestamp}
+            now={now}
+            isFirst={index === 0}
           />
+        ) : item.kind === "transaction" ? (
+          <View
+            className={`border-x border-border bg-surface px-4 ${
+              item.first ? "rounded-t-[24px] border-t pt-1" : ""
+            } ${item.last ? "rounded-b-[24px] border-b pb-1" : ""}`}
+            style={{ borderCurve: "continuous" }}
+          >
+            <IndexedTransactionRow
+              entry={item.entry}
+              project={projectTransaction}
+              showBorder={!item.last}
+              onPress={onTransactionPress}
+            />
+          </View>
         ) : item.kind === "category" ? (
           <CategoryListRow
             row={item}
@@ -277,7 +317,7 @@ export function HomeScreen() {
     ),
     [
       projectTransaction,
-      transactions.length,
+      now,
       onTransactionPress,
       rowFade,
       sectionData,
@@ -303,7 +343,6 @@ export function HomeScreen() {
   const onSectionChange = useCallback(
     (next: HomeSection) => {
       if (next === section) return;
-      sectionOpacity.set(0);
       // When switching from a scrolled section, start the new content directly
       // below the pinned controls rather than retaining a deep list offset.
       if (isSelectorSticky && selectorTop !== null) {
@@ -338,9 +377,10 @@ export function HomeScreen() {
     );
     return entry ? projectTransaction(entry) : null;
   }, [transactions, selectedTransactionId, projectTransaction]);
-  const monthSelector =
+  const monthSelector = (blurTarget?: typeof blurTargetRef) =>
     section === "transactions" ? (
       <TransactionMonthSelector
+        blurTarget={blurTarget}
         start={monthStart}
         end={monthEnd}
         isCurrent={monthOffset === 0}
@@ -401,16 +441,27 @@ export function HomeScreen() {
             contentInsetAdjustmentBehavior="never"
             ListEmptyComponent={
               homeData.error ? (
-                <View accessibilityRole="alert" style={styles.loading}>
-                  <Text className="text-center text-sm text-danger">
+                <View
+                  accessibilityRole="alert"
+                  className="items-center gap-3 rounded-[24px] border border-border bg-surface p-6"
+                  style={{ borderCurve: "continuous" }}
+                >
+                  <View
+                    className="size-11 items-center justify-center rounded-2xl bg-surface-secondary"
+                    style={{ borderCurve: "continuous" }}
+                  >
+                    <FilledIcon name="help" size={20} tone="danger" />
+                  </View>
+                  <Text className="text-center font-manrope-semibold text-[14px] leading-[20px] text-danger">
                     {t("home.loadError")}
                   </Text>
                   <Pressable
                     accessibilityRole="button"
-                    className="min-h-11 items-center justify-center"
                     onPress={() => setLoadRetry((retry) => retry + 1)}
+                    className="min-h-10 items-center justify-center rounded-full border border-border bg-surface-secondary px-4"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
                   >
-                    <Text className="text-sm text-accent">
+                    <Text className="font-manrope-semibold text-[13px] leading-[18px] text-accent">
                       {t("home.retryLoad")}
                     </Text>
                   </Pressable>
@@ -426,9 +477,20 @@ export function HomeScreen() {
                 </View>
               ) : section === "transactions" ? (
                 <Reanimated.View style={sectionStyle}>
-                  <Text className="py-5 text-center font-sans text-sm text-muted">
-                    {t("home.monthSelector.empty")}
-                  </Text>
+                  <View
+                    className="items-center gap-2.5 rounded-[24px] border border-border bg-surface px-6 py-8"
+                    style={{ borderCurve: "continuous" }}
+                  >
+                    <View
+                      className="size-11 items-center justify-center rounded-2xl bg-surface-secondary"
+                      style={{ borderCurve: "continuous" }}
+                    >
+                      <FilledIcon name="receipt" size={20} tone="muted" />
+                    </View>
+                    <Text className="text-center font-sans text-[14px] leading-[20px] text-muted">
+                      {t("home.monthSelector.empty")}
+                    </Text>
+                  </View>
                 </Reanimated.View>
               ) : (
                 <Reanimated.View style={sectionStyle}>
@@ -443,11 +505,32 @@ export function HomeScreen() {
                             : "/recurring",
                       )
                     }
-                    className="rounded-3xl bg-surface p-4"
+                    className="flex-row items-center gap-3.5 rounded-[24px] border border-border bg-surface p-4"
+                    style={({ pressed }) => ({
+                      opacity: pressed ? 0.68 : 1,
+                      borderCurve: "continuous",
+                    })}
                   >
-                    <Text className="text-sm text-muted">
+                    <View
+                      className="size-11 shrink-0 items-center justify-center rounded-2xl bg-surface-secondary"
+                      style={{ borderCurve: "continuous" }}
+                    >
+                      <FilledIcon
+                        name={
+                          section === "categories"
+                            ? "tag"
+                            : section === "budgets"
+                              ? "chart-donut-variant"
+                              : "event-repeat"
+                        }
+                        size={20}
+                        tone="accent"
+                      />
+                    </View>
+                    <Text className="min-w-0 flex-1 font-sans text-[13px] leading-[19px] text-muted">
                       {t(`home.${section}.empty`)}
                     </Text>
+                    <FilledIcon name="chevron-right" size={18} tone="muted" />
                   </Pressable>
                 </Reanimated.View>
               )
@@ -475,16 +558,21 @@ export function HomeScreen() {
                 <CollapsingHeaderSpacer height={HEADER_HEIGHT} />
                 <View style={styles.headerGap} />
                 {homeData.error && rows.length > 0 ? (
-                  <View accessibilityRole="alert">
-                    <Text className="text-sm text-danger">
+                  <View
+                    accessibilityRole="alert"
+                    className="mb-4 flex-row items-center justify-between gap-3 rounded-[22px] border border-border bg-surface p-3.5"
+                    style={{ borderCurve: "continuous" }}
+                  >
+                    <Text className="min-w-0 flex-1 font-manrope-semibold text-[13px] leading-[18px] text-danger">
                       {t("home.loadError")}
                     </Text>
                     <Pressable
                       accessibilityRole="button"
-                      className="min-h-11 justify-center"
+                      className="min-h-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-secondary px-3"
+                      style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
                       onPress={() => setLoadRetry((retry) => retry + 1)}
                     >
-                      <Text className="text-sm text-accent">
+                      <Text className="font-manrope-semibold text-[12px] leading-[16px] text-accent">
                         {t("home.retryLoad")}
                       </Text>
                     </Pressable>
@@ -546,27 +634,17 @@ export function HomeScreen() {
                     value={section}
                     onChange={onSectionChange}
                   />
-                  {monthSelector}
+                  {monthSelector()}
                 </View>
                 <Reanimated.View style={sectionStyle}>
-                  {isSectionPending ? null : section === "transactions" ? (
-                    <View>
-                      <View className="mb-2">
-                        <Text className="font-manrope-bold text-lg text-foreground">
-                          {t("home.recentActivity.allTitle")}
-                        </Text>
-                        <Text className="mt-0.5 font-sans text-xs text-muted">
-                          {t("home.recentActivity.description")}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : sectionData?.section === "categories" ? (
-                    <CategoryListHeader count={totalRows} />
+                  {isSectionPending ||
+                  section === "transactions" ? null : sectionData?.section ===
+                    "categories" ? (
+                    <CategoryListHeader />
                   ) : sectionData?.section === "budgets" ? (
-                    <BudgetListHeader count={totalRows} />
+                    <BudgetListHeader />
                   ) : sectionData?.section === "recurring" ? (
                     <RecurringHomeHeader
-                      count={totalRows}
                       paid={sectionData.paid}
                       remaining={sectionData.remaining}
                       fallbackCurrency={activeProfile.currencyCode}
@@ -603,7 +681,7 @@ export function HomeScreen() {
               value={section}
               onChange={onSectionChange}
             />
-            {monthSelector}
+            {monthSelector(blurTargetRef)}
           </View>
         ) : null}
       </View>
@@ -620,11 +698,11 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   content: { paddingHorizontal: 20, paddingBottom: 160 },
-  headerGap: { height: 28 },
-  sectionGap: { height: 28 },
+  headerGap: { height: 16 },
+  sectionGap: { height: 20 },
   rowGap: { marginBottom: 12 },
   loading: { minHeight: 80, alignItems: "center", justifyContent: "center" },
-  selectorSpacer: { paddingBottom: 20 },
+  selectorSpacer: { paddingBottom: 16 },
   hiddenSelectorSpacer: { opacity: 0 },
   selectorDock: {
     left: 12,

@@ -16,6 +16,7 @@ import {
   type RecurringDraft,
 } from "../model/recurring-record";
 import { createRecordLookup } from "./transaction-selectors";
+import { memoizeForDocument } from "./document-memo";
 import {
   filterProjection,
   finishProjection,
@@ -23,7 +24,9 @@ import {
 } from "./cooperative";
 
 export function selectRecurrings(document: BackupDocument, now = new Date()) {
-  return finishProjection(iterateRecurrings(document, now));
+  return memoizeForDocument(document, `recurrings:${now.getTime()}`, () =>
+    finishProjection(iterateRecurrings(document, now)),
+  );
 }
 
 export function* iterateRecurrings(document: BackupDocument, now: Date) {
@@ -219,7 +222,28 @@ function* iterateRecurringTotals(
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([currencyCode, amount]) => ({ currencyCode, amount }));
 }
+const recurringSummaryCache = new WeakMap<
+  Recurring[],
+  Map<string, {
+    yearly: { currencyCode: string; amount: number }[];
+    yearlyIncome: { currencyCode: string; amount: number }[];
+    yearlyExpense: { currencyCode: string; amount: number }[];
+    yearlyNet: { currencyCode: string; amount: number }[];
+    monthly: { currencyCode: string; amount: number }[];
+    monthlyNet: { currencyCode: string; amount: number }[];
+    income: { currencyCode: string; amount: number }[];
+    expense: { currencyCode: string; amount: number }[];
+    due: { currencyCode: string; amount: number }[];
+    dueCount: number;
+  }>
+>();
+
 export function selectRecurringSummary(items: Recurring[], now = new Date()) {
+  const monthKey = `${now.getFullYear()}-${now.getMonth()}`;
+  let byMonth = recurringSummaryCache.get(items);
+  const cached = byMonth?.get(monthKey);
+  if (cached) return cached;
+
   const active = items.filter((r) => !r.archived && r.valid);
   const annual = active.map((r) => ({
     ...r,
@@ -240,12 +264,23 @@ export function selectRecurringSummary(items: Recurring[], now = new Date()) {
     new Date(now.getFullYear(), now.getMonth(), 1),
     new Date(now.getFullYear(), now.getMonth() + 1, 1),
   );
-  return {
+  const unpaid = month.filter((e) => e.status === "pending" && e.type === 0);
+  // Income counts up and expenses count down, so the net is what the person
+  // keeps (or spends beyond) from their scheduled money each period.
+  const signedAnnual = annual.map((r) => ({
+    ...r,
+    amount: r.type === 1 ? r.amount : -r.amount,
+  }));
+  const summary = {
     yearly: recurringTotals(annual),
     yearlyIncome: recurringTotals(annual.filter((r) => r.type === 1)),
     yearlyExpense: recurringTotals(annual.filter((r) => r.type === 0)),
+    yearlyNet: recurringTotals(signedAnnual),
     monthly: recurringTotals(
       annual.map((r) => ({ ...r, amount: r.amount / 12 })),
+    ),
+    monthlyNet: recurringTotals(
+      signedAnnual.map((r) => ({ ...r, amount: r.amount / 12 })),
     ),
     income: recurringTotals(
       annual
@@ -257,10 +292,16 @@ export function selectRecurringSummary(items: Recurring[], now = new Date()) {
         .filter((r) => r.type === 0)
         .map((r) => ({ ...r, amount: r.amount / 12 })),
     ),
-    due: recurringTotals(
-      month.filter((e) => e.status === "pending" && e.type === 0),
-    ),
+    due: recurringTotals(unpaid),
+    /** Unpaid expense payments still scheduled in the current month. */
+    dueCount: unpaid.length,
   };
+  if (!byMonth) {
+    byMonth = new Map();
+    recurringSummaryCache.set(items, byMonth);
+  }
+  byMonth.set(monthKey, summary);
+  return summary;
 }
 
 /** Current-month recurring expense activity used by the home screen. */
@@ -268,7 +309,11 @@ export function selectHomeRecurringPayments(
   document: BackupDocument,
   now = new Date(),
 ) {
-  return finishProjection(iterateHomeRecurringPayments(document, now));
+  return memoizeForDocument(
+    document,
+    `home-recurring:${now.getTime()}`,
+    () => finishProjection(iterateHomeRecurringPayments(document, now)),
+  );
 }
 
 export function* iterateHomeRecurringPayments(

@@ -1,6 +1,6 @@
 export type VisibleRow = {
   key: string;
-  index: number | null;
+  index: number | null | undefined;
   isViewable: boolean;
 };
 type RowAnimation = {
@@ -61,7 +61,7 @@ export function createVisibleRowFade(
     update(rows: readonly VisibleRow[]) {
       const now = clock();
       const ordered = rows
-        .filter((row) => row.isViewable && row.index !== null)
+        .filter((row) => row.isViewable && row.index != null)
         .slice()
         .sort((a, b) => a.index! - b.index!);
       const next = new Set(ordered.map((row) => row.key));

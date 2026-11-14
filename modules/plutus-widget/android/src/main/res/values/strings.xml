@@ -1,0 +1,13 @@
+<resources>
+  <string name="plutus_widget_title">Plutus · Assets &amp; Cash Flow</string>
+  <string name="plutus_widget_description">View total balance, assets, account state, monthly income and expenses, switch profiles, and quickly create income or expense transactions.</string>
+  <string name="plutus_widget_preview_balance">24,580.00$</string>
+  <string name="plutus_widget_preview_assets">Assets: 26,120.00$</string>
+  <string name="plutus_widget_preview_debt">Liabilities: 1,540.00$</string>
+  <string name="plutus_widget_preview_income">+6,400.00$</string>
+  <string name="plutus_widget_preview_expense">-2,180.00$</string>
+  <string name="plutus_widget_preview_accounts">Checking: 18,400.00$  ·  Savings: 7,720.00$</string>
+  <string name="plutus_widget_preview_profile">Personal ▾</string>
+  <string name="plutus_widget_preview_count">3 accounts</string>
+</resources>
+

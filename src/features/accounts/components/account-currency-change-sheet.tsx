@@ -10,6 +10,10 @@ import {
   type ExchangeRateSnapshot,
 } from "@/data/model/exchange-rate";
 import { selectExchangeRates } from "@/data/selectors/exchange-rate-selectors";
+import {
+  useLazySheetMount,
+  useLazySheetOpenState,
+} from "@/shared/lib/use-post-frame-ready";
 import { Text } from "@/shared/ui/app-text";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-initial-position-fix";
@@ -20,7 +24,17 @@ export type CurrencyChangeRequest = {
   amount: number;
 };
 
-export function AccountCurrencyChangeSheet({
+export function AccountCurrencyChangeSheet(props: {
+  request: CurrencyChangeRequest | null;
+  onClose: () => void;
+  onApply: (amount: number, explanation: string) => void;
+}) {
+  const mounted = useLazySheetMount(props.request !== null);
+  if (!mounted) return null;
+  return <MountedAccountCurrencyChangeSheet {...props} />;
+}
+
+function MountedAccountCurrencyChangeSheet({
   request,
   onClose,
   onApply,
@@ -32,19 +46,28 @@ export function AccountCurrencyChangeSheet({
   const { t } = useTranslation();
   const { document, ensureExchangeRates } = useLocalData();
   const insets = useSafeAreaInsets();
-  const isOpen = request !== null;
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { effectiveIsOpen: isOpen, openAfterLayout, canDismiss } =
+    useLazySheetOpenState(request !== null);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const [snapshot, setSnapshot] = useState<ExchangeRateSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [cached, setCached] = useState(false);
   const generation = useRef(0);
-  useEffect(() => {
-    generation.current += 1;
+  // A new request starts from a clean slate. Resetting while rendering avoids
+  // a second render pass with the previous request's rate.
+  const [shownRequest, setShownRequest] = useState(request);
+  if (shownRequest !== request) {
+    setShownRequest(request);
     setSnapshot(null);
     setLoading(false);
     setError("");
     setCached(false);
+  }
+  useEffect(() => {
+    // Invalidates any rate lookup still running for the previous request.
+    generation.current += 1;
     return () => {
       generation.current += 1;
     };
@@ -103,7 +126,7 @@ export function AccountCurrencyChangeSheet({
     <BottomSheet
       isOpen={isOpen}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (canDismiss(open)) onClose();
       }}
     >
       <AppBottomSheetPortal
@@ -112,6 +135,7 @@ export function AccountCurrencyChangeSheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           topInset={insets.top}
@@ -121,6 +145,7 @@ export function AccountCurrencyChangeSheet({
         >
           {request && (
             <View
+              onLayout={openAfterLayout}
               className="gap-4"
               style={{ paddingBottom: insets.bottom + 16 }}
             >

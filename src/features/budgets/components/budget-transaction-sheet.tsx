@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { uuid } from "expo-modules-core";
+import { uuid } from "expo";
 import { Button } from "heroui-native";
 import { useTranslation } from "react-i18next";
 import { useLocalData } from "@/data/local-data-provider";

@@ -12,15 +12,25 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   View,
+  type ViewInstance,
 } from "react-native";
+import Reanimated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
-import { FilledIcon } from "@/shared/ui/filled-icon";
+import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { RecordIcon } from "@/shared/ui/record-icon";
 import { Text } from "@/shared/ui/app-text";
@@ -30,19 +40,69 @@ import { colorForeground } from "@/shared/icons/colors";
 export function RecurringScrim() {
   return <BottomSafeAreaGradient />;
 }
+
+/**
+ * A Button label that swaps to a spinner while its action runs. The hidden
+ * label keeps the button's width so neighbouring buttons do not shift.
+ */
+export function BusyButtonLabel({
+  label,
+  busy,
+  spinnerColor,
+}: {
+  label: string;
+  busy: boolean;
+  spinnerColor: string;
+}) {
+  return (
+    <View className="items-center justify-center">
+      <Button.Label style={{ opacity: busy ? 0 : 1 }}>{label}</Button.Label>
+      {busy ? (
+        <ActivityIndicator
+          color={spinnerColor}
+          size="small"
+          style={{ position: "absolute" }}
+        />
+      ) : null}
+    </View>
+  );
+}
+/**
+ * The save button. Dimmed until the schedule can be saved, then fully lit:
+ * readiness is seen, not read. It stays pressable so a tap explains what is
+ * missing.
+ */
 export function RecurringAction({
   label,
   busy,
   error,
   onPress,
+  ready = true,
+  icon = "save",
 }: {
   label: string;
   busy: boolean;
   error?: string;
   onPress: () => void;
+  ready?: boolean;
+  icon?: FilledIconName;
 }) {
   const insets = useSafeAreaInsets(),
     c = useAppThemeColors();
+  const emphasis = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    emphasis.set(
+      withTiming(ready ? 1 : 0, {
+        duration: 220,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [emphasis, ready]);
+  const readyStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 + emphasis.get() * 0.5,
+    transform: [{ scale: 0.98 + emphasis.get() * 0.02 }],
+  }));
   return (
     <>
       <RecurringScrim />
@@ -59,10 +119,15 @@ export function RecurringAction({
         }}
       >
         {!!error && (
-          <Text accessibilityRole="alert" className="text-sm text-danger">
+          <Text
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            className="px-2 text-center font-sans text-sm text-danger"
+          >
             {error}
           </Text>
         )}
+        <Reanimated.View style={readyStyle}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ busy, disabled: busy }}
@@ -79,11 +144,12 @@ export function RecurringAction({
             opacity: busy ? 0.5 : pressed ? 0.72 : 1,
           })}
         >
-          <FilledIcon name="save" size={24} tone="accent-foreground" />
-          <Text className="font-manrope-bold text-base text-accent-foreground">
+          <FilledIcon name={icon} size={24} tone="accent-foreground" />
+          <Text className="font-manrope-bold text-[17px] text-accent-foreground">
             {label}
           </Text>
         </Pressable>
+        </Reanimated.View>
       </View>
     </>
   );
@@ -106,9 +172,10 @@ export function RecurringEditorShell({
   onBack: () => void;
   bottomOverlay: ReactNode;
 }>) {
+  const { t } = useTranslation();
   const c = useAppThemeColors(),
     insets = useSafeAreaInsets(),
-    target = useRef<View | null>(null);
+    target = useRef<ViewInstance | null>(null);
   const [scrollY] = useState(() => new Animated.Value(0));
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
@@ -193,7 +260,7 @@ export function RecurringEditorShell({
               <Button
                 isIconOnly
                 variant="ghost"
-                accessibilityLabel="Go back"
+                accessibilityLabel={t("common.back")}
                 isDisabled={busy}
                 onPress={onBack}
               >
@@ -237,25 +304,34 @@ export function RecurringEditorShell({
 export function RecurringBadge({
   item,
   small = false,
+  size: requested,
+  muted = false,
 }: {
   item: { icon: string; iconPath: string | null; color: string };
   small?: boolean;
+  /** Overrides the small/regular size, in points. */
+  size?: number;
+  /** Desaturates the badge for ended or archived schedules. */
+  muted?: boolean;
 }) {
+  const size = requested ?? (small ? 22 : 54);
   return (
     <View
       style={{
-        width: small ? 22 : 54,
-        height: small ? 22 : 54,
-        borderRadius: small ? 8 : 15,
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.3),
+        borderCurve: "continuous",
         backgroundColor: item.color,
         alignItems: "center",
         justifyContent: "center",
+        opacity: muted ? 0.45 : 1,
       }}
     >
       <RecordIcon
         name={item.icon}
         pathData={item.iconPath}
-        size={small ? 14 : 29}
+        size={Math.round(size * 0.54)}
         color={colorForeground(item.color)}
       />
     </View>

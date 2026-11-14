@@ -1,10 +1,21 @@
 import type { BackupDocument } from "../model/backup-document";
 import {
+  activeUtcMonthKeysForWindow,
+  getDocumentWindowState,
+  parseRecordTimestampMs,
+  UNDATED_MONTH_KEY,
+} from "../database/month-index";
+import {
+  searchIndexedDatabaseSync,
+  selectCatalogCategoryCounts,
+} from "../database/fast-store-client";
+import {
   categoryParent,
   createProfileMatcher,
   identity,
 } from "../model/category-record";
 import { financialMonth } from "../model/financial-month";
+import { memoizeForDocument } from "./document-memo";
 import type { JsonObject, JsonValue } from "../model/json";
 import { transactionMoney } from "../model/transaction-conversion";
 import {
@@ -125,6 +136,8 @@ export type SearchContext = {
   facets: SearchFacets;
   profileCurrency: string;
   monthStartDay: number;
+  document?: BackupDocument;
+  catalogNameHaystack?: string;
 };
 
 export type SearchTotals = {
@@ -157,16 +170,25 @@ function searchTokens(query: string) {
 }
 
 /**
- * Relation names and ancestry are resolved once per document. Each keystroke
- * then filters flat facts instead of re-walking every collection.
+ * Shared search context for one committed document, profile currency and
+ * language. Search, its filter counts and the idle pre-warm reuse one build.
  */
-export function createSearchContext(
+export function selectSearchContext(
   document: BackupDocument,
   profileCurrency: string,
+  language: string | undefined,
 ): SearchContext {
-  const target = currency(profileCurrency) || "USD";
-  const belongs = createProfileMatcher(document);
-  const index = createTransactionIndex(document);
+  return memoizeForDocument(
+    document,
+    `search-context:${profileCurrency}:${language ?? ""}`,
+    () => createSearchContext(document, profileCurrency),
+  );
+}
+
+function createSearchFactBuilder(
+  document: BackupDocument,
+  target: string,
+) {
   const categories = createRecordLookup(document.categories);
   const accounts = createRecordLookup(document.accounts);
   const labels = createRecordLookup(document.labels);
@@ -196,15 +218,7 @@ export function createSearchContext(
   };
   const nameOf = (record: JsonObject | undefined) => string(record?.name);
 
-  const facts: IndexedFacts[] = [];
-  const counts = Object.fromEntries(
-    SEARCH_RELATIONS.map((key) => [key, new Map<string, number>()]),
-  ) as Record<SearchRelation, Map<string, number>>;
-  const bump = (key: SearchRelation, id: string) => {
-    if (id) counts[key].set(id, (counts[key].get(id) ?? 0) + 1);
-  };
-
-  for (const entry of index) {
+  return (entry: TransactionIndexEntry) => {
     const { record } = entry;
     const categoryRecord = categories.get(record.category);
     const source = accounts.get(
@@ -260,7 +274,7 @@ export function createSearchContext(
       amount.toFixed(2),
     ];
 
-    facts.push({
+    const fact: IndexedFacts = {
       entry,
       type,
       category: categoryRecord
@@ -283,15 +297,64 @@ export function createSearchContext(
         (value) => typeof value === "string" && value.length > 0,
       ),
       haystack: normalizeSearchText(text.filter(Boolean).join("\n")),
-    });
+    };
 
-    for (const id of path) bump("categories", id);
-    for (const id of accountIds) bump("accounts", id);
-    for (const id of labelIds) bump("labels", id);
-    bump("places", place ? identity(place) : "");
-    bump("people", person ? identity(person) : "");
-    bump("budgets", budget ? identity(budget) : "");
-    bump("currencies", code);
+    return {
+      fact,
+      path,
+      accountIds,
+      labelIds,
+      placeId: place ? identity(place) : "",
+      personId: person ? identity(person) : "",
+      budgetId: budget ? identity(budget) : "",
+      code,
+    };
+  };
+}
+
+/**
+ * Relation names and ancestry are resolved once per document. Each keystroke
+ * then filters flat facts instead of re-walking every collection.
+ */
+export function createSearchContext(
+  document: BackupDocument,
+  profileCurrency: string,
+): SearchContext {
+  const target = currency(profileCurrency) || "USD";
+  const belongs = createProfileMatcher(document);
+  const index = createTransactionIndex(document);
+  const categories = createRecordLookup(document.categories);
+  const buildFact = createSearchFactBuilder(document, target);
+
+  const facts: IndexedFacts[] = [];
+  const counts = Object.fromEntries(
+    SEARCH_RELATIONS.map((key) => [key, new Map<string, number>()]),
+  ) as Record<SearchRelation, Map<string, number>>;
+  const bump = (key: SearchRelation, id: string) => {
+    if (id) counts[key].set(id, (counts[key].get(id) ?? 0) + 1);
+  };
+
+  for (const entry of index) {
+    const built = buildFact(entry);
+    facts.push(built.fact);
+
+    for (const id of built.path) bump("categories", id);
+    for (const id of built.accountIds) bump("accounts", id);
+    for (const id of built.labelIds) bump("labels", id);
+    bump("places", built.placeId);
+    bump("people", built.personId);
+    bump("budgets", built.budgetId);
+    bump("currencies", built.code);
+  }
+
+  // Merge full-history category usage counts from the month index when windowed.
+  const indexedCategoryCounts = selectCatalogCategoryCounts(document);
+  if (indexedCategoryCounts) {
+    for (const [catId, count] of indexedCategoryCounts) {
+      if (count > (counts.categories.get(catId) ?? 0)) {
+        counts.categories.set(catId, count);
+      }
+    }
   }
 
   const option = (
@@ -370,11 +433,28 @@ export function createSearchContext(
   // Cyclic imports never reach a root; list them flat rather than hiding them.
   for (const record of usedCategories) visit(record, 0);
 
+  const catalogNames = normalizeSearchText(
+    [
+      ...document.categories,
+      ...document.accounts,
+      ...document.labels,
+      ...document.places,
+      ...document.peoples,
+      ...document.budgets,
+      ...document.loans,
+    ]
+      .map((item) => string(item.name))
+      .filter(Boolean)
+      .join("\n"),
+  );
+
   return {
     index,
     facts,
     profileCurrency: target,
     monthStartDay: document._local.monthStartDay,
+    document,
+    catalogNameHaystack: catalogNames,
     facets: {
       categories: categoryOptions,
       accounts: facetFor("accounts", document.accounts),
@@ -438,10 +518,6 @@ export function searchTransactions(
 ): SearchOutcome {
   const tokens = searchTokens(filters.query);
   const range = searchPeriodRange(filters.period, now, context.monthStartDay);
-  // Facts share the index order (newest first), so a period is one slice.
-  const bounds = range
-    ? transactionPeriodBounds(context.index, range.start, range.end)
-    : { first: 0, last: context.facts.length };
   const sets = Object.fromEntries(
     SEARCH_RELATIONS.map((key) => [key, new Set(filters[key])]),
   ) as Record<SearchRelation, Set<string>>;
@@ -449,9 +525,86 @@ export function searchTransactions(
   const min = filters.minAmount;
   const max = filters.maxAmount;
 
+  let sourceFacts = context.facts;
+  let first = 0;
+  let last = sourceFacts.length;
+
+  const windowState = context.document
+    ? getDocumentWindowState(context.document)
+    : undefined;
+  const rangeNeedsColdMonths = Boolean(
+    windowState?.isPartial &&
+    (!range ||
+      activeUtcMonthKeysForWindow(range.start, range.end).some(
+        (key) =>
+          windowState.catalog.some((entry) => entry.monthKey === key) &&
+          !windowState.loadedMonthKeys.has(key),
+      ) ||
+      windowState.catalog.some(
+        (entry) =>
+          entry.monthKey === UNDATED_MONTH_KEY &&
+          !windowState.loadedMonthKeys.has(UNDATED_MONTH_KEY),
+      )),
+  );
+
+  // When a large database is windowed in RAM and the query or date range extends
+  // beyond loaded months, query the SQLite/native month index directly across disk.
+  if (context.document && windowState && rangeNeedsColdMonths) {
+    const belongs = createProfileMatcher(context.document);
+    const catalogMatchesToken =
+      tokens.length > 0 &&
+      !!context.catalogNameHaystack &&
+      tokens.some((token) => context.catalogNameHaystack!.includes(token));
+    const sqlQueryTokens =
+      tokens.length > 0 && !catalogMatchesToken ? [tokens[0]] : undefined;
+    const dbResult = searchIndexedDatabaseSync(context.document, {
+      queryTokens: sqlQueryTokens,
+      type:
+        filters.types.length === 1
+          ? filters.types[0] === "income"
+            ? 1
+            : filters.types[0] === "transfer"
+              ? 2
+              : 0
+          : undefined,
+      startMs: range?.start.getTime(),
+      endMs: range?.end.getTime(),
+      accountIds:
+        filters.accounts.length === 1 ? filters.accounts : undefined,
+      sort: filters.sort === "oldest" ? "oldest" : "newest",
+      limit: 25_000,
+    });
+    if (dbResult) {
+      const buildFact = createSearchFactBuilder(
+        context.document,
+        context.profileCurrency,
+      );
+      sourceFacts = [];
+      for (let i = 0; i < dbResult.rows.length; i++) {
+        const record = dbResult.rows[i];
+        if (!belongs(record)) continue;
+        const ts = parseRecordTimestampMs(record);
+        const entry: TransactionIndexEntry = {
+          id: string(record.uuid, String(record.id ?? i)),
+          record,
+          index: i,
+          timestamp: Number.isFinite(ts) ? ts : -Infinity,
+        };
+        sourceFacts.push(buildFact(entry).fact);
+      }
+      first = 0;
+      last = sourceFacts.length;
+    }
+  } else if (range) {
+    // Facts share the index order (newest first), so a period is one slice.
+    const bounds = transactionPeriodBounds(context.index, range.start, range.end);
+    first = bounds.first;
+    last = bounds.last;
+  }
+
   const matches: IndexedFacts[] = [];
-  for (let position = bounds.first; position < bounds.last; position++) {
-    const fact = context.facts[position];
+  for (let position = first; position < last; position++) {
+    const fact = sourceFacts[position];
     if (types.size && !types.has(fact.type)) continue;
     if (
       sets.categories.size &&

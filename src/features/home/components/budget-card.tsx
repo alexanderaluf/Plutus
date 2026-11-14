@@ -1,6 +1,5 @@
 import { useAppDate } from "@/shared/lib/use-app-date";
 import { useRouter } from "expo-router";
-import { Button } from "heroui-native";
 import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 import Animated, {
@@ -16,11 +15,15 @@ import {
 } from "@/features/budgets/components/budget-ui";
 import { colorForeground } from "@/shared/icons/colors";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { RecordIcon } from "@/shared/ui/record-icon";
 
+import { HomeSectionAction } from "./home-section-header";
+
 const layout = LinearTransition.duration(240).reduceMotion(ReduceMotion.System);
+
 export function BudgetOverviewCard({
   budget: b,
   expanded,
@@ -36,10 +39,13 @@ export function BudgetOverviewCard({
   const { formatDayMonth } = useAppDate();
   const router = useRouter();
   const { t, i18n } = useTranslation();
+  const theme = useAppThemeColors();
   const labels = useBudgetLabels();
   const money = (amount: number) => formatCurrency(amount, b.currencyCode);
-  const open = onOpen ?? (() =>
-    router.push({ pathname: "/budgets/[id]", params: { id: b.id } }));
+  const open =
+    onOpen ??
+    (() => router.push({ pathname: "/budgets/[id]", params: { id: b.id } }));
+
   const remaining = t(
     b.remaining < 0
       ? b.transactionType === 0
@@ -49,21 +55,25 @@ export function BudgetOverviewCard({
     { amount: money(b.remaining) },
   );
   const danger = b.transactionType === 0 && b.remaining < 0;
+  const indicatorColor = danger ? theme.danger : b.color;
+
   return (
     <Animated.View
       layout={layout}
-      className="overflow-hidden rounded-3xl border border-border bg-surface p-4"
+      className="overflow-hidden rounded-[24px] border border-border bg-surface p-4"
+      style={{ borderCurve: "continuous" }}
     >
       <View className="flex-row items-center gap-3">
         <Pressable
           onPress={open}
           accessibilityRole="button"
           accessibilityLabel={t("home.budgets.open", { name: b.name })}
-          className="min-w-0 flex-1 flex-row items-center gap-2.5"
+          className="min-w-0 flex-1 flex-row items-center gap-3"
+          style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
         >
           <View
-            className="size-9 items-center justify-center rounded-xl"
-            style={{ backgroundColor: b.color }}
+            className="size-11 shrink-0 items-center justify-center rounded-2xl"
+            style={{ backgroundColor: b.color, borderCurve: "continuous" }}
           >
             <RecordIcon
               name={b.icon}
@@ -75,25 +85,35 @@ export function BudgetOverviewCard({
           <View className="min-w-0 flex-1 gap-0.5">
             <Text
               numberOfLines={1}
-              className="font-manrope-semibold text-base text-foreground"
+              className="font-manrope-bold text-[15px] leading-[20px] text-foreground"
             >
               {b.name}
             </Text>
-            <Text className="text-xs text-muted">
+            <Text
+              numberOfLines={1}
+              className="font-sans text-[12px] leading-[16px] text-muted"
+            >
               {labels.periods[b.period]} · {labels.types[b.transactionType]}
             </Text>
           </View>
         </Pressable>
-        <View className="max-w-[45%] items-end gap-0.5">
+
+        <View className="max-w-[44%] shrink-0 items-end gap-0.5">
           <Text
-            className={`font-manrope-bold text-lg ${danger ? "text-danger" : "text-accent"}`}
+            adjustsFontSizeToFit
+            minimumFontScale={0.75}
+            numberOfLines={1}
+            className={`text-right font-manrope-bold text-[18px] leading-[22px] ${danger ? "text-danger" : "text-accent"}`}
             style={{ fontVariant: ["tabular-nums"] }}
           >
             {b.active
               ? money(b.dailyAllowance)
               : money(Math.max(0, b.remaining))}
           </Text>
-          <Text className="text-xs text-muted">
+          <Text
+            numberOfLines={1}
+            className="text-right font-sans text-[11px] leading-[14px] text-muted"
+          >
             {b.active
               ? t(
                   b.transactionType === 0
@@ -108,27 +128,54 @@ export function BudgetOverviewCard({
           </Text>
         </View>
       </View>
-      <View className="mt-3 mb-2 flex-row items-baseline justify-between gap-2">
-        <Text className="min-w-0 flex-1 text-xs text-muted">
-          {labels.tracked[b.transactionType]}{" "}
-          <Text className="font-manrope-semibold text-foreground">
-            {money(b.tracked)}
-          </Text>{" "}
-          / {money(b.limit)}
-        </Text>
-        <Text className="text-xs text-muted">
-          {Math.round(b.percent).toLocaleString(i18n.resolvedLanguage)}%
-        </Text>
+
+      <View className="mt-3.5 gap-2">
+        <View className="flex-row items-center justify-between gap-2">
+          <Text
+            numberOfLines={1}
+            className="min-w-0 flex-1 font-sans text-[12px] leading-[16px] text-muted"
+            style={{ fontVariant: ["tabular-nums"] }}
+          >
+            {labels.tracked[b.transactionType]}{" "}
+            <Text className="font-manrope-semibold text-foreground">
+              {money(b.tracked)}
+            </Text>{" "}
+            / {money(b.limit)}
+          </Text>
+          <View
+            className="shrink-0 rounded-full px-2 py-0.5"
+            style={{
+              backgroundColor: colorWithAlpha(
+                indicatorColor,
+                theme.isDark ? 0.22 : 0.14,
+              ),
+            }}
+          >
+            <Text
+              className="font-manrope-bold text-[11px] leading-[14px]"
+              style={{
+                color: indicatorColor,
+                fontVariant: ["tabular-nums"],
+              }}
+            >
+              {Math.round(b.percent).toLocaleString(i18n.resolvedLanguage)}%
+            </Text>
+          </View>
+        </View>
+
+        <BudgetProgress percent={b.percent} color={indicatorColor} />
       </View>
-      <BudgetProgress percent={b.percent} color={b.color} />
-      <View className="-mb-2 mt-1 flex-row items-center justify-between gap-2">
+
+      <View className="mt-3 flex-row items-center justify-between gap-2">
         <Text
-          className={`min-w-0 flex-1 font-manrope-semibold text-xs ${danger ? "text-danger" : "text-foreground"}`}
+          className={`min-w-0 flex-1 font-manrope-semibold text-[13px] leading-[18px] ${danger ? "text-danger" : "text-foreground"}`}
+          style={{ fontVariant: ["tabular-nums"] }}
         >
           {remaining}
         </Text>
         <Pressable
           onPress={onToggle}
+          hitSlop={6}
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={t(
@@ -137,44 +184,75 @@ export function BudgetOverviewCard({
               : "home.budgets.expandBudget",
             { name: b.name },
           )}
-          className="min-h-11 flex-row items-center gap-1.5 ps-2"
+          className="shrink-0 flex-row items-center gap-1 rounded-full bg-surface-secondary px-3 py-1.5"
+          style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
         >
-          <Text className="text-xs text-muted">
+          <Text className="font-manrope-semibold text-[12px] leading-[16px] text-muted">
             {t(expanded ? "home.budgets.less" : "home.budgets.more")}
           </Text>
           <View
             style={{ transform: [{ rotate: expanded ? "0deg" : "180deg" }] }}
           >
-            <FilledIcon name="chevron-up" size={18} tone="muted" />
+            <FilledIcon name="chevron-up" size={15} tone="muted" />
           </View>
         </Pressable>
       </View>
+
       {expanded && (
         <Animated.View
           entering={FadeIn.duration(180).reduceMotion(ReduceMotion.System)}
           exiting={FadeOut.duration(120).reduceMotion(ReduceMotion.System)}
-          className="mt-2 gap-3 border-t border-border pt-3"
+          className="mt-3 gap-2.5 border-t border-border pt-3"
         >
-          <View className="flex-row gap-4">
-            <View className="min-w-0 flex-1 gap-1">
-              <Text className="text-xs text-muted">
+          <View className="flex-row gap-2.5">
+            <View
+              className="min-w-0 flex-1 gap-0.5 rounded-2xl bg-surface-secondary p-3"
+              style={{ borderCurve: "continuous" }}
+            >
+              <Text
+                numberOfLines={1}
+                className="font-sans text-[11px] leading-[15px] text-muted"
+              >
                 {t("home.budgets.plannedPerDay")}
               </Text>
-              <Text className="font-manrope-semibold text-lg text-foreground">
+              <Text
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+                numberOfLines={1}
+                className="font-manrope-bold text-[16px] leading-[21px] text-foreground"
+                style={{ fontVariant: ["tabular-nums"] }}
+              >
                 {money(b.dailyPlan)}
               </Text>
-              <Text className="text-xs text-muted">
+              <Text
+                numberOfLines={1}
+                className="font-sans text-[11px] leading-[15px] text-muted"
+              >
                 {t("home.budgets.periodDaysShort", { count: b.periodDays })}
               </Text>
             </View>
-            <View className="min-w-0 flex-1 gap-1 border-s border-border ps-4">
-              <Text className="text-xs text-muted">
+
+            <View
+              className="min-w-0 flex-1 gap-0.5 rounded-2xl bg-surface-secondary p-3"
+              style={{ borderCurve: "continuous" }}
+            >
+              <Text
+                numberOfLines={1}
+                className="font-sans text-[11px] leading-[15px] text-muted"
+              >
                 {t("home.budgets.daysLeftShort")}
               </Text>
-              <Text className="font-manrope-semibold text-lg text-foreground">
+              <Text
+                numberOfLines={1}
+                className="font-manrope-bold text-[16px] leading-[21px] text-foreground"
+                style={{ fontVariant: ["tabular-nums"] }}
+              >
                 {b.daysLeft.toLocaleString(i18n.resolvedLanguage)}
               </Text>
-              <Text className="text-xs text-muted">
+              <Text
+                numberOfLines={1}
+                className="font-sans text-[11px] leading-[15px] text-muted"
+              >
                 {b.active
                   ? t("home.budgets.includesToday")
                   : t(
@@ -185,63 +263,66 @@ export function BudgetOverviewCard({
               </Text>
             </View>
           </View>
-          <View className="flex-row flex-wrap justify-between gap-2">
-            <Text className="text-xs text-muted">
-              {formatDayMonth(b.range.start)} –{" "}
-              {formatDayMonth(new Date(b.range.end.getTime() - 1))}
-            </Text>
-            <Text className="text-xs text-muted">
-              {t("home.budgets.transactions", { count: b.transactionCount })}
-            </Text>
+
+          <View className="flex-row flex-wrap items-center justify-between gap-2 px-0.5">
+            <View className="flex-row items-center gap-1.5">
+              <FilledIcon name="calendar" size={13} tone="muted" />
+              <Text className="font-sans text-[12px] leading-[16px] text-muted">
+                {formatDayMonth(b.range.start)} –{" "}
+                {formatDayMonth(new Date(b.range.end.getTime() - 1))}
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-1.5">
+              <FilledIcon name="receipt" size={13} tone="muted" />
+              <Text
+                className="font-sans text-[12px] leading-[16px] text-muted"
+                style={{ fontVariant: ["tabular-nums"] }}
+              >
+                {t("home.budgets.transactions", { count: b.transactionCount })}
+              </Text>
+            </View>
           </View>
+
           {b.rollover > 0 && (
-            <Text className="text-xs text-muted">
+            <Text className="px-0.5 font-sans text-[12px] leading-[16px] text-muted">
               {t("home.budgets.rollover", { amount: money(b.rollover) })}
             </Text>
           )}
           {b.excludedCurrencyCount > 0 && (
-            <Text className="text-xs text-muted">
+            <Text className="px-0.5 font-sans text-[12px] leading-[16px] text-muted">
               {t("home.budgets.otherCurrencies", {
                 count: b.excludedCurrencyCount,
               })}
             </Text>
           )}
+
           <Pressable
             onPress={open}
             accessibilityRole="button"
-            className="min-h-11 flex-row items-center justify-between rounded-xl bg-surface-secondary px-3"
+            className="min-h-11 flex-row items-center justify-between rounded-2xl bg-surface-secondary px-3.5"
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.68 : 1,
+              borderCurve: "continuous",
+            })}
           >
-            <Text className="font-manrope-semibold text-xs text-accent">
+            <Text className="font-manrope-semibold text-[13px] leading-[18px] text-accent">
               {t("home.budgets.fullDetails")}
             </Text>
-            <FilledIcon name="chevron-right" size={18} tone="accent" />
+            <FilledIcon name="chevron-right" size={17} tone="accent" />
           </Pressable>
         </Animated.View>
       )}
     </Animated.View>
   );
 }
-export function BudgetListHeader({ count }: { count: number }) {
+
+export function BudgetListHeader() {
   const router = useRouter();
   const { t } = useTranslation();
   return (
-    <View className="mb-3 flex-row items-center justify-between">
-      <View className="min-w-0 flex-1 flex-row items-center gap-2">
-        <Text className="font-manrope-bold text-lg text-foreground">
-          {t("home.budgets.title")}
-        </Text>
-        <Text className="text-xs text-muted">{count}</Text>
-      </View>
-      <Button
-        size="sm"
-        variant="outline"
-        onPress={() => router.push("/budgets")}
-      >
-        <FilledIcon name="plus" size={16} tone="accent" />
-        <Button.Label className="font-manrope-semibold text-accent">
-          {t("home.budgets.manage")}
-        </Button.Label>
-      </Button>
-    </View>
+    <HomeSectionAction
+      label={t("home.budgets.manage")}
+      onPress={() => router.push("/budgets")}
+    />
   );
 }

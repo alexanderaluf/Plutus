@@ -7,6 +7,15 @@ import type {
 } from "./PlutusLocalAI.types";
 
 declare class PlutusLocalAIModule extends NativeModule<PlutusLocalAIModuleEvents> {
+  readChatGPTVaultAsync(): Promise<string | null>;
+  writeChatGPTVaultAsync(value: string): Promise<void>;
+  chatGPTRandomAsync(): Promise<string>;
+  chatGPTDigestAsync(value: string): Promise<string>;
+  /** `returnUrl` is the app's deep link; the callback page opens it to return to the app. */
+  startChatGPTCallbackAsync(state: string, returnUrl: string, title: string, message: string, action: string): Promise<string>;
+  waitChatGPTCallbackAsync(): Promise<string>;
+  cancelChatGPTCallbackAsync(): Promise<void>;
+  verifyChatGPTIdentityAsync(token: string, jwks: string, clientId: string, nonce: string): Promise<{ subject: string; email: string }>;
   isInstalledAsync(modelKey: string): Promise<boolean>;
   /** Also finalizes a finished transfer; safe to call from any screen. */
   getDownloadStateAsync(modelKey: string): Promise<LocalAIDownloadState>;

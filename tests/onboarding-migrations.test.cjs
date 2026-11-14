@@ -578,7 +578,7 @@ test("native startup checkpoint contract: reopen a full pre-upgrade SQLite copy;
     create() {
       fs.writeFileSync(this.uri, "");
     }
-    write(value) {
+    writeSync(value) {
       if (failWrites) throw new Error("disk full");
       fs.writeFileSync(this.uri, value);
     }
@@ -750,7 +750,7 @@ test("Paisa v3 document, CSV quoted fields, JSON stripping and ZIP media round t
       this.type = "";
     }
     create() {}
-    write(content) {
+    writeSync(content) {
       this.size = content.length;
     }
     async copy(destination) {

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="320dp"
+  android:height="200dp"
+  android:viewportWidth="320"
+  android:viewportHeight="200">
+  <!-- Outer rounded widget surface -->
+  <path
+    android:fillColor="#111817"
+    android:strokeColor="#253230"
+    android:strokeWidth="1.5"
+    android:pathData="M24,2 L296,2 A22,22 0 0,1 318,24 L318,176 A22,22 0 0,1 296,198 L24,198 A22,22 0 0,1 2,176 L2,24 A22,22 0 0,1 24,2 Z" />
+  <!-- Top left icon circle -->
+  <path
+    android:fillColor="#19353B"
+    android:pathData="M28,26 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+  <path
+    android:fillColor="#70D2EB"
+    android:pathData="M24,23 h8 a2,2 0 0,1 2,2 v2 a2,2 0 0,1 -2,2 h-8 a2,2 0 0,1 -2,-2 v-2 a2,2 0 0,1 2,-2 z" />
+  <!-- Profile pill top right -->
+  <path
+    android:fillColor="#1E2B28"
+    android:pathData="M232,16 L294,16 A10,10 0 0,1 304,26 L304,26 A10,10 0 0,1 294,36 L232,36 A10,10 0 0,1 222,26 L222,26 A10,10 0 0,1 232,16 Z" />
+  <!-- Progress track & fill -->
+  <path
+    android:fillColor="#22302D"
+    android:pathData="M22,82 L298,82 A4,4 0 0,1 302,86 L302,86 A4,4 0 0,1 298,90 L22,90 A4,4 0 0,1 18,86 L18,86 A4,4 0 0,1 22,82 Z" />
+  <path
+    android:fillColor="#34D399"
+    android:pathData="M22,82 L248,82 A4,4 0 0,1 252,86 L252,86 A4,4 0 0,1 248,90 L22,90 A4,4 0 0,1 18,86 L18,86 A4,4 0 0,1 22,82 Z" />
+  <!-- Middle inner card -->
+  <path
+    android:fillColor="#182220"
+    android:strokeColor="#263532"
+    android:strokeWidth="1"
+    android:pathData="M30,100 L290,100 A12,12 0 0,1 302,112 L302,140 A12,12 0 0,1 290,152 L30,152 A12,12 0 0,1 18,140 L18,112 A12,12 0 0,1 30,100 Z" />
+  <!-- Bottom two action buttons -->
+  <path
+    android:fillColor="#163329"
+    android:strokeColor="#235342"
+    android:strokeWidth="1"
+    android:pathData="M28,160 L146,160 A10,10 0 0,1 156,170 L156,176 A10,10 0 0,1 146,186 L28,186 A10,10 0 0,1 18,176 L18,170 A10,10 0 0,1 28,160 Z" />
+  <path
+    android:fillColor="#361B1D"
+    android:strokeColor="#592B2E"
+    android:strokeWidth="1"
+    android:pathData="M174,160 L292,160 A10,10 0 0,1 302,170 L302,176 A10,10 0 0,1 292,186 L174,186 A10,10 0 0,1 164,176 L164,170 A10,10 0 0,1 174,160 Z" />
+</vector>
+

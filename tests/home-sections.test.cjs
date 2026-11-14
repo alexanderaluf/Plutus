@@ -32,6 +32,7 @@ const { recurringDefaults } = require("../src/data/model/recurring-record.ts");
 const {
   createHomeCategoryRows,
   createHomeSectionLoader,
+  createHomeTransactionRows,
 } = require("../src/data/selectors/home-section-selectors.ts");
 const now = new Date(2026, 8, 16, 12);
 function fixture() {
@@ -252,4 +253,44 @@ test("home budget aggregates match detail calculations and exclude hidden budget
   assert.ok(detailed.breakdown.length);
   assert.equal(summary.points.length, 0);
   assert.equal(summary.breakdown.length, 0);
+});
+
+test("home transactions are grouped by local day, newest day first, one card per day", () => {
+  const at = (day, hour) => new Date(2026, 8, day, hour, 0, 0).getTime();
+  // The transaction index is already sorted newest first.
+  const entries = [
+    { id: "late-20", timestamp: at(20, 23) },
+    { id: "early-20", timestamp: at(20, 0) },
+    { id: "only-18", timestamp: at(18, 12) },
+    { id: "a-15", timestamp: at(15, 18) },
+    { id: "b-15", timestamp: at(15, 9) },
+    { id: "c-15", timestamp: at(15, 8) },
+    { id: "undated", timestamp: -Infinity },
+  ].map((entry, index) => ({ ...entry, index, record: {} }));
+
+  const rows = createHomeTransactionRows(entries);
+  const summary = rows.map((row) =>
+    row.kind === "date"
+      ? `date:${row.id}`
+      : `${row.id}${row.first ? " first" : ""}${row.last ? " last" : ""}`,
+  );
+  assert.deepEqual(summary, [
+    "date:2026-09-20",
+    "late-20 first",
+    "early-20 last",
+    "date:2026-09-18",
+    "only-18 first last",
+    "date:2026-09-15",
+    "a-15 first",
+    "b-15",
+    "c-15 last",
+    "date:unknown",
+    "undated first last",
+  ]);
+  assert.equal(rows[0].timestamp, at(20, 23));
+  assert.equal(rows.at(-2).timestamp, null);
+  // Row keys stay unique so the virtualized list never confuses rows.
+  const keys = rows.map((row) => `${row.kind}:${row.id}`);
+  assert.equal(new Set(keys).size, keys.length);
+  assert.deepEqual(createHomeTransactionRows([]), []);
 });

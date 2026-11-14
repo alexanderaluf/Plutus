@@ -42,7 +42,12 @@ const { parseExchangeRates } = require("../src/data/model/exchange-rate.ts");
 const {
   reconcileRecurring,
   processRecurring,
+  processDueRecurrings,
 } = require("../src/data/recurring/recurring-service.ts");
+const { dueOccurrenceCount } = require("../src/data/model/recurring-record.ts");
+const {
+  selectTransactions,
+} = require("../src/data/selectors/transaction-selectors.ts");
 const {
   selectRecurrings,
   selectRecurringSummary,
@@ -339,6 +344,17 @@ test("due-this-month excludes processed/skipped expenses, includes future unpaid
     { currencyCode: "ILS", amount: 3650 },
     { currencyCode: "USD", amount: 240 },
   ]);
+  // Net subtracts expenses from income inside each currency, never across.
+  assert.deepEqual(summary.yearlyNet, [
+    { currencyCode: "ILS", amount: 600 - 3650 },
+    { currencyCode: "USD", amount: -240 },
+  ]);
+  assert.equal(
+    summary.monthlyNet.find((v) => v.currencyCode === "USD").amount,
+    -20,
+  );
+  // Two unpaid daily ILS payments and one USD payment remain this month.
+  assert.equal(summary.dueCount, 3);
   const events = selectRecurringEvents(
     items,
     new Date(2026, 9, 1),
@@ -524,8 +540,230 @@ test("migration defaults automatic off and atomic repository rolls back ledger a
       }),
     );
     assert.deepEqual(await readDocument(adapter), before);
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 22);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 25);
   } finally {
     db.close();
   }
+});
+
+test("process all records every due occurrence, manual and missed ones included", async () => {
+  let d = add(fixture(), {
+    currencyCode: "ILS",
+    automatic: false,
+    startAt: new Date(2026, 7, 10, 8).toISOString(),
+  });
+  d = add(d, { currencyCode: "ILS", amount: "5" }, "automatic");
+  d = add(d, { currencyCode: "ILS" }, "archived");
+  d.recurrings[2].archived = true;
+  d = add(
+    d,
+    { currencyCode: "ILS", startAt: new Date(2026, 9, 20, 8).toISOString() },
+    "future",
+  );
+  const [manual, automatic, archived, future] = d.recurrings;
+  assert.equal(dueOccurrenceCount(manual, now), 2);
+  assert.equal(dueOccurrenceCount(automatic, now), 1);
+  assert.equal(dueOccurrenceCount(archived, now), 0);
+  assert.equal(dueOccurrenceCount(future, now), 0);
+
+  const store = memory(d);
+  const result = await processDueRecurrings(store, owner, { now });
+  assert.deepEqual(result, {
+    processed: 3,
+    failed: 0,
+    error: "",
+    remaining: 0,
+  });
+  const after = await store.read();
+  assert.equal(after.transactions.length, 3);
+  assert.equal(after.accounts[0].amount, 1000 - 20 - 20 - 5);
+  assert.deepEqual(
+    after.transactions.map((t) => localDateKey(new Date(t.date))).sort(),
+    ["2026-08-10", "2026-09-10", "2026-09-10"],
+  );
+  // Nothing left to do on a second run.
+  assert.equal(
+    (await processDueRecurrings(store, owner, { now })).processed,
+    0,
+  );
+});
+
+test("process all keeps going when one payment fails and reports it", async () => {
+  let d = add(fixture(), { currencyCode: "ILS" }, "local");
+  d = add(d, { currencyCode: "USD" }, "foreign");
+  const store = memory(d);
+  const result = await processDueRecurrings(store, owner, {
+    now,
+    fetchRates: async () => {
+      throw new Error("Rates are offline.");
+    },
+  });
+  assert.equal(result.processed, 1);
+  assert.equal(result.failed, 1);
+  assert.equal(result.remaining, 1);
+  assert.match(result.error, /offline/);
+  assert.equal((await store.read()).transactions.length, 1);
+});
+
+test("pressing process lists a transaction on the payment's scheduled date", async () => {
+  const scheduled = new Date(2026, 9, 1, 9, 30);
+  const d = add(fixture(), {
+    name: "Gym",
+    currencyCode: "ILS",
+    amount: "120",
+    automatic: false,
+    startAt: scheduled.toISOString(),
+  });
+  d._local.selectedProfileId = owner;
+  const store = memory(d);
+  await processRecurring(store, "subscription", occurrenceKey(d.recurrings[0]), {
+    now,
+    profileId: owner,
+  });
+  const after = await store.read();
+  const listed = selectTransactions(after).filter(
+    (t) => t.id === occurrenceKey(d.recurrings[0]),
+  );
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].merchant, "Gym");
+  assert.equal(listed[0].amount, -120);
+  // The date the user scheduled, not the moment the button was pressed.
+  assert.equal(listed[0].occurredAtIso, scheduled.toISOString());
+  assert.equal(after.recurrings[0].occurrences[0].transactionId, listed[0].id);
+});
+
+test("opening the app records automatic payments missed on earlier days", async () => {
+  const d = add(fixture(), {
+    currencyCode: "ILS",
+    period: "Daily",
+    startAt: new Date(2026, 8, 29, 8).toISOString(),
+  });
+  d._local.selectedProfileId = owner;
+  const store = memory(d);
+  const result = await reconcileRecurring(store, { now });
+  assert.equal(result.error, "");
+  const dates = selectTransactions(await store.read())
+    .map((t) => localDateKey(new Date(t.occurredAtIso)))
+    .sort();
+  assert.deepEqual(dates, [
+    "2026-09-29",
+    "2026-09-30",
+    "2026-10-01",
+    "2026-10-02",
+  ]);
+});
+
+test("a recurring can use a parent category that has subcategories", () => {
+  const d = fixture();
+  d.categories = [
+    { uuid: "car", user: owner, name: "Car", type: 0 },
+    { uuid: "fuel", user: owner, name: "Fuel", type: 0, parentId: "car" },
+    { uuid: "salary", user: owner, name: "Salary", type: 1 },
+  ];
+  const parent = add(d, { category: "car" });
+  assert.equal(parent.recurrings[0].category, "car");
+  const child = add(d, { category: "fuel" }, "child");
+  assert.equal(child.recurrings[0].category, "fuel");
+  assert.throws(() => add(d, { category: "salary" }, "mismatch"), /matches/);
+});
+
+test("a new recurring form starts from the profile and borrows its category's look", () => {
+  const {
+    createInitialRecurringDraft,
+    withCategoryLook,
+    REMINDER_OPTIONS,
+  } = require("../src/features/recurring/lib/recurring-form-helpers.ts");
+  const now = new Date(2026, 10, 14, 9, 30);
+  const accounts = [
+    { id: "cash", isDefault: false },
+    { id: "main", isDefault: true },
+  ];
+  const draft = createInitialRecurringDraft(accounts, "ils", now);
+  assert.equal(draft.currencyCode, "ILS", "the profile currency leads");
+  assert.equal(draft.account, "main", "the default account pays");
+  assert.equal(draft.startAt, now.toISOString());
+  assert.equal(draft.automatic, false, "nothing is recorded implicitly");
+  assert.equal(
+    createInitialRecurringDraft([{ id: "only", isDefault: false }], "USD")
+      .account,
+    "only",
+  );
+  assert.equal(
+    createInitialRecurringDraft(
+      [
+        { id: "a", isDefault: false },
+        { id: "b", isDefault: false },
+      ],
+      "USD",
+    ).account,
+    "",
+    "with several accounts and no default, the person chooses",
+  );
+
+  const category = { icon: "food", iconPath: null, color: "#ABCDEF" };
+  assert.deepEqual(
+    (({ icon, color }) => ({ icon, color }))(
+      withCategoryLook(draft, category, false),
+    ),
+    { icon: "food", color: "#ABCDEF" },
+  );
+  // A chosen look, or no category, is never overwritten.
+  assert.equal(withCategoryLook(draft, category, true), draft);
+  assert.equal(withCategoryLook(draft, undefined, false), draft);
+  assert.deepEqual([...REMINDER_OPTIONS], [null, 0, 1, 2, 7]);
+});
+
+const {
+  groupUpcoming,
+  relativeDay,
+  upcomingGroup,
+} = require("../src/features/recurring/lib/recurring-list-helpers.ts");
+
+test("the recurring list groups schedules by what needs doing and when", () => {
+  const today = new Date(2026, 10, 14, 9);
+  const at = (day, month = 10) => new Date(2026, month, day, 8);
+  assert.equal(upcomingGroup({ due: true, next: at(10) }, today), "attention");
+  // An imported schedule without a next date cannot run until edited.
+  assert.equal(upcomingGroup({ due: false, next: null }, today), "attention");
+  assert.equal(upcomingGroup({ due: false, next: at(14) }, today), "week");
+  assert.equal(upcomingGroup({ due: false, next: at(20) }, today), "week");
+  assert.equal(upcomingGroup({ due: false, next: at(21) }, today), "month");
+  assert.equal(upcomingGroup({ due: false, next: at(3, 11) }, today), "later");
+  // Seven days ahead can cross into next month and still read as "this week".
+  const late = new Date(2026, 10, 28, 9);
+  assert.equal(upcomingGroup({ due: false, next: at(2, 11) }, late), "week");
+
+  const items = [
+    { id: "later", due: false, next: at(3, 11) },
+    { id: "soon", due: false, next: at(15) },
+    { id: "due", due: true, next: at(1) },
+    { id: "month", due: false, next: at(25) },
+  ];
+  assert.deepEqual(
+    groupUpcoming(items, today).map((g) => [g.group, g.items.map((i) => i.id)]),
+    [
+      ["attention", ["due"]],
+      ["week", ["soon"]],
+      ["month", ["month"]],
+      ["later", ["later"]],
+    ],
+  );
+});
+
+test("upcoming payments read as today, tomorrow, or in N days within a week", () => {
+  const today = new Date(2026, 10, 14, 23, 30);
+  assert.deepEqual(relativeDay(new Date(2026, 10, 14, 8), today), {
+    key: "today",
+    count: 0,
+  });
+  assert.deepEqual(relativeDay(new Date(2026, 10, 15, 0, 5), today), {
+    key: "tomorrow",
+    count: 1,
+  });
+  assert.deepEqual(relativeDay(new Date(2026, 10, 20, 8), today), {
+    key: "inDays",
+    count: 6,
+  });
+  assert.equal(relativeDay(new Date(2026, 10, 21, 8), today), null);
+  assert.equal(relativeDay(new Date(2026, 10, 13, 8), today), null);
 });

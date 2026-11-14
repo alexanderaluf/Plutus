@@ -1,7 +1,6 @@
 import type { BackupDocument } from "./backup-document";
 import {
   belongsToProfile,
-  categoryParent,
   identity,
   references,
 } from "./category-record";
@@ -121,6 +120,18 @@ export function occurrenceDate(record: JsonObject, index: number): Date | null {
 export function nextOccurrence(record: JsonObject) {
   return occurrenceDate(record, Number(record.nextIndex ?? 0));
 }
+/** How many unrecorded occurrences are due by `now`, including missed ones. */
+export function dueOccurrenceCount(record: JsonObject, now: Date, limit = 1000) {
+  if (record.archived === true) return 0;
+  const start = Number(record.nextIndex ?? 0);
+  let count = 0;
+  while (count < limit) {
+    const date = occurrenceDate(record, start + count);
+    if (!date || date > now) break;
+    count++;
+  }
+  return count;
+}
 export function occurrenceKey(record: JsonObject) {
   return `recurring:${identity(record)}:${Number(record.scheduleRevision ?? 0)}:${Number(record.nextIndex ?? 0)}`;
 }
@@ -189,12 +200,8 @@ export function saveRecurring(
       throw new Error(
         "A selected record is no longer available in this profile.",
       );
-    if (
-      collection === "categories" &&
-      (related.type !== draft.type ||
-        document.categories.some((c) => references(related, categoryParent(c))))
-    )
-      throw new Error("Select a matching category without subcategories.");
+    if (collection === "categories" && related.type !== draft.type)
+      throw new Error("Select a category that matches this payment type.");
   }
   const changedSchedule =
     !!existing &&

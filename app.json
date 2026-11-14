@@ -3,12 +3,12 @@
     "name": "Plutus",
     "slug": "plutus",
     "owner": "project-aurora-ltd",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "platforms": [
       "ios",
       "android"
     ],
-    "orientation": "portrait",
+    "orientation": "default",
     "backgroundColor": "#DCE7E0",
     "scheme": "plutus",
     "userInterfaceStyle": "automatic",
@@ -16,7 +16,10 @@
       "bundleIdentifier": "com.plutus.budgettracker",
       "icon": "./assets/plutus.icon",
       "entitlements": {
-        "com.apple.developer.kernel.extended-virtual-addressing": true
+        "com.apple.developer.kernel.extended-virtual-addressing": true,
+        "com.apple.security.application-groups": [
+          "group.com.plutus.budgettracker"
+        ]
       },
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Allow Plutus to record voice messages for private on-device AI chat.",
@@ -25,12 +28,17 @@
         "CFBundleLocalizations": [
           "en",
           "he",
+          "ru",
+          "en",
+          "he",
           "ru"
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.plutus.budgettracker",
+      "versionCode": 6,
       "backgroundColor": "#DCE7E0",
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
@@ -42,7 +50,9 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.INTERNET",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "plugins": [
@@ -106,7 +116,19 @@
         }
       ],
       "expo-background-task",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icons-android/notification-icon.png",
+          "color": "#087E8B"
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Plutus to use Face ID to unlock the app and keep your finances private."
+        }
+      ],
       "expo-image",
       "expo-web-browser",
       [
@@ -120,15 +142,27 @@
       "react-native-litert-lm",
       "./plugins/with-local-ai-android-ndk",
       "./plugins/with-local-ai-ios-build",
+      "./plugins/with-plutus-widgets",
       "expo-asset",
       [
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class * extends androidx.room.RoomDatabase { *; }\n-keep class androidx.work.impl.WorkDatabase_Impl { *; }\n-keep class * extends androidx.work.InputMerger { public <init>(); }\n-keep class * extends androidx.work.ListenableWorker { public <init>(android.content.Context, androidx.work.WorkerParameters); }\n-keep class dev.litert.litertlm.** { *; }\n-keep class expo.modules.plutuslocalai.** { *; }\n-keep class expo.modules.plutuswidget.** { *; }"
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -142,7 +176,24 @@
         "hidden": false
       },
       "eas": {
-        "projectId": "af452427-6c13-41c5-b1c7-1e188d3ee54a"
+        "projectId": "af452427-6c13-41c5-b1c7-1e188d3ee54a",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "PlutusWidgetExtension",
+                  "bundleIdentifier": "com.plutus.budgettracker.widget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.plutus.budgettracker"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
       }
     }
   }

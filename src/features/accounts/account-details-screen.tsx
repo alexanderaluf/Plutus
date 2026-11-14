@@ -1,5 +1,9 @@
+import { queryScopedTransactionsAsync } from "@/data/database/fast-store-client";
+import { getDocumentWindowState } from "@/data/database/month-index";
 import { useLocalData } from "@/data/local-data-provider";
 import { deleteAccountFromDocument } from "@/data/model/account-record";
+import type { BackupDocument } from "@/data/model/backup-document";
+import type { JsonObject } from "@/data/model/json";
 import {
   accountPeriodRange,
   selectAccounts,
@@ -30,9 +34,9 @@ import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-i
 import { BlurTargetView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Animated, Platform, Pressable, StyleSheet, View } from "react-native";
+import { Animated, Platform, Pressable, StyleSheet, View, type ViewInstance } from "react-native";
 import { Easing } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AccountCard } from "./components/account-card";
@@ -45,7 +49,52 @@ export function AccountDetailsScreen() {
   const { t } = useTranslation();
   const { isRTL } = useAppLocalization();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { document, updateDocument } = useLocalData();
+  const { document, ensurePeriodLoaded, updateDocument } = useLocalData();
+  const windowState = getDocumentWindowState(document);
+  const isPartial = Boolean(windowState?.isPartial);
+  const [scopedState, setScopedState] = useState<{
+    doc: BackupDocument;
+    id: string;
+    rows: JsonObject[];
+  } | null>(null);
+  const accountIds = useMemo(() => {
+    const ids = new Set<string>([id]);
+    const raw = document.accounts?.find(
+      (item) => item.uuid === id || String(item.id ?? "") === id,
+    );
+    if (raw) {
+      if (typeof raw.uuid === "string" && raw.uuid) ids.add(raw.uuid);
+      if (typeof raw.id === "string" && raw.id) ids.add(raw.id);
+      else if (typeof raw.id === "number" && Number.isFinite(raw.id)) {
+        ids.add(String(raw.id));
+      }
+    }
+    return [...ids];
+  }, [document, id]);
+
+  useEffect(() => {
+    if (!isPartial || !id) return;
+    let active = true;
+    void queryScopedTransactionsAsync(document, {
+      kind: "account",
+      ids: accountIds,
+    }).then((rows) => {
+      if (active && rows) {
+        setScopedState({ doc: document, id, rows });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [document, isPartial, id, accountIds]);
+
+  const scopedDocument = useMemo(
+    () =>
+      scopedState && scopedState.doc === document && scopedState.id === id
+        ? { ...document, transactions: scopedState.rows }
+        : document,
+    [scopedState, document, id],
+  );
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
@@ -60,27 +109,28 @@ export function AccountDetailsScreen() {
   const menuRequested = useRef(false);
   const menuClosing = useRef(false);
   const pendingEdit = useRef(false);
-  const menuInitialPositionFix = useBottomSheetInitialPositionFix(isMenuOpen);
+  const { bindSheet: bindMenuSheet, ...menuInitialPositionFix } =
+    useBottomSheetInitialPositionFix(isMenuOpen);
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const account = useMemo(
     () => selectAccounts(document, now).find((item) => item.id === id),
     [document, id, now],
   );
   const transactionCount = useMemo(
-    () => selectAccountTransactionCount(document, id),
-    [document, id],
+    () => selectAccountTransactionCount(scopedDocument, id),
+    [scopedDocument, id],
   );
   const visible = useMemo(
     () =>
       selectAccountTransactions(
-        document,
+        scopedDocument,
         id,
         allTime ? undefined : { period, anchor },
       ),
-    [document, id, allTime, period, anchor],
+    [scopedDocument, id, allTime, period, anchor],
   );
   const totals = useMemo(
     () =>
@@ -105,6 +155,13 @@ export function AccountDetailsScreen() {
   );
   const paymentDay = account?.kind === "credit" ? account.paymentDay : null;
   const { start, end } = accountPeriodRange(period, anchor, paymentDay);
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+  useLayoutEffect(() => {
+    if (!allTime && isPartial) {
+      void ensurePeriodLoaded?.(new Date(startTime), new Date(endTime));
+    }
+  }, [ensurePeriodLoaded, allTime, isPartial, startTime, endTime]);
   const periodLabel = {
     Daily: t("accounts.details.periods.daily"),
     Weekly: t("accounts.details.periods.weekly"),
@@ -200,6 +257,10 @@ export function AccountDetailsScreen() {
         <Animated.FlatList
           data={visible}
           keyExtractor={(item) => item.id}
+          initialNumToRender={16}
+          maxToRenderPerBatch={14}
+          updateCellsBatchingPeriod={16}
+          windowSize={7}
           contentContainerStyle={{
             paddingHorizontal: 16,
             paddingBottom: 110 + insets.bottom,
@@ -411,9 +472,9 @@ export function AccountDetailsScreen() {
         >
           <BottomSheet.Overlay isCloseOnPress={!deleting} />
           <BottomSheet.Content
+            ref={bindMenuSheet}
             containerStyle={menuInitialPositionFix.containerStyle}
             onChange={menuInitialPositionFix.onChange}
-            bottomInset={insets.bottom}
             topInset={insets.top}
             enablePanDownToClose={!deleting}
             enableHandlePanningGesture={!deleting}

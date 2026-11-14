@@ -6,6 +6,9 @@ import { initializeLocalDatabase } from "../database/safe-startup";
 import { settleDueCardPayments } from "../model/card-payment";
 import { reconcileRecurring } from "./recurring-service";
 import { syncRecurringReminders } from "./recurring-reminders";
+import { syncDailyNotifications } from "../notifications/daily-notifications";
+import { syncHomeWidget } from "../widgets/widget-sync";
+import { i18n } from "@/localization/i18n";
 
 const TASK = "plutus-recurring-payments-v1";
 // Headless entry point: no React provider or feature component opens this connection.
@@ -27,7 +30,14 @@ if (!TaskManager.isTaskDefined(TASK))
         },
         { limit: 100 },
       );
-      await syncRecurringReminders(await readDocument(database));
+      const latest = await readDocument(database);
+      // Headless runs have no LocalizationProvider; match the app's language.
+      if (i18n.language !== latest._local.appLanguage)
+        await i18n.changeLanguage(latest._local.appLanguage);
+      await syncRecurringReminders(latest);
+      // Keeps the daily notification window filled when the app stays closed.
+      await syncDailyNotifications(latest).catch(() => undefined);
+      await syncHomeWidget(latest).catch(() => undefined);
       return result.error
         ? BackgroundTask.BackgroundTaskResult.Failed
         : BackgroundTask.BackgroundTaskResult.Success;

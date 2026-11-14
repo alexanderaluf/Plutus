@@ -36,7 +36,7 @@ export function ProfileSettingsDialog({
       value: t("settings.dialog.enabled"),
       icon: "bell",
     },
-  ] satisfies Array<{ label: string; value: string; icon: FilledIconName }>;
+  ] satisfies { label: string; value: string; icon: FilledIconName }[];
 
   return (
     <Dialog isOpen={isOpen} onOpenChange={onOpenChange}>

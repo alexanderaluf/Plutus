@@ -61,7 +61,7 @@ export function BudgetColorPicker({
     <View className="gap-5">
       <View
         accessibilityRole="tablist"
-        className="flex-row rounded-2xl bg-surface p-1"
+        className="flex-row rounded-2xl bg-surface-secondary p-1"
       >
         {tabs.map((tabId) => (
           <Pressable

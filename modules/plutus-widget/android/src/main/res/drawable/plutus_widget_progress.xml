@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <item android:id="@android:id/background">
+    <shape android:shape="rectangle">
+      <corners android:radius="999dp" />
+      <solid android:color="@color/plutus_widget_progress_track" />
+    </shape>
+  </item>
+  <item android:id="@android:id/progress">
+    <scale android:scaleWidth="100%">
+      <shape android:shape="rectangle">
+        <corners android:radius="999dp" />
+        <gradient
+          android:angle="0"
+          android:startColor="@color/plutus_widget_progress_start"
+          android:endColor="@color/plutus_widget_progress_end"
+          android:type="linear" />
+      </shape>
+    </scale>
+  </item>
+</layer-list>
+

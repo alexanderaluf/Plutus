@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import type { RefObject } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, View, type ViewInstance } from "react-native";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import {
@@ -16,7 +16,7 @@ type SegmentOption<Value extends SegmentValue> = {
 
 type GlassSegmentedControlProps<Value extends SegmentValue> = {
   accessibilityLabel?: string;
-  blurTarget?: RefObject<View | null>;
+  blurTarget?: RefObject<ViewInstance | null>;
   fitLabels?: boolean;
   minHeight?: number;
   multilineLabels?: boolean;

@@ -1,71 +1,92 @@
-import { useTranslation } from "react-i18next";
-import { View } from "react-native";
 import type { ConsumptionFlow } from "@/data/selectors/consumption-report-selectors";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
-import { ReportHeading, ReportMetric, ReportPanel } from "./report-primitives";
+import { useTranslation } from "react-i18next";
+import { View } from "react-native";
+import {
+  FigureTile,
+  RatioBar,
+  ReportCard,
+  ReportCardHeader,
+  ReportPill,
+  TABULAR,
+} from "./report-primitives";
 
+/** What came in, what went out and what is left, in that reading order. */
 export function CashFlowCard({ flow }: { flow: ConsumptionFlow }) {
   const { t, i18n } = useTranslation();
+  const theme = useAppThemeColors();
   const { formatCurrency, amountsHidden } = useCurrencyFormat();
   const money = (value: number) => formatCurrency(value, flow.currencyCode);
-  const spent =
+  const isNegative = !amountsHidden && flow.net < 0;
+  const spentPercent =
     flow.spentIncomePercent === null
-      ? "—"
+      ? null
       : amountsHidden
         ? "••"
         : new Intl.NumberFormat(i18n.resolvedLanguage, {
             style: "percent",
             maximumFractionDigits: 1,
           }).format(flow.spentIncomePercent / 100);
+  const footnote =
+    spentPercent !== null
+      ? t("reports.overview.incomeSpentSentence", { percent: spentPercent })
+      : flow.expense > 0
+        ? t("reports.overview.noIncome")
+        : null;
+
   return (
-    <ReportPanel>
-      <ReportHeading
+    <ReportCard>
+      <ReportCardHeader
         icon="swap-horizontal"
         title={t("reports.overview.cashFlow")}
+        trailing={<ReportPill label={flow.currencyCode} />}
       />
-      <View className="flex-row flex-wrap gap-3">
-        <ReportMetric
-          icon="arrow-bottom-left"
+      <View className="gap-2.5">
+        <View className="gap-0.5">
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.68}
+            numberOfLines={1}
+            selectable={!amountsHidden}
+            className={`font-manrope-bold text-[34px] leading-[40px] tracking-[-0.6px] ${
+              isNegative ? "text-danger" : "text-foreground"
+            }`}
+            style={TABULAR}
+          >
+            {isNegative ? "−" : ""}
+            {money(flow.net)}
+          </Text>
+          <Text className="font-sans text-[12px] leading-[16px] text-muted">
+            {t("reports.overview.netCaption")}
+          </Text>
+        </View>
+        {amountsHidden ? null : (
+          <RatioBar primary={flow.income} secondary={flow.expense} />
+        )}
+      </View>
+      <View className="flex-row gap-2.5">
+        <FigureTile
+          dotColor={theme.success}
           label={t("reports.kpi.income")}
           value={money(flow.income)}
-          tone="success"
+          toneClass="text-success"
         />
-        <ReportMetric
-          icon="arrow-top-right"
+        <FigureTile
+          dotColor={theme.danger}
           label={t("reports.overview.expenses")}
           value={money(flow.expense)}
-        />
-        <ReportMetric
-          icon="wallet"
-          label={t("reports.overview.netFlow")}
-          value={money(flow.net)}
-          tone={flow.net < 0 ? "danger" : "foreground"}
-        />
-        <ReportMetric
-          icon="chart-donut-variant"
-          label={t("reports.overview.incomeSpent")}
-          value={spent}
+          toneClass="text-danger"
         />
       </View>
-      {flow.largestExpense ? (
-        <View className="flex-row items-center justify-between gap-4 border-t border-border pt-4">
-          <View className="flex-1 gap-1">
-            <Text className="font-sans text-xs text-muted">
-              {t("reports.stats.largest")}
-            </Text>
-            <Text className="font-manrope-semibold text-sm text-foreground">
-              {flow.largestExpense.name}
-            </Text>
-          </View>
-          <Text
-            selectable
-            className="font-manrope-bold text-base text-foreground"
-          >
-            {money(flow.largestExpense.amount)}
+      {footnote ? (
+        <View className="border-t border-border/70 pt-3">
+          <Text className="font-sans text-[12px] leading-[17px] text-muted">
+            {footnote}
           </Text>
         </View>
       ) : null}
-    </ReportPanel>
+    </ReportCard>
   );
 }

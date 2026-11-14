@@ -1,0 +1,24 @@
+<resources>
+  <!-- Light mode adaptive palette matching Plutus theme -->
+  <color name="plutus_widget_surface_start">#F3F8F5</color>
+  <color name="plutus_widget_surface_end">#E4EFE9</color>
+  <color name="plutus_widget_border">#C4D6CC</color>
+  <color name="plutus_widget_inner_surface">#FFFFFF</color>
+  <color name="plutus_widget_inner_border">#D5E3DB</color>
+  <color name="plutus_widget_pill_bg">#DCE9E1</color>
+  <color name="plutus_widget_pill_border">#B8CEC1</color>
+  <color name="plutus_widget_badge_bg">#D4EBEE</color>
+  <color name="plutus_widget_foreground">#122019</color>
+  <color name="plutus_widget_muted">#52665B</color>
+  <color name="plutus_widget_accent">#087E8B</color>
+  <color name="plutus_widget_progress_track">#CFDDD4</color>
+  <color name="plutus_widget_progress_start">#087E8B</color>
+  <color name="plutus_widget_progress_end">#21885B</color>
+  <color name="plutus_widget_income_text">#16794B</color>
+  <color name="plutus_widget_income_btn_bg">#DCF2E6</color>
+  <color name="plutus_widget_income_btn_border">#A9DFC3</color>
+  <color name="plutus_widget_expense_text">#C03C30</color>
+  <color name="plutus_widget_expense_btn_bg">#F9E2DF</color>
+  <color name="plutus_widget_expense_btn_border">#EBBAB4</color>
+</resources>
+

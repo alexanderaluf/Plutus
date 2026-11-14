@@ -17,16 +17,17 @@ export function useModelDownload(modelKey: LocalAIModelKey) {
   const refresh = useCallback(async () => {
     if (!nativeAI) return;
     const ai = nativeAI;
-    try {
-      const pairs = await Promise.all(
-        KEYS.map(
-          async (key) => [key, await ai.getDownloadStateAsync(key)] as const,
-        ),
-      );
-      setStates(Object.fromEntries(pairs));
-    } catch (cause) {
-      setError(String(cause));
-    }
+    await Promise.all(
+      KEYS.map(
+        async (key) => [key, await ai.getDownloadStateAsync(key)] as const,
+      ),
+    ).then(
+      (pairs) => {
+        setStates(Object.fromEntries(pairs));
+        setError("");
+      },
+      (cause: unknown) => setError(String(cause)),
+    );
   }, []);
   useEffect(() => {
     void refresh();
@@ -45,12 +46,13 @@ export function useModelDownload(modelKey: LocalAIModelKey) {
   }, [states, refresh]);
   const start = useCallback(
     async (key: LocalAIModelKey) => {
-      if (!nativeAI) return;
+      if (!nativeAI) throw new Error("Local AI runtime is unavailable");
       setError("");
       try {
         await nativeAI.downloadAsync(key);
       } catch (cause) {
         setError(String(cause));
+        throw cause;
       }
       await refresh();
     },
@@ -58,7 +60,7 @@ export function useModelDownload(modelKey: LocalAIModelKey) {
   );
   const remove = useCallback(
     async (key: LocalAIModelKey) => {
-      if (!nativeAI) return;
+      if (!nativeAI) throw new Error("Local AI runtime is unavailable");
       setError("");
       try {
         await nativeAI.deleteModelAsync(key);

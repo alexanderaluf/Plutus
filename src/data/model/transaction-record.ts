@@ -3,7 +3,6 @@ import { i18n } from "@/localization/i18n";
 import type { BackupDocument } from "./backup-document";
 import {
   belongsToProfile,
-  categoryParent,
   categoryProfileId,
   identity,
   references,
@@ -213,17 +212,6 @@ function resolveDraft(
       transactionType(category) !== draft.type)
   )
     throw new Error(i18n.t("validation.transaction.category"));
-  if (
-    category &&
-    document.categories.some((candidate) =>
-      references(category, categoryParent(candidate)),
-    )
-  )
-    throw new Error(
-      i18n.t("validation.transaction.subcategory", {
-        name: String(category.name),
-      }),
-    );
   const optionalRelations = [
     [
       i18n.t("validation.transaction.relations.budget"),

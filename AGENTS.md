@@ -66,12 +66,18 @@ The canonical collections are listed in `BACKUP_COLLECTION_KEYS` and include:
 
 `transactions`, `accounts`, `assets`, `budgets`, `billSplitters`,
 `billParticipants`, `categories`, `goals`, `loans`, `recurrings`, `labels`,
-`places`, `peoples`, `users`, `images`, `templates`, `achievements`, and
-`exchangeRates`.
+`places`, `peoples`, `users`, `images`, `templates`, `achievements`,
+`exchangeRates`, and `aiChats` (saved ChatGPT conversations; see
+`src/data/model/ai-chat-record.ts`).
 
 Imported backups may contain additional top-level fields. Preserve unknown
 fields and collections. Never rebuild an imported document by selecting only
 fields currently understood by the UI.
+
+Before adding or changing a selector, screen projection or tab navigation, read
+`docs/performance-architecture.md`. Memoize projections per committed document
+with `memoizeForDocument`, read periods through the shared transaction index,
+and never add loading states for local data.
 
 ## Writing Records
 

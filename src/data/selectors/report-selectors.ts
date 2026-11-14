@@ -1,5 +1,7 @@
+import { i18n } from "@/localization/i18n";
 import { financialMonth } from "../model/financial-month";
 import type { BackupDocument } from "../model/backup-document";
+import { memoizeForDocument } from "./document-memo";
 import {
   selectAccounts,
   selectAccountTotals,
@@ -85,6 +87,18 @@ export function selectProfileReport(
   document: BackupDocument,
   currencyCode: string,
   now = new Date(),
+) {
+  return memoizeForDocument(
+    document,
+    `profile-report:${currencyCode}:${now.getTime()}:${i18n.resolvedLanguage ?? ""}`,
+    () => buildProfileReport(document, currencyCode, now),
+  );
+}
+
+function buildProfileReport(
+  document: BackupDocument,
+  currencyCode: string,
+  now: Date,
 ) {
   const monthStartDay = document._local.monthStartDay;
   const months: ReportMonth[] = [];

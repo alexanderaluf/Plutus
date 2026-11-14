@@ -1,4 +1,12 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { BlurView } from "expo-blur";
+import type { RefObject } from "react";
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  type ViewInstance,
+} from "react-native";
 import { useTranslation } from "react-i18next";
 
 import { formatAppDate } from "@/data/model/onboarding";
@@ -14,6 +22,11 @@ type Props = {
   dateFormat: AppDateFormat;
   onPrevious: () => void;
   onNext: () => void;
+  /**
+   * The content this picker floats over. Android can only blur a
+   * `BlurTargetView` that is not an ancestor of the picker; iOS needs none.
+   */
+  blurTarget?: RefObject<ViewInstance | null>;
 };
 
 export function TransactionMonthSelector({
@@ -23,6 +36,7 @@ export function TransactionMonthSelector({
   dateFormat,
   onPrevious,
   onNext,
+  blurTarget,
 }: Props) {
   const { i18n, t } = useTranslation();
   const colors = useAppThemeColors();
@@ -46,16 +60,36 @@ export function TransactionMonthSelector({
       style={[
         styles.container,
         {
-          backgroundColor: colorWithAlpha(colors.surface, 0.92),
+          backgroundColor: colorWithAlpha(colors.surface, 0.78),
           borderColor: colors.border,
         },
       ]}
     >
+      {/* Same frosted glass as the bottom navigation. */}
+      {Platform.OS === "ios" || blurTarget ? (
+        <BlurView
+          blurMethod={
+            Platform.OS === "android" ? "dimezisBlurViewSdk31Plus" : undefined
+          }
+          blurReductionFactor={3}
+          blurTarget={blurTarget}
+          intensity={36}
+          pointerEvents="none"
+          style={StyleSheet.absoluteFill}
+          tint={colors.isDark ? "dark" : "light"}
+        />
+      ) : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t("home.monthSelector.previousMonth")}
         onPress={onPrevious}
-        style={({ pressed }) => [styles.arrow, { opacity: pressed ? 0.6 : 1 }]}
+        style={({ pressed }) => [
+          styles.arrow,
+          {
+            backgroundColor: colors.surfaceSecondary,
+            opacity: pressed ? 0.6 : 1,
+          },
+        ]}
       >
         <FilledIcon name="arrow-left" size={20} />
       </Pressable>
@@ -86,7 +120,10 @@ export function TransactionMonthSelector({
         onPress={onNext}
         style={({ pressed }) => [
           styles.arrow,
-          { opacity: isCurrent ? 0.3 : pressed ? 0.6 : 1 },
+          {
+            backgroundColor: colors.surfaceSecondary,
+            opacity: isCurrent ? 0.3 : pressed ? 0.6 : 1,
+          },
         ]}
       >
         <FilledIcon
@@ -104,13 +141,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 999,
     marginTop: 8,
-    paddingVertical: 4,
+    overflow: "hidden",
+    paddingHorizontal: 5,
+    paddingVertical: 5,
   },
   arrow: {
-    minHeight: 48,
-    width: 48,
+    height: 44,
+    width: 44,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },

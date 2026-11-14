@@ -3,15 +3,21 @@ import {
   BottomSafeAreaGradient,
 } from "@/shared/ui/safe-area-gradients";
 import { BlurTargetView } from "expo-blur";
-import Reanimated from "react-native-reanimated";
+import Reanimated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import {
   CategoryFormSections,
   categoryEntrance,
 } from "./components/category-motion";
-import { uuid } from "expo-modules-core";
+import { uuid } from "expo";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Button, Input, Switch as HeroSwitch } from "heroui-native";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "heroui-native";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Animated,
@@ -19,8 +25,11 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   View,
+  type TextInputInstance,
+  type ViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
@@ -32,28 +41,44 @@ import {
 } from "@/data/model/category-record";
 import { selectCategories } from "@/data/selectors/document-selectors";
 import { useProfiles } from "@/features/profile/profile-provider";
-import { TransactionSelectionSection } from "@/features/transactions/components/transaction-selection-section";
-import { useAppLocalization } from "@/localization/localization-provider";
 import { ICON_COLORS, colorForeground } from "@/shared/icons/colors";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import {
+  CONTINUOUS,
+  FieldInput,
+  FormCard,
+  FormLabel,
+  SwitchRow,
+} from "@/shared/ui/form-ui";
 import { IconPicker } from "@/shared/ui/icon-picker";
 import { RecordIcon } from "@/shared/ui/record-icon";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { CategoryTypeSelector } from "./components/category-ui";
+import {
+  createInitialCategoryDraft,
+  defaultCategoryIcons,
+  parentOptions,
+  suggestCategoryColor,
+} from "./lib/initial-category-draft";
+
+type Palette = "Primary" | "Accent" | "Custom";
+
+/** Accent swatches are the primary colours, lifted toward white. */
+function accentSwatch(hex: string) {
+  const rgb = [1, 3, 5].map((start) =>
+    Math.round(parseInt(hex.slice(start, start + 2), 16) * 0.65 + 255 * 0.35)
+      .toString(16)
+      .padStart(2, "0"),
+  );
+  return `#${rgb.join("")}`;
+}
 
 export function CategoryEditorScreen({ editId }: { editId?: string }) {
   const { t } = useTranslation();
-  const { direction } = useAppLocalization();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
-  const inputDirectionStyle = {
-    direction,
-    textAlign: direction === "rtl" ? ("right" as const) : ("left" as const),
-    textAlignVertical: "center" as const,
-    writingDirection: direction,
-  };
   const params = useLocalSearchParams<{ parentId?: string; type?: string }>();
   const { document, updateDocument } = useLocalData();
   const { activeProfile } = useProfiles();
@@ -63,29 +88,30 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
   const existing = categories.find((category) => category.id === editId);
   const [draft, setDraft] = useState<CategoryDraft>(
     () =>
-      existing ?? {
-        name: "",
-        description: "",
-        type: (params.type === "1"
-          ? 1
-          : params.type === "2"
-            ? 2
-            : 0) as CategoryType,
-        parentId: params.parentId ?? null,
-        icon: "shopping",
-        iconPath: null,
-        color: "#ef5350",
-        isDefault: false,
-      },
+      existing ??
+      createInitialCategoryDraft(
+        categories,
+        (params.type === "1" ? 1 : params.type === "2" ? 2 : 0) as CategoryType,
+        params.parentId ?? null,
+      ),
   );
   const [showIcons, setShowIcons] = useState(false);
-  const [showParents, setShowParents] = useState(!!params.parentId);
-  const [palette, setPalette] = useState<"Primary" | "Accent" | "Custom">(
-    "Primary",
+  const [palette, setPalette] = useState<Palette>(() =>
+    ICON_COLORS.includes(draft.color.toLowerCase())
+      ? "Primary"
+      : ICON_COLORS.map(accentSwatch).includes(draft.color.toLowerCase())
+        ? "Accent"
+        : editId
+          ? "Custom"
+          : "Primary",
   );
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [headerHidden, setHeaderHidden] = useState(false);
+  // Suggestions follow the type and parent until the person makes a choice.
+  const iconChosen = useRef(!!editId);
+  const colorChosen = useRef(!!editId);
+  const descriptionRef = useRef<TextInputInstance>(null);
   const paletteLabels = {
     Primary: t("categories.form.palette.primary"),
     Accent: t("categories.form.palette.accent"),
@@ -93,7 +119,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
   };
   const saving = useRef(false);
   const id = useRef(editId ?? uuid.v4());
-  const blurTargetRef = useRef<View | null>(null);
+  const blurTargetRef = useRef<ViewInstance | null>(null);
   const [scrollY] = useState(() => new Animated.Value(0));
   const topControlsTranslateY = scrollY.interpolate({
     inputRange: [0, 56],
@@ -110,14 +136,21 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
       editId ? categoryFamily(document.categories, editId) : new Set<string>(),
     [document.categories, editId],
   );
-  const parents = categories.filter(
-    (category) => category.type === draft.type && !family.has(category.id),
-  );
-  const parent = categories.find((category) => category.id === draft.parentId);
+  // Only main categories can be parents; subcategories never nest further.
+  const parents = parentOptions(categories, draft.type, family, {
+    editingId: editId,
+    keepId: existing?.parentId,
+  });
   const color = /^#[a-f\d]{6}$/i.test(draft.color) ? draft.color : "#70d2eb";
   const title = editId
     ? t("categories.form.editTitle")
     : t("categories.form.title");
+  const isMissing = !!editId && !existing;
+  const isReady =
+    !isMissing &&
+    draft.name.trim().length > 0 &&
+    draft.name.trim().length <= 100 &&
+    /^#[a-f\d]{6}$/i.test(draft.color);
 
   useEffect(() => {
     let wasHidden = false;
@@ -136,6 +169,34 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
     value: CategoryDraft[K],
   ) {
     setDraft((current) => ({ ...current, [key]: value }));
+    setError("");
+  }
+  function chooseColor(value: string) {
+    colorChosen.current = true;
+    change("color", value);
+  }
+  function chooseParent(parentId: string | null) {
+    setDraft((current) => ({
+      ...current,
+      parentId,
+      ...(colorChosen.current
+        ? {}
+        : { color: suggestCategoryColor(categories, current.type, parentId) }),
+    }));
+    setError("");
+  }
+  function changeType(type: CategoryType) {
+    setDraft((current) => ({
+      ...current,
+      type,
+      parentId: null,
+      ...(iconChosen.current
+        ? {}
+        : { icon: defaultCategoryIcons[type], iconPath: null }),
+      ...(colorChosen.current
+        ? {}
+        : { color: suggestCategoryColor(categories, type, null) }),
+    }));
     setError("");
   }
   function goBack() {
@@ -175,18 +236,8 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
     }
   }
   const swatches =
-    palette === "Accent"
-      ? ICON_COLORS.map((hex) => {
-          const rgb = [1, 3, 5].map((start) =>
-            Math.round(
-              parseInt(hex.slice(start, start + 2), 16) * 0.65 + 255 * 0.35,
-            )
-              .toString(16)
-              .padStart(2, "0"),
-          );
-          return `#${rgb.join("")}`;
-        })
-      : ICON_COLORS;
+    palette === "Accent" ? ICON_COLORS.map(accentSwatch) : ICON_COLORS;
+
   return (
     <View style={[styles.fill, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
@@ -198,7 +249,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
             <Animated.ScrollView
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{
-                paddingBottom: 104 + insets.bottom,
+                paddingBottom: 120 + insets.bottom,
               }}
               showsVerticalScrollIndicator={false}
               scrollEventThrottle={16}
@@ -209,7 +260,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
             >
               <View style={[styles.headerSpace, { height: 56 + insets.top }]} />
               <View style={styles.selectorSpace} />
-              {editId && !existing ? (
+              {isMissing ? (
                 <Text className="px-5 text-danger">
                   {t("categories.form.missing")}
                 </Text>
@@ -217,180 +268,209 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
                 <CategoryFormSections
                   collapsable={false}
                   pointerEvents={isSaving ? "none" : "auto"}
-                  className="gap-5 px-5"
+                  className="gap-3 px-4"
                 >
-                  <View className="flex-row items-center gap-3">
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t("categories.form.chooseIcon")}
-                      onPress={() => {
-                        Keyboard.dismiss();
-                        setShowIcons(true);
-                      }}
-                      className="size-16 items-center justify-center rounded-2xl"
-                      style={{ backgroundColor: color }}
-                    >
-                      <RecordIcon
-                        name={draft.icon}
-                        pathData={draft.iconPath}
-                        color={colorForeground(color)}
-                        size={32}
-                      />
-                      <View
-                        className="absolute -bottom-1 rounded-full border-2 border-background bg-surface p-1"
-                        style={{ end: -4 }}
-                      >
-                        <FilledIcon name="pencil" size={14} />
-                      </View>
-                    </Pressable>
-                    <Input
-                      accessibilityLabel={t("categories.form.name")}
-                      placeholder={t("categories.form.namePlaceholder")}
-                      maxLength={100}
-                      value={draft.name}
-                      onChangeText={(value) => change("name", value)}
-                      containerClassName="flex-1"
-                      className="h-16 rounded-2xl bg-surface"
-                      style={inputDirectionStyle}
-                    />
-                  </View>
-                  <Input
-                    accessibilityLabel={t("categories.form.description")}
-                    placeholder={t("categories.form.descriptionPlaceholder")}
-                    multiline
-                    maxLength={500}
-                    value={draft.description}
-                    onChangeText={(value) => change("description", value)}
-                    className="h-14 min-h-14 rounded-2xl bg-surface"
-                    style={inputDirectionStyle}
-                  />
-                  <Pressable
-                    accessibilityRole="switch"
-                    accessibilityState={{
-                      checked: draft.isDefault,
-                      disabled: isSaving,
-                    }}
-                    accessibilityLabel={t("categories.form.defaultCategory")}
-                    disabled={isSaving}
-                    onPress={() => change("isDefault", !draft.isDefault)}
-                    className="flex-row items-center gap-4 rounded-2xl py-2"
-                    style={({ pressed }) => ({ opacity: pressed ? 0.72 : 1 })}
-                  >
-                    <View className="flex-1 gap-1">
-                      <Text className="font-manrope-bold text-lg text-foreground">
-                        {t("categories.form.defaultCategory")}
-                      </Text>
-                      <Text className="font-sans text-sm leading-5 text-muted">
-                        {t("categories.form.defaultCategoryHelp")}
-                      </Text>
-                    </View>
-                    <View
-                      pointerEvents="none"
-                      importantForAccessibility="no-hide-descendants"
-                    >
-                      <HeroSwitch
-                        isSelected={draft.isDefault}
-                        isDisabled={isSaving}
-                        style={{ width: 60, height: 28 }}
-                      >
-                        <HeroSwitch.Thumb style={{ width: 36, height: 24 }} />
-                      </HeroSwitch>
-                    </View>
-                  </Pressable>
-                  <TransactionSelectionSection
-                    title={t("categories.form.parentCategory")}
-                    placeholder={t("categories.form.noParent")}
-                    icon="filter"
-                    options={parents.map((category) => ({
-                      id: category.id,
-                      name: category.name,
-                      description: category.description,
-                      icon: category.icon,
-                      iconPath: category.iconPath,
-                      color: category.color,
-                    }))}
-                    selectedId={parent?.id ?? ""}
-                    expanded={showParents}
-                    disabled={isSaving}
-                    optional
-                    compactOptions
-                    onToggle={() => setShowParents((value) => !value)}
-                    onSelect={(parentId) =>
-                      change("parentId", parentId || null)
-                    }
-                  />
-                  <Text className="mt-2 font-manrope-semibold text-lg text-foreground">
-                    {t("categories.form.colors")}
-                  </Text>
-                  <View className="flex-row rounded-xl bg-surface p-1">
-                    {(["Primary", "Accent", "Custom"] as const).map((value) => (
+                  {/* Identity: the tile previews the category as it will look. */}
+                  <FormCard>
+                    <View className="flex-row items-center gap-3.5">
                       <Pressable
-                        key={value}
-                        accessibilityRole="tab"
-                        accessibilityState={{ selected: palette === value }}
-                        onPress={() => setPalette(value)}
-                        className={`min-h-11 flex-1 items-center justify-center rounded-lg ${
-                          palette === value ? "bg-accent" : "bg-transparent"
-                        }`}
+                        accessibilityRole="button"
+                        accessibilityLabel={t("categories.form.chooseIcon")}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setShowIcons(true);
+                        }}
+                        className="size-[72px] items-center justify-center rounded-[22px]"
+                        style={({ pressed }) => ({
+                          backgroundColor: color,
+                          opacity: pressed ? 0.8 : 1,
+                          ...CONTINUOUS,
+                        })}
                       >
-                        <Text
-                          className={
-                            palette === value
-                              ? "text-accent-foreground"
-                              : "text-foreground"
-                          }
+                        <RecordIcon
+                          name={draft.icon}
+                          pathData={draft.iconPath}
+                          color={colorForeground(color)}
+                          size={34}
+                        />
+                        <View
+                          className="absolute -bottom-1 rounded-full border-2 bg-surface p-1"
+                          style={{ end: -4, borderColor: theme.surface }}
                         >
-                          {paletteLabels[value]}
-                        </Text>
+                          <FilledIcon name="pencil" size={13} />
+                        </View>
                       </Pressable>
-                    ))}
-                  </View>
-                  {palette === "Custom" ? (
-                    <Input
-                      accessibilityLabel={t("categories.form.customHex")}
-                      autoCapitalize="characters"
-                      autoCorrect={false}
-                      placeholder={t("categories.form.hexPlaceholder")}
-                      maxLength={7}
-                      value={draft.color}
-                      onChangeText={(value) => change("color", value)}
-                      style={inputDirectionStyle}
-                    />
-                  ) : (
-                    <View className="flex-row flex-wrap gap-2">
-                      {swatches.map((hex) => (
-                        <Pressable
-                          key={hex}
-                          accessibilityRole="radio"
-                          accessibilityLabel={t(
-                            "categories.form.colorAccessibility",
-                            { color: hex },
-                          )}
-                          accessibilityState={{
-                            checked:
-                              draft.color.toLowerCase() === hex.toLowerCase(),
-                          }}
-                          onPress={() => change("color", hex)}
-                          style={{
-                            backgroundColor: hex,
-                            width: 44,
-                            height: 44,
-                            borderRadius: 12,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          {draft.color.toLowerCase() === hex.toLowerCase() && (
-                            <FilledIcon
-                              name="check"
-                              color={colorForeground(hex)}
-                              size={26}
-                            />
-                          )}
-                        </Pressable>
-                      ))}
+                      <View className="min-w-0 flex-1 gap-2">
+                        <FormLabel>{t("categories.form.name")}</FormLabel>
+                        <FieldInput
+                          accessibilityLabel={t("categories.form.name")}
+                          placeholder={t("categories.form.namePlaceholder")}
+                          maxLength={100}
+                          returnKeyType="next"
+                          submitBehavior="submit"
+                          onSubmitEditing={() => descriptionRef.current?.focus()}
+                          value={draft.name}
+                          onChangeText={(value) => change("name", value)}
+                          style={styles.nameInput}
+                        />
+                      </View>
                     </View>
-                  )}
+                    <View className="gap-2">
+                      <FormLabel>{t("categories.form.description")}</FormLabel>
+                      <FieldInput
+                        ref={descriptionRef}
+                        accessibilityLabel={t("categories.form.description")}
+                        placeholder={t("categories.form.descriptionPlaceholder")}
+                        multiline
+                        maxLength={500}
+                        value={draft.description}
+                        onChangeText={(value) => change("description", value)}
+                        textAlignVertical="top"
+                        style={styles.description}
+                      />
+                    </View>
+                  </FormCard>
+
+                  <FormCard title={t("categories.form.colors")}>
+                    <PaletteTabs
+                      value={palette}
+                      labels={paletteLabels}
+                      onChange={setPalette}
+                    />
+                    {palette === "Custom" ? (
+                      <View className="flex-row items-center gap-3">
+                        <View
+                          className="size-14 rounded-2xl"
+                          style={{
+                            backgroundColor: color,
+                            borderWidth: 1,
+                            borderColor: colorWithAlpha(theme.foreground, 0.12),
+                            ...CONTINUOUS,
+                          }}
+                        />
+                        <FieldInput
+                          accessibilityLabel={t("categories.form.customHex")}
+                          autoCapitalize="characters"
+                          autoCorrect={false}
+                          placeholder={t("categories.form.hexPlaceholder")}
+                          maxLength={7}
+                          value={draft.color}
+                          onChangeText={chooseColor}
+                          style={styles.hexInput}
+                        />
+                      </View>
+                    ) : (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={styles.swatches}
+                        style={styles.bleed}
+                      >
+                        {swatches.map((hex) => {
+                          const selected =
+                            draft.color.toLowerCase() === hex.toLowerCase();
+                          return (
+                            <Pressable
+                              key={hex}
+                              accessibilityRole="radio"
+                              accessibilityLabel={t(
+                                "categories.form.colorAccessibility",
+                                { color: hex },
+                              )}
+                              accessibilityState={{ checked: selected }}
+                              onPress={() => chooseColor(hex)}
+                              style={[
+                                styles.swatchRing,
+                                {
+                                  borderColor: selected
+                                    ? theme.foreground
+                                    : "transparent",
+                                },
+                              ]}
+                            >
+                              <View
+                                style={[
+                                  styles.swatch,
+                                  {
+                                    backgroundColor: hex,
+                                    borderColor: colorWithAlpha(
+                                      theme.foreground,
+                                      0.12,
+                                    ),
+                                  },
+                                ]}
+                              >
+                                {selected && (
+                                  <FilledIcon
+                                    name="check"
+                                    color={colorForeground(hex)}
+                                    size={20}
+                                  />
+                                )}
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </ScrollView>
+                    )}
+                  </FormCard>
+
+                  <FormCard title={t("categories.form.parentCategory")}>
+                    <View style={styles.parentWrap}>
+                      <ParentPill
+                        selected={!draft.parentId}
+                        label={t("categories.form.noParent")}
+                        onPress={() => chooseParent(null)}
+                      >
+                        <FilledIcon
+                          name="tag"
+                          size={15}
+                          color={
+                            draft.parentId
+                              ? theme.muted
+                              : theme.accentForeground
+                          }
+                        />
+                      </ParentPill>
+                      {parents.map((option) => {
+                        const selected = draft.parentId === option.id;
+                        return (
+                          <ParentPill
+                            key={option.id}
+                            selected={selected}
+                            color={option.color}
+                            label={option.name}
+                            onPress={() =>
+                              chooseParent(selected ? null : option.id)
+                            }
+                          >
+                            <RecordIcon
+                              name={option.icon}
+                              pathData={option.iconPath}
+                              color={
+                                selected
+                                  ? colorForeground(option.color)
+                                  : option.color
+                              }
+                              size={15}
+                            />
+                          </ParentPill>
+                        );
+                      })}
+                    </View>
+                  </FormCard>
+
+                  <FormCard>
+                    <SwitchRow
+                      icon="pin"
+                      title={t("categories.form.defaultCategory")}
+                      description={t("categories.form.defaultCategoryHelp")}
+                      value={draft.isDefault}
+                      disabled={isSaving}
+                      onChange={(value) => change("isDefault", value)}
+                    />
+                  </FormCard>
                 </CategoryFormSections>
               )}
             </Animated.ScrollView>
@@ -448,10 +528,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
               blurTarget={blurTargetRef}
               minHeight={Platform.OS === "android" ? 52 : 48}
               value={draft.type}
-              onChange={(type) => {
-                setDraft((current) => ({ ...current, type, parentId: null }));
-                setError("");
-              }}
+              onChange={changeType}
             />
           </Animated.View>
 
@@ -466,49 +543,55 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
               <Text
                 accessibilityRole="alert"
                 accessibilityLiveRegion="polite"
-                className="font-sans text-sm text-danger"
+                className="px-2 text-center font-sans text-sm text-danger"
               >
                 {error}
               </Text>
             )}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={
-                isSaving
-                  ? t("categories.form.saving")
-                  : editId
-                    ? t("categories.form.save")
-                    : t("categories.form.add")
-              }
-              accessibilityState={{
-                busy: isSaving,
-                disabled: isSaving || (!!editId && !existing),
-              }}
-              disabled={isSaving || (!!editId && !existing)}
-              onPress={save}
-              android_ripple={{
-                color: colorWithAlpha(theme.accentForeground, 0.16),
-                borderless: false,
-              }}
-              style={({ pressed }) => [
-                styles.actionButton,
-                { backgroundColor: theme.accent },
-                (isSaving || (!!editId && !existing)) && styles.actionDisabled,
-                Platform.OS === "ios" && pressed && styles.actionPressed,
-              ]}
-            >
-              <FilledIcon name="check" size={24} tone="accent-foreground" />
-              <Text
-                numberOfLines={1}
-                className="shrink font-manrope-bold text-base text-accent-foreground"
+            <SaveEmphasis ready={isReady}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isSaving
+                    ? t("categories.form.saving")
+                    : editId
+                      ? t("categories.form.save")
+                      : t("categories.form.add")
+                }
+                accessibilityState={{
+                  busy: isSaving,
+                  disabled: isSaving || isMissing,
+                }}
+                disabled={isSaving || isMissing}
+                onPress={save}
+                android_ripple={{
+                  color: colorWithAlpha(theme.accentForeground, 0.16),
+                  borderless: false,
+                }}
+                style={({ pressed }) => [
+                  styles.actionButton,
+                  { backgroundColor: theme.accent },
+                  (isSaving || isMissing) && styles.actionDisabled,
+                  Platform.OS === "ios" && pressed && styles.actionPressed,
+                ]}
               >
-                {isSaving
-                  ? t("categories.form.saving")
-                  : editId
-                    ? t("categories.form.save")
-                    : t("categories.form.add")}
-              </Text>
-            </Pressable>
+                <FilledIcon
+                  name={editId ? "check" : "plus"}
+                  size={24}
+                  tone="accent-foreground"
+                />
+                <Text
+                  numberOfLines={1}
+                  className="shrink font-manrope-bold text-[17px] text-accent-foreground"
+                >
+                  {isSaving
+                    ? t("categories.form.saving")
+                    : editId
+                      ? t("categories.form.save")
+                      : t("categories.form.add")}
+                </Text>
+              </Pressable>
+            </SaveEmphasis>
           </Reanimated.View>
         </View>
       </KeyboardAvoidingView>
@@ -517,6 +600,7 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
           selected={{ name: draft.icon, pathData: draft.iconPath }}
           onClose={() => setShowIcons(false)}
           onSelect={(icon) => {
+            iconChosen.current = true;
             setDraft((current) => ({
               ...current,
               icon: icon.name,
@@ -528,6 +612,135 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
       )}
     </View>
   );
+}
+
+function PaletteTabs({
+  value,
+  labels,
+  onChange,
+}: {
+  value: Palette;
+  labels: Record<Palette, string>;
+  onChange: (value: Palette) => void;
+}) {
+  const theme = useAppThemeColors();
+  return (
+    <View
+      accessibilityRole="tablist"
+      className="flex-row rounded-2xl p-1"
+      style={{ backgroundColor: theme.surfaceSecondary, ...CONTINUOUS }}
+    >
+      {(["Primary", "Accent", "Custom"] as const).map((option) => {
+        const selected = value === option;
+        return (
+          <Pressable
+            key={option}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+            onPress={() => onChange(option)}
+            className="min-h-11 flex-1 items-center justify-center rounded-xl"
+            style={({ pressed }) => ({
+              backgroundColor: selected ? theme.accent : "transparent",
+              opacity: pressed ? 0.72 : 1,
+              ...CONTINUOUS,
+            })}
+          >
+            <Text
+              className={`font-manrope-semibold text-[14px] ${
+                selected ? "text-accent-foreground" : "text-foreground"
+              }`}
+            >
+              {labels[option]}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** One-tap parent choice, filled with the parent's colour when chosen. */
+function ParentPill({
+  selected,
+  color,
+  label,
+  onPress,
+  children,
+}: {
+  selected: boolean;
+  color?: string;
+  label: string;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  const theme = useAppThemeColors();
+  const fill = selected ? (color ?? theme.accent) : theme.surfaceSecondary;
+  const ink = selected
+    ? color
+      ? colorForeground(color)
+      : theme.accentForeground
+    : theme.foreground;
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ checked: selected }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.parentPill,
+        { backgroundColor: fill, opacity: pressed ? 0.72 : 1 },
+      ]}
+    >
+      <View
+        style={[
+          styles.parentIcon,
+          {
+            backgroundColor: selected
+              ? colorWithAlpha(ink, 0.16)
+              : color
+                ? colorWithAlpha(color, theme.isDark ? 0.28 : 0.18)
+                : colorWithAlpha(theme.muted, 0.16),
+          },
+        ]}
+      >
+        {children}
+      </View>
+      <Text
+        numberOfLines={1}
+        style={[styles.parentLabel, { color: ink }]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/**
+ * Dimmed until the category has a name, then fully lit: readiness is seen,
+ * not read. It stays pressable so a tap explains what is missing.
+ */
+function SaveEmphasis({
+  ready,
+  children,
+}: {
+  ready: boolean;
+  children: ReactNode;
+}) {
+  const emphasis = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    emphasis.set(
+      withTiming(ready ? 1 : 0, {
+        duration: 220,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [emphasis, ready]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.5 + emphasis.get() * 0.5,
+    transform: [{ scale: 0.98 + emphasis.get() * 0.02 }],
+  }));
+  return <Reanimated.View style={style}>{children}</Reanimated.View>;
 }
 
 const styles = StyleSheet.create({
@@ -576,4 +789,49 @@ const styles = StyleSheet.create({
   },
   actionPressed: { opacity: 0.72 },
   actionDisabled: { opacity: 0.5 },
+  nameInput: { fontSize: 17 },
+  description: {
+    height: "auto",
+    minHeight: 56,
+    maxHeight: 140,
+    paddingVertical: 16,
+  },
+  hexInput: { flex: 1, letterSpacing: 1 },
+  bleed: { marginHorizontal: -16 },
+  swatches: { gap: 6, paddingHorizontal: 12 },
+  swatchRing: { borderRadius: 999, borderWidth: 2, padding: 2 },
+  swatch: {
+    alignItems: "center",
+    borderRadius: 999,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44,
+  },
+  parentWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  parentPill: {
+    minHeight: 44,
+    maxWidth: "100%",
+    paddingStart: 8,
+    paddingEnd: 13,
+    paddingVertical: 6,
+    borderRadius: 22,
+    borderCurve: "continuous",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  parentIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  parentLabel: {
+    fontFamily: "Huninn_400Regular",
+    fontSize: 14,
+    lineHeight: 19,
+    flexShrink: 1,
+  },
 });

@@ -655,6 +655,24 @@ function fakeModel(replies) {
 const t = (key, values) => `${key}${values ? JSON.stringify(values) : ""}`;
 const prompt = { now: NOW, currency: "USD", monthStartDay: 10, appLanguage: "en" };
 
+test("remote request failures stop planning without retries or a mutation fallback", async () => {
+  for (const question of ["How much did I spend this month?", "Change this transaction from 400 to 40"]) {
+    const document = richDocument();
+    const before = JSON.stringify(document);
+    const failure = new Error("subscription_sharing_usage_limit_exceeded");
+    let requests = 0;
+    const model = {
+      resetConversation() {}, isRequestError: (error) => error === failure,
+      async execute() { requests++; throw failure; },
+    };
+    await assert.rejects(runChatTurn({ model, document, question, history: [], prompt,
+      contextTokens: 8192, proposals: storeFor(), t, structuredOutput: { enabled: true } }),
+    (error) => error === failure);
+    assert.equal(requests, 1);
+    assert.equal(JSON.stringify(document), before);
+  }
+});
+
 test("broad advice always reads the full evidence bundle", async () => {
   const model = fakeModel((text) => (text.includes("TOOL_RESULTS") ? "Your score is fine." : '{"tool_calls":[{"name":"accounts"}]}'));
   const result = await runChatTurn({

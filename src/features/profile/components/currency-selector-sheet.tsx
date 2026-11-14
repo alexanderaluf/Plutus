@@ -10,6 +10,10 @@ import { useTranslation } from "react-i18next";
 import { Keyboard, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  useLazySheetMount,
+  useLazySheetOpenState,
+} from "@/shared/lib/use-post-frame-ready";
 import { Text } from "@/shared/ui/app-text";
 import { AppBottomSheetPortal } from "@/shared/ui/app-bottom-sheet-portal";
 import { FilledIcon } from "@/shared/ui/filled-icon";
@@ -17,22 +21,24 @@ import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-i
 
 import type { CurrencyOption } from "../data/currencies-data";
 
+type CurrenciesModule = typeof import("../data/currencies-data");
+let cachedCurrenciesModule: CurrenciesModule | null = null;
+function getCurrenciesModule(): CurrenciesModule {
+  if (!cachedCurrenciesModule) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedCurrenciesModule = require("../data/currencies-data") as CurrenciesModule;
+  }
+  return cachedCurrenciesModule;
+}
+
 type CurrencySelectorSheetProps = {
-  currencies: CurrencyOption[];
+  currencies?: CurrencyOption[];
   isOpen: boolean;
   selectedCode: string;
   closeOnSelect?: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onSelect: (currency: CurrencyOption) => void;
 };
-
-function normalizeSearch(value: string, locale: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase(locale)
-    .trim();
-}
 
 function CurrencySearch({
   value,
@@ -70,35 +76,38 @@ function CurrencyList({
   isOpen,
   selectedCode,
   onSelect,
+  onLayout,
 }: Pick<
   CurrencySelectorSheetProps,
   "currencies" | "isOpen" | "selectedCode" | "onSelect"
->) {
+> & { onLayout?: () => void }) {
   const { t, i18n } = useTranslation();
   const [query, setQuery] = useState("");
   const listRef = useRef<ComponentRef<typeof BottomSheetFlatList>>(null);
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setQuery("");
+  }
   useEffect(() => {
-    if (isOpen) {
-      setQuery("");
-      listRef.current?.scrollToOffset({ offset: 0, animated: false });
-    }
+    if (isOpen) listRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [isOpen]);
   const insets = useSafeAreaInsets();
   const [accentForeground, muted] = useThemeColor([
     "accent-foreground",
     "muted",
   ]);
-  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const language = i18n.resolvedLanguage ?? i18n.language;
   const normalizedCode = selectedCode.toUpperCase();
-  const results = useMemo(() => {
-    const search = normalizeSearch(query, locale);
-    return currencies.filter((item) =>
-      normalizeSearch(`${item.code} ${item.name}`, locale).includes(search),
-    );
-  }, [currencies, locale, query]);
+  const currenciesModule = getCurrenciesModule();
+  const currencyList = currencies ?? currenciesModule.currencies;
+  const results = useMemo(
+    () => currenciesModule.searchCurrencies(currencyList, query),
+    [currenciesModule, currencyList, query],
+  );
 
   return (
-    <>
+    <View onLayout={onLayout} style={{ flex: 1 }}>
       <View className="px-5 pb-3 pt-2">
         <CurrencySearch
           value={query}
@@ -112,7 +121,7 @@ function CurrencyList({
       <BottomSheetFlatList
         ref={listRef}
         data={results}
-        extraData={normalizedCode}
+        extraData={`${normalizedCode}:${language}`}
         keyExtractor={(item: CurrencyOption) => item.code}
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -122,16 +131,19 @@ function CurrencyList({
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         initialNumToRender={14}
-        windowSize={7}
+        maxToRenderPerBatch={16}
+        windowSize={5}
         renderItem={({ item }: { item: CurrencyOption }) => {
           const isSelected = item.code === normalizedCode;
+          const name = currenciesModule.getCurrencyDisplayName(item, language);
+          const flag = currenciesModule.getCurrencyFlag(item.code);
 
           return (
             <Pressable
               accessibilityRole="radio"
               accessibilityState={{ checked: isSelected }}
               accessibilityLabel={t("currency.optionAccessibility", {
-                name: item.name,
+                name,
                 code: item.code,
               })}
               className={`my-0.5 min-h-18 flex-row items-center gap-3 rounded-2xl px-3 py-3 active:bg-surface-tertiary ${
@@ -140,23 +152,26 @@ function CurrencyList({
               onPress={() => onSelect(item)}
             >
               <View
+                importantForAccessibility="no-hide-descendants"
                 className={`h-11 w-14 items-center justify-center rounded-xl ${
-                  isSelected ? "bg-accent" : "bg-surface-tertiary"
+                  isSelected ? "bg-accent/20" : "bg-surface-tertiary"
                 }`}
               >
-                <Text
-                  className={`font-manrope-bold text-xs ${
-                    isSelected ? "text-accent-foreground" : "text-foreground"
-                  }`}
-                >
-                  {item.code}
-                </Text>
+                {flag ? (
+                  <Text className="text-2xl" allowFontScaling={false}>
+                    {flag}
+                  </Text>
+                ) : (
+                  <Text className="font-manrope-bold text-xs text-foreground">
+                    {item.code}
+                  </Text>
+                )}
               </View>
               <View className="flex-1 gap-1">
                 <Text className="font-manrope-semibold text-sm text-foreground">
-                  {item.name}
+                  {name}
                 </Text>
-                <Text className="font-sans text-xs text-muted">
+                <Text className="font-manrope-bold text-xs text-muted">
                   {item.code}
                 </Text>
               </View>
@@ -184,11 +199,17 @@ function CurrencyList({
           </View>
         }
       />
-    </>
+    </View>
   );
 }
 
-export function CurrencySelectorSheet({
+export function CurrencySelectorSheet(props: CurrencySelectorSheetProps) {
+  const mounted = useLazySheetMount(props.isOpen);
+  if (!mounted) return null;
+  return <MountedCurrencySelectorSheet {...props} />;
+}
+
+function MountedCurrencySelectorSheet({
   currencies,
   isOpen,
   selectedCode,
@@ -197,21 +218,26 @@ export function CurrencySelectorSheet({
   onSelect,
 }: CurrencySelectorSheetProps) {
   const insets = useSafeAreaInsets();
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { effectiveIsOpen, openAfterLayout, canDismiss } =
+    useLazySheetOpenState(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(effectiveIsOpen);
 
   function handleOpenChange(open: boolean) {
-    if (!open) Keyboard.dismiss();
+    if (!canDismiss(open)) return;
+    Keyboard.dismiss();
     onOpenChange(open);
   }
 
   return (
-    <BottomSheet isOpen={isOpen} onOpenChange={handleOpenChange}>
+    <BottomSheet isOpen={effectiveIsOpen} onOpenChange={handleOpenChange}>
       <AppBottomSheetPortal
-        isOpen={isOpen}
+        isOpen={effectiveIsOpen}
         unstable_accessibilityContainerViewIsModal
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["85%"]}
@@ -227,11 +253,15 @@ export function CurrencySelectorSheet({
         >
           <CurrencyList
             currencies={currencies}
-            isOpen={isOpen}
+            isOpen={effectiveIsOpen}
             selectedCode={selectedCode}
+            onLayout={openAfterLayout}
             onSelect={(currency) => {
               onSelect(currency);
-              if (closeOnSelect) handleOpenChange(false);
+              if (closeOnSelect) {
+                Keyboard.dismiss();
+                onOpenChange(false);
+              }
             }}
           />
         </BottomSheet.Content>

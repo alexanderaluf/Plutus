@@ -452,8 +452,8 @@ test("v7-to-v13 migration preserves imported category data and survives SQLite r
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 22);
-    assert.equal(restored._local.schemaVersion, 22);
+    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 25);
+    assert.equal(restored._local.schemaVersion, 25);
     assert.equal(restored.categories.length, 1);
     assert.equal(restored.categories[0].parentId, null);
     assert.deepEqual(restored.categories[0].custom, { keep: true });
@@ -706,7 +706,7 @@ test("partially migrated databases preserve legacy and custom categories", async
       sqlite.prepare("SELECT document_json FROM app_document").get()
         .document_json,
     );
-    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 22);
+    assert.equal(sqlite.prepare("PRAGMA user_version").get().user_version, 25);
     assert.equal(restored.categories.length, 7);
     assert.equal(restored._local.defaultCategoriesRevision, 0);
     assert.ok(
@@ -731,4 +731,158 @@ test("partially migrated databases preserve legacy and custom categories", async
     assert.ok(path.basename(directory).startsWith("budget-categories-stuck-"));
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("a new category starts from the profile's categories: type icon, free colour, parent family", () => {
+  const {
+    createInitialCategoryDraft,
+    defaultCategoryIcons,
+    parentOptions,
+    suggestCategoryColor,
+  } = require("../src/features/categories/lib/initial-category-draft.ts");
+  const { ICON_COLORS } = require("../src/shared/icons/colors.ts");
+  const category = (id, type, color, parentId = null) => ({
+    id,
+    name: id,
+    description: "",
+    type,
+    parentId,
+    icon: "shopping",
+    iconPath: null,
+    color,
+    isDefault: false,
+  });
+  const categories = [
+    category("food", 0, ICON_COLORS[0]),
+    category("food-out", 0, ICON_COLORS[5], "food"),
+    category("rent", 0, ICON_COLORS[1]),
+    category("salary", 1, ICON_COLORS[0]),
+  ];
+
+  // An unused colour of the same type; other types do not block a colour.
+  assert.equal(suggestCategoryColor(categories, 0, null), ICON_COLORS[2]);
+  assert.equal(suggestCategoryColor(categories, 1, null), ICON_COLORS[1]);
+  // A subcategory joins its parent's colour family.
+  assert.equal(suggestCategoryColor(categories, 0, "rent"), ICON_COLORS[1]);
+
+  const expense = createInitialCategoryDraft(categories, 0, null);
+  assert.equal(expense.icon, defaultCategoryIcons[0]);
+  assert.equal(expense.parentId, null);
+  assert.equal(expense.isDefault, false);
+  assert.equal(createInitialCategoryDraft(categories, 1, null).icon, "cash");
+  assert.equal(
+    createInitialCategoryDraft(categories, 2, null).icon,
+    "currency-exchange",
+  );
+  const child = createInitialCategoryDraft(categories, 0, "food");
+  assert.equal(child.parentId, "food");
+  assert.equal(child.color, ICON_COLORS[0]);
+  // A preset parent of another type, or a missing one, is ignored.
+  assert.equal(createInitialCategoryDraft(categories, 1, "food").parentId, null);
+  assert.equal(createInitialCategoryDraft(categories, 0, "gone").parentId, null);
+
+  // A subcategory preset as parent is ignored: it cannot be a parent.
+  assert.equal(
+    createInitialCategoryDraft(categories, 0, "food-out").parentId,
+    null,
+  );
+
+  // Only main categories of the type can be parents.
+  assert.deepEqual(
+    parentOptions(categories, 0, new Set()).map((item) => item.id),
+    ["food", "rent"],
+  );
+  // Never the edited family itself.
+  assert.deepEqual(
+    parentOptions(categories, 0, new Set(["rent"]), { editingId: "rent" }).map(
+      (item) => item.id,
+    ),
+    ["food"],
+  );
+  // A category with subcategories cannot become a subcategory.
+  assert.deepEqual(
+    parentOptions(categories, 0, new Set(["food", "food-out"]), {
+      editingId: "food",
+    }),
+    [],
+  );
+  // Older nested data keeps its current parent listed, so saving never moves it.
+  const nested = [...categories, category("tips", 0, "#123456", "food-out")];
+  assert.deepEqual(
+    parentOptions(nested, 0, new Set(["tips"]), {
+      editingId: "tips",
+      keepId: "food-out",
+    }).map((item) => item.id),
+    ["food", "food-out", "rent"],
+  );
+  // A parent whose own parent was deleted counts as a main category.
+  const orphan = [category("lonely", 0, "#654321", "deleted")];
+  assert.deepEqual(
+    parentOptions(orphan, 0, new Set()).map((item) => item.id),
+    ["lonely"],
+  );
+});
+
+const {
+  buildCategoryTree,
+  sortCategories,
+  summarizeMonth,
+} = require("../src/features/categories/lib/category-list-helpers.ts");
+
+test("categories overview nests children, keeps cycles reachable and sorts by name or month amount", () => {
+  const list = [
+    { id: "food", name: "Food", parentId: null },
+    { id: "cafe", name: "Cafe", parentId: "food" },
+    { id: "bills", name: "Bills", parentId: null },
+    // An imported cycle: neither has a real root, so both stay visible.
+    { id: "a", name: "Loop A", parentId: "b" },
+    { id: "b", name: "Loop B", parentId: "a" },
+  ];
+  const { roots, children } = buildCategoryTree(list);
+  assert.deepEqual(
+    roots.map((r) => r.id),
+    ["food", "bills", "a", "b"],
+  );
+  assert.deepEqual(
+    (children.get("food") ?? []).map((c) => c.id),
+    ["cafe"],
+  );
+  const totals = new Map([
+    ["food", { count: 3, amounts: { ILS: 90 } }],
+    ["bills", { count: 1, amounts: { ILS: 400 } }],
+  ]);
+  assert.equal(sortCategories(roots, "original", totals), roots);
+  assert.deepEqual(
+    sortCategories(roots, "name", totals).map((r) => r.id),
+    ["bills", "food", "a", "b"],
+  );
+  assert.deepEqual(
+    sortCategories(roots, "amount", totals).map((r) => r.id),
+    ["bills", "food", "a", "b"],
+  );
+});
+
+test("categories month summary adds top-level totals once and shares only within one currency", () => {
+  const roots = [
+    { id: "food", name: "Food", parentId: null },
+    { id: "bills", name: "Bills", parentId: null },
+  ];
+  const totals = new Map([
+    // Food already includes its child's spending; children are not re-added.
+    ["food", { count: 3, amounts: { ILS: 100 } }],
+    ["cafe", { count: 2, amounts: { ILS: 40 } }],
+    ["bills", { count: 1, amounts: { ILS: 300 } }],
+  ]);
+  const summary = summarizeMonth(roots, totals);
+  assert.equal(summary.count, 4);
+  assert.deepEqual(summary.amounts, [{ currencyCode: "ILS", amount: 400 }]);
+  assert.equal(summary.share(totals.get("bills")), 0.75);
+
+  totals.set("bills", { count: 1, amounts: { USD: 300 } });
+  const mixed = summarizeMonth(roots, totals);
+  assert.deepEqual(
+    mixed.amounts.map((v) => v.currencyCode),
+    ["ILS", "USD"],
+  );
+  assert.equal(mixed.share(totals.get("food")), null);
 });

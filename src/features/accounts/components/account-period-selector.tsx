@@ -1,7 +1,7 @@
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import type { View } from "react-native";
+import type { ViewInstance } from "react-native";
 import type { AccountPeriod } from "../types";
 
 const periods: AccountPeriod[] = ["Daily", "Weekly", "Monthly", "Yearly"];
@@ -11,7 +11,7 @@ export function AccountPeriodSelector({
   value,
   onChange,
 }: {
-  blurTarget?: RefObject<View | null>;
+  blurTarget?: RefObject<ViewInstance | null>;
   value: AccountPeriod;
   onChange: (value: AccountPeriod) => void;
 }) {

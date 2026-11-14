@@ -4,6 +4,8 @@
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
   },
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
   "tailwindCSS.experimental.configFile": {
     "global.css": ["global.css", "src/**/*.{ts,tsx}"]
   },

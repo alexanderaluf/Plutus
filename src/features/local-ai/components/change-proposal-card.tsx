@@ -13,7 +13,7 @@ import { useLocalData } from "@/data/local-data-provider";
 import { selectBudgets } from "@/data/selectors/budget-selectors";
 import { selectCategories } from "@/data/selectors/category-selectors";
 import { selectAccounts } from "@/data/selectors/document-selectors";
-import { TransactionCategorySheet } from "@/features/transactions/components/transaction-category-sheet";
+import { CategorySelectionSection } from "@/features/transactions/components/category-selection-section";
 import {
   TransactionSelectionSection,
   type TransactionOption,
@@ -184,7 +184,7 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
 
 /**
  * The editing form uses the transaction editor's own selection sections and
- * subcategory sheet, so correcting a proposal looks like the rest of the app.
+ * category picker, so correcting a proposal looks like the rest of the app.
  */
 function ProposalEditor({
   fields,
@@ -199,7 +199,6 @@ function ProposalEditor({
   const colors = useAppThemeColors();
   const { document } = useLocalData();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [sheetParent, setSheetParent] = useState<{ field: string; id: string } | null>(null);
   const accounts = useMemo(() => selectAccounts(document), [document]);
   const categories = useMemo(() => selectCategories(document), [document]);
   const budgets = useMemo(() => selectBudgets(document), [document]);
@@ -216,40 +215,6 @@ function ProposalEditor({
     iconPath: account.iconPath,
     color: account.color,
   }));
-  const option = (category: (typeof categories)[number]): TransactionOption => ({
-    id: category.id,
-    name: category.name,
-    description: category.description,
-    icon: category.icon,
-    iconPath: category.iconPath,
-    color: category.color,
-  });
-  const hasChildren = (id: string) => categories.some((category) => category.parentId === id);
-  const rootOf = (id: string) => {
-    let current = categories.find((category) => category.id === id);
-    const seen = new Set<string>();
-    while (current?.parentId && !seen.has(current.id)) {
-      seen.add(current.id);
-      const parentId = current.parentId;
-      const parent = categories.find((category) => category.id === parentId);
-      if (!parent) break;
-      current = parent;
-    }
-    return current?.id ?? "";
-  };
-  const descendantsOf = (parentId: string) =>
-    categories.filter((category) => {
-      if (hasChildren(category.id)) return false;
-      const seen = new Set<string>();
-      let parent = category.parentId;
-      while (parent && !seen.has(parent)) {
-        if (parent === parentId) return true;
-        seen.add(parent);
-        parent = categories.find((candidate) => candidate.id === parent)?.parentId ?? null;
-      }
-      return false;
-    });
-
   return (
     <View className="gap-3">
       {fields.map((item) => {
@@ -274,32 +239,24 @@ function ProposalEditor({
                 }}
               />
             );
-          case "category": {
-            const roots = categories
-              .filter((category) => !category.parentId && (item.categoryType === undefined || category.type === item.categoryType))
-              .map(option);
+          case "category":
             return (
-              <TransactionSelectionSection
+              <CategorySelectionSection
                 key={item.field}
                 title={label}
                 placeholder={t("transactions.form.selectCategory")}
-                icon="chart-donut-variant"
-                options={roots}
-                selectedId={current ? rootOf(String(current)) : ""}
+                categories={categories}
+                type={item.categoryType}
+                selectedId={String(current ?? "")}
                 expanded={expanded === item.field}
-                compactOptions
                 optional={!item.required}
                 onToggle={() => setExpanded((open) => (open === item.field ? null : item.field))}
                 onSelect={(id) => {
-                  if (id && hasChildren(id)) setSheetParent({ field: item.field, id });
-                  else {
-                    onChange(item.field, id);
-                    setExpanded(null);
-                  }
+                  onChange(item.field, id);
+                  setExpanded(null);
                 }}
               />
             );
-          }
           case "budget":
             return (
               <TransactionSelectionSection
@@ -376,23 +333,6 @@ function ProposalEditor({
             );
         }
       })}
-      {sheetParent &&
-        (() => {
-          const parent = categories.find((category) => category.id === sheetParent.id);
-          if (!parent) return null;
-          return (
-            <TransactionCategorySheet
-              parent={option(parent)}
-              options={descendantsOf(parent.id).map(option)}
-              selectedId={String(draft[sheetParent.field] ?? "")}
-              onSelect={(id) => {
-                onChange(sheetParent.field, id);
-                setExpanded(null);
-              }}
-              onDismiss={() => setSheetParent(null)}
-            />
-          );
-        })()}
     </View>
   );
 }

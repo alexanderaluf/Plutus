@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Pressable, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, TextInput, View, type TextInputInstance } from "react-native";
 import Animated, {
   useAnimatedKeyboard,
   useAnimatedStyle,
@@ -8,7 +8,9 @@ import Animated, {
 
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
+import { ChatGPTLogo } from "@/shared/ui/chatgpt-logo";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import { GeminiLogo } from "@/shared/ui/gemini-logo";
 
 import { WAVE_BARS } from "../voice/use-voice-input";
 import type { VoiceState } from "../voice/voice-state";
@@ -82,6 +84,7 @@ export function ChatComposer({
   onSend,
   onOpenCommands,
   modelName,
+  provider,
   onOpenModels,
   inputRef,
   voice,
@@ -103,8 +106,10 @@ export function ChatComposer({
   /** Opens the "/" menu of everything the assistant can do. */
   onOpenCommands: () => void;
   modelName: string;
+  /** Shows the OpenAI mark for ChatGPT models and the Gemini mark for on-device Gemma. */
+  provider: "chatgpt" | "gemma";
   onOpenModels: () => void;
-  inputRef?: React.RefObject<TextInput | null>;
+  inputRef?: React.RefObject<TextInputInstance | null>;
   voice: VoiceState;
   /** Recent microphone levels (0…1), oldest first. */
   levels: number[];
@@ -248,11 +253,12 @@ export function ChatComposer({
               accessibilityLabel={t("localAI.selectModel")}
               onPress={onOpenModels}
               disabled={busy || processing}
-              className="min-h-9 max-w-[52%] flex-row items-center justify-center rounded-full border border-border px-3"
+              className="min-h-9 max-w-[52%] flex-row items-center justify-center gap-1.5 rounded-full border border-border ps-2 pe-3"
             >
+              {provider === "chatgpt" ? <ChatGPTLogo size={16} /> : <GeminiLogo size={16} />}
               <Text
                 numberOfLines={1}
-                className="text-xs font-manrope-semibold text-foreground"
+                className="shrink text-xs font-manrope-semibold text-foreground"
               >
                 {modelName}
               </Text>

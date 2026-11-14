@@ -15,7 +15,15 @@ module.exports = function withLocalAiAndroidNdk(config) {
   return withProjectBuildGradle(withSpeechQuery, (project) => {
     if (project.modResults.language !== "groovy") return project;
     const marker = "// Plutus: use the Expo NDK for LiteRT-LM too.";
-    if (project.modResults.contents.includes(marker)) return project;
+    if (project.modResults.contents.includes(marker)) {
+      if (!project.modResults.contents.includes("androidDsl.compileSdk")) {
+        project.modResults.contents = project.modResults.contents.replace(
+          "subproject.android.ndkVersion = rootProject.ext.ndkVersion",
+          "subproject.android.ndkVersion = rootProject.ext.ndkVersion\n      subproject.androidComponents.finalizeDsl { androidDsl ->\n        androidDsl.compileSdk = rootProject.ext.compileSdkVersion\n      }",
+        );
+      }
+      return project;
+    }
     project.modResults.contents += `
 ${marker}
 subprojects { subproject ->
@@ -33,6 +41,9 @@ subprojects { subproject ->
   if (subproject.name == "react-native-litert-lm") {
     subproject.plugins.withId("com.android.library") {
       subproject.android.ndkVersion = rootProject.ext.ndkVersion
+      subproject.androidComponents.finalizeDsl { androidDsl ->
+        androidDsl.compileSdk = rootProject.ext.compileSdkVersion
+      }
     }
   }
 }

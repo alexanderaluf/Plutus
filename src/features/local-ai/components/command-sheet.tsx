@@ -36,7 +36,8 @@ export function CommandSheet({
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState(initialQuery);
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const opened = useRef(Platform.OS === "ios");
   const openingFrame = useRef<number | null>(null);
 
@@ -75,13 +76,13 @@ export function CommandSheet({
       <AppBottomSheetPortal isOpen={isOpen} unstable_accessibilityContainerViewIsModal>
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["82%"]}
           enableDynamicSizing={false}
           enableOverDrag={false}
           topInset={insets.top}
-          bottomInset={insets.bottom}
           contentContainerClassName="h-full px-0 pb-0 pt-2"
           backgroundClassName="rounded-t-[28px] bg-surface"
           handleIndicatorClassName="w-10 bg-muted/40"

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 
 import { useAppThemeColors } from "@/shared/theme/app-theme";
+import { useAmountVisibility } from "@/shared/lib/use-currency-format";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 
@@ -21,6 +22,7 @@ export function SearchToolbar({
 }: SearchToolbarProps) {
   const { t } = useTranslation();
   const theme = useAppThemeColors();
+  const { hidden, toggle } = useAmountVisibility();
   const active = activeFilters > 0;
 
   return (
@@ -47,6 +49,20 @@ export function SearchToolbar({
           </SearchField.Group>
         </SearchField>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t(
+          hidden ? "home.overview.showAmounts" : "home.overview.hideAmounts",
+        )}
+        accessibilityState={{ selected: hidden }}
+        hitSlop={6}
+        onPress={() => void toggle()}
+        className="size-13 items-center justify-center rounded-2xl border border-border bg-surface"
+        style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+      >
+        <FilledIcon name={hidden ? "eye-off" : "eye"} size={21} tone="muted" />
+      </Pressable>
 
       <Pressable
         accessibilityRole="button"

@@ -4,11 +4,6 @@ import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
-import Animated, {
-  Easing,
-  FadeInDown,
-  ReduceMotion,
-} from "react-native-reanimated";
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
@@ -20,10 +15,6 @@ import { colorForeground } from "@/shared/icons/colors";
 import { ACCENT_OPTIONS } from "@/shared/theme/app-theme";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
-
-const reveal = FadeInDown.duration(400)
-  .easing(Easing.bezier(0.22, 1, 0.36, 1))
-  .reduceMotion(ReduceMotion.System);
 
 export function ThemeSettingsPage() {
   const { t } = useTranslation();
@@ -68,7 +59,7 @@ export function ThemeSettingsPage() {
       contentContainerStyle={{ paddingBottom: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <Animated.View entering={reveal} className="gap-3">
+      <View className="gap-3">
         <View className="gap-1 px-1">
           <Text className="font-manrope-bold text-lg text-foreground">
             {t("theme.appearance")}
@@ -84,9 +75,9 @@ export function ThemeSettingsPage() {
           options={modeOptions}
           value={themeMode}
         />
-      </Animated.View>
+      </View>
 
-      <Animated.View entering={reveal.delay(80)} className="gap-3">
+      <View className="gap-3">
         <View className="gap-1 px-1">
           <Text className="font-manrope-bold text-lg text-foreground">
             {t("theme.accentColor")}
@@ -137,7 +128,7 @@ export function ThemeSettingsPage() {
             );
           })}
         </View>
-      </Animated.View>
+      </View>
 
       {error ? (
         <Text

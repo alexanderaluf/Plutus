@@ -27,7 +27,7 @@ function timestamp() {
 function createExportFile(name: string, content: string | Uint8Array) {
   const file = new File(Paths.cache, name);
   file.create({ overwrite: true, intermediates: true });
-  file.write(content);
+  file.writeSync(content);
   return file;
 }
 

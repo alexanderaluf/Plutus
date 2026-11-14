@@ -1,8 +1,8 @@
-import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { memo, useRef, useState, type PropsWithChildren } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, View, type ScrollViewInstance } from "react-native";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -15,9 +15,9 @@ import Animated, {
 } from "react-native-reanimated";
 import type { HomeOverview } from "@/data/selectors/document-selectors";
 import { useAppLocalization } from "@/localization/localization-provider";
+import { useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
-import { useAppThemeColors } from "@/shared/theme/app-theme";
 import {
   OverviewCard,
   OverviewPrivacyButton,
@@ -26,6 +26,7 @@ import {
 
 // Match TabPage's px-5 gutter, while the swipe viewport reaches both screen edges.
 const PAGE_INSET = 20;
+
 function SlidingCard({
   children,
   index,
@@ -61,6 +62,7 @@ function SlidingCard({
     </Animated.View>
   );
 }
+
 function CardDot({
   title,
   index,
@@ -97,10 +99,11 @@ function CardDot({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       accessibilityLabel={title}
-      className="size-11 items-center justify-center"
+      className="h-7 min-w-7 items-center justify-center px-1"
     >
       <Animated.View
         pointerEvents="none"
@@ -110,6 +113,7 @@ function CardDot({
     </Pressable>
   );
 }
+
 export const OverviewCarousel = memo(function OverviewCarousel({
   overview,
   now,
@@ -124,7 +128,7 @@ export const OverviewCarousel = memo(function OverviewCarousel({
   const { t } = useTranslation();
   const router = useRouter();
   const { background } = useAppThemeColors();
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   const [{ width, initialPage }, setViewport] = useState({
     width: 0,
     initialPage: 0,
@@ -144,25 +148,30 @@ export const OverviewCarousel = memo(function OverviewCarousel({
     });
   }
   return (
-    <View className="gap-2">
-      <View className="flex-row items-center justify-between">
-        <Text className="font-manrope-bold text-lg text-foreground">
+    <View className="gap-2.5">
+      <View className="flex-row items-center justify-between gap-3">
+        <Text
+          accessibilityRole="header"
+          className="min-w-0 flex-1 font-manrope-bold text-[20px] leading-[26px] tracking-[-0.2px] text-foreground"
+        >
           {t("home.overview.title")}
         </Text>
-        <View className="flex-row items-center">
+        <View className="shrink-0 flex-row items-center gap-2">
           <OverviewPrivacyButton
             visible={isBalanceVisible}
             onPress={onToggleBalance}
           />
           <Pressable
             accessibilityRole="button"
+            hitSlop={4}
             onPress={() => router.push("/insights")}
-            className="min-h-11 flex-row items-center gap-1.5 ps-2"
+            className="min-h-10 flex-row items-center gap-1 rounded-full border border-border/80 bg-surface px-3.5"
+            style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
           >
-            <Text className="font-manrope-semibold text-xs text-accent">
+            <Text className="font-manrope-semibold text-[12px] leading-[16px] text-accent">
               {t("home.overview.allInsights")}
             </Text>
-            <FilledIcon name="chevron-right" size={16} tone="accent" />
+            <FilledIcon name="chevron-right" size={15} tone="accent" />
           </Pressable>
         </View>
       </View>

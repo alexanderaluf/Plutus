@@ -1,22 +1,19 @@
-import { AppAlert } from "@/shared/ui/app-alert";
 import { BlurTargetView } from "expo-blur";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Animated, AppState, Pressable, View } from "react-native";
+import { Animated, AppState, View, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
-import { localDateKey } from "@/data/model/recurring-record";
-import { getCalendarOffset } from "@/data/model/onboarding";
+import { dueOccurrenceCount } from "@/data/model/recurring-record";
 import {
-  selectRecurrings,
-  selectRecurringEvents,
-  selectRecurringSummary,
-  recurringTotals,
-  selectTransactions,
   selectAppPreferences,
+  selectRecurrings,
+  selectRecurringSummary,
+  selectTransaction,
 } from "@/data/selectors/document-selectors";
+import type { Recurring } from "@/data/selectors/recurring-selectors";
 import {
   BudgetHeader,
   BudgetOption,
@@ -24,37 +21,101 @@ import {
 } from "@/features/budgets/components/budget-ui";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { TransactionDetailSheet } from "@/features/transactions/transaction-detail-sheet";
+import { useAppLocalization } from "@/localization/localization-provider";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
-import { FilledIcon } from "@/shared/ui/filled-icon";
-import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import {
   CollapsingHeader,
   CollapsingHeaderSpacer,
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
-import { RecurringCard } from "./components/recurring-card";
+import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
+import { CONTINUOUS } from "@/shared/ui/form-ui";
+import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
+import { RecurringCalendar } from "./components/recurring-calendar";
 import {
-  MoneyLines,
-  RecurringBadge,
-  RecurringScrim,
-} from "./components/recurring-ui";
-import { useRecurringActions } from "./use-recurring-actions";
+  RecurringDueCard,
+  RecurringRow,
+  RecurringSection,
+  useScheduleSubtitle,
+  useUpcomingLabel,
+} from "./components/recurring-card";
+import { RecurringOverview } from "./components/recurring-overview";
+import { BusyButtonLabel, RecurringScrim } from "./components/recurring-ui";
+import {
+  groupUpcoming,
+  relativeDay,
+  type UpcomingGroup,
+} from "./lib/recurring-list-helpers";
+import {
+  dueOccurrenceTotal,
+  useRecurringActions,
+} from "./use-recurring-actions";
+
+type Tab = "active" | "calendar" | "archived";
+type Sort = "date" | "name" | "amount";
 
 export function useRecurringClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 15_000);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+    const scheduleMinuteTick = () => {
+      if (disposed) return;
+      const msUntilNextMinute = Math.max(1000, 60_000 - (Date.now() % 60_000));
+      timer = setTimeout(() => {
+        setNow(new Date());
+        scheduleMinuteTick();
+      }, msUntilNextMinute);
+    };
+    scheduleMinuteTick();
     const listener = AppState.addEventListener("change", (state) => {
       if (state === "active") setNow(new Date());
     });
     return () => {
-      clearInterval(timer);
+      disposed = true;
+      if (timer) clearTimeout(timer);
       listener.remove();
     };
   }, []);
   return now;
 }
+
+function EmptyState({
+  icon,
+  title,
+  hint,
+  action,
+}: {
+  icon: FilledIconName;
+  title: string;
+  hint: string;
+  action?: { label: string; onPress: () => void };
+}) {
+  const c = useAppThemeColors();
+  return (
+    <View className="items-center gap-3 px-6 py-14">
+      <View
+        className="size-20 items-center justify-center rounded-[26px]"
+        style={{ ...CONTINUOUS, backgroundColor: colorWithAlpha(c.accent, 0.12) }}
+      >
+        <FilledIcon name={icon} size={40} tone="accent" />
+      </View>
+      <Text className="mt-2 text-center font-manrope-bold text-xl text-foreground">
+        {title}
+      </Text>
+      <Text className="text-center text-[15px] leading-6 text-muted">
+        {hint}
+      </Text>
+      {action && (
+        <Button className="mt-2" onPress={action.onPress}>
+          <Button.Label>{action.label}</Button.Label>
+        </Button>
+      )}
+    </View>
+  );
+}
+
 export function RecurringScreen() {
   const {
       document,
@@ -63,23 +124,20 @@ export function RecurringScreen() {
       reconcileRecurringPayments,
     } = useLocalData(),
     { activeProfile } = useProfiles(),
+    { isRTL } = useAppLocalization(),
     c = useAppThemeColors(),
     insets = useSafeAreaInsets(),
     router = useRouter(),
-    { t, i18n } = useTranslation();
-  const target = useRef<View | null>(null),
+    { t } = useTranslation();
+  const target = useRef<ViewInstance | null>(null),
     now = useRecurringClock(),
     actions = useRecurringActions();
   const { weekStartDay } = selectAppPreferences(document);
-  const [view, setView] = useState<"all" | "calendar">("all"),
-    [status, setStatus] = useState<"active" | "due" | "archived">("active");
-  const [compact, setCompact] = useState(false),
-    [sortSheet, setSortSheet] = useState(false),
-    [sort, setSort] = useState<"date" | "name" | "amount">("date");
-  const [month, setMonth] = useState(
-      () => new Date(now.getFullYear(), now.getMonth(), 1),
-    ),
-    [day, setDay] = useState(() => localDateKey(now));
+  const upcomingLabel = useUpcomingLabel(),
+    scheduleSubtitle = useScheduleSubtitle();
+  const [tab, setTab] = useState<Tab>("active"),
+    [sort, setSort] = useState<Sort>("date"),
+    [sheet, setSheet] = useState<"sort" | "info" | null>(null);
   const [transactionId, setTransactionId] = useState<string | null>(null),
     [retryError, setRetryError] = useState("");
   const items = useMemo(() => selectRecurrings(document, now), [document, now]);
@@ -87,132 +145,94 @@ export function RecurringScreen() {
     () => selectRecurringSummary(items, now),
     [items, now],
   );
-  const visible = items
-    .filter((r) =>
-      status === "archived"
-        ? r.archived
-        : status === "due"
-          ? r.due
-          : !r.archived,
-    )
-    .sort((a, b) =>
+  const dueCount = useMemo(() => dueOccurrenceTotal(items, now), [items, now]);
+  const sorted = (list: Recurring[]) =>
+    [...list].sort((a, b) =>
       sort === "name"
         ? a.name.localeCompare(b.name)
         : sort === "amount"
           ? a.currencyCode.localeCompare(b.currencyCode) || b.amount - a.amount
           : (a.next?.getTime() ?? Infinity) - (b.next?.getTime() ?? Infinity),
     );
-  const events = useMemo(
-    () =>
-      selectRecurringEvents(
-        items,
-        month,
-        new Date(month.getFullYear(), month.getMonth() + 1, 1),
-      ),
-    [items, month],
-  );
-  const selectedEvents = events.filter((e) => localDateKey(e.date) === day);
-  const transaction = transactionId
-    ? selectTransactions(document).find((v) => v.id === transactionId)
-    : null;
-  const shift = (amount: number) => {
-    const next = new Date(month.getFullYear(), month.getMonth() + amount, 1);
-    setMonth(next);
-    setDay(localDateKey(next));
+  const active = sorted(items.filter((r) => !r.archived));
+  const archived = sorted(items.filter((r) => r.archived));
+  // Due schedules always lead; the rest follow either in time buckets (date
+  // sort) or as one list in the chosen order.
+  const sections = groupUpcoming(active, now);
+  const attention = sections.find((s) => s.group === "attention")?.items ?? [];
+  const rest =
+    sort === "date"
+      ? sections.filter((s) => s.group !== "attention")
+      : [
+          {
+            group: null,
+            items: active.filter((r) => !attention.includes(r)),
+          },
+        ].filter((s) => s.items.length);
+  const groupTitle: Record<Exclude<UpcomingGroup, "attention">, string> = {
+    week: t("recurring.nextWeek"),
+    month: t("recurring.laterThisMonth"),
+    later: t("recurring.later"),
   };
-  function stat(
-    label: string,
-    values: { amount: number; currencyCode: string }[],
-    color?: string,
-    primary = false,
-  ) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          borderRadius: 22,
-          padding: 14,
-          gap: 7,
-          backgroundColor: primary
-            ? c.accent
-            : color
-              ? colorWithAlpha(color, 0.17)
-              : c.surface,
-        }}
-      >
-        <Text
-          className="font-manrope-semibold text-base"
-          style={{
-            color: primary ? c.accentForeground : (color ?? c.foreground),
-          }}
-        >
-          {label}
-        </Text>
-        <MoneyLines
-          values={values}
-          emptyCurrency={activeProfile.currencyCode}
-          color={primary ? c.accentForeground : color}
-          large
-        />
-      </View>
-    );
-  }
+  const transaction = transactionId
+    ? selectTransaction(document, transactionId)
+    : null;
+  const openRecurring = (id: string) =>
+    router.push({ pathname: "/recurring/[id]", params: { id } });
   const error = actions.error || recurringError || retryError;
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
+  const bottom = Math.max(insets.bottom, 10);
+
+  const upcomingRow = (item: Recurring) => {
+    const soon = item.next ? relativeDay(item.next, now) : null;
+    return (
+      <RecurringRow
+        key={item.id}
+        badge={item}
+        title={item.name}
+        subtitle={scheduleSubtitle(item)}
+        amount={item}
+        caption={item.next ? upcomingLabel(item.next, now) : undefined}
+        captionTone={soon && soon.count <= 1 ? "accent" : "muted"}
+        onPress={() => openRecurring(item.id)}
+      />
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <BlurTargetView ref={target} style={{ flex: 1 }}>
         <Animated.ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
-            paddingHorizontal: 12,
+            paddingHorizontal: 16,
             paddingTop: 16,
-            paddingBottom: 160 + insets.bottom,
-            gap: 16,
+            paddingBottom: 170 + insets.bottom,
+            gap: 20,
           }}
           onScroll={onScroll}
           scrollEventThrottle={16}
         >
           <CollapsingHeaderSpacer />
-          <View className="gap-1 px-2">
-            <Text className="font-manrope-semibold text-lg text-accent">
-              {t("recurring.monthly")}
-            </Text>
-            <MoneyLines
-              values={summary.monthly}
-              emptyCurrency={activeProfile.currencyCode}
-              color={c.accent}
-              large
-            />
-          </View>
-          <View className="gap-2">
-            <View className="flex-row gap-2">
-              {stat(t("recurring.dueMonth"), summary.due, undefined, true)}
-              {stat(t("recurring.yearly"), summary.yearly)}
-            </View>
-            <View className="flex-row gap-2">
-              {stat(t("recurring.income"), summary.income, c.success)}
-              {stat(t("recurring.expense"), summary.expense, c.danger)}
-            </View>
-          </View>
-          <GlassSegmentedControl
-            accessibilityLabel={t("recurring.title")}
-            options={[
-              { label: t("recurring.all"), value: "all" },
-              { label: t("recurring.calendar"), value: "calendar" },
-            ]}
-            value={view}
-            onChange={setView}
-          />
           {!!error && (
-            <View className="gap-2 rounded-2xl border border-danger p-3">
-              <Text accessibilityRole="alert" className="text-sm text-danger">
+            <View
+              className="flex-row items-center gap-3 rounded-[20px] p-3 ps-4"
+              style={{
+                ...CONTINUOUS,
+                backgroundColor: colorWithAlpha(c.danger, 0.1),
+              }}
+            >
+              <Text
+                accessibilityRole="alert"
+                className="flex-1 text-sm text-danger"
+              >
                 {error}
               </Text>
               <Button
                 size="sm"
                 variant="ghost"
                 onPress={() => {
+                  setRetryError("");
                   void reconcileRecurringPayments().catch(() =>
                     setRetryError(t("recurring.error")),
                   );
@@ -222,266 +242,124 @@ export function RecurringScreen() {
               </Button>
             </View>
           )}
-          {view === "all" ? (
-            <>
-              <View className="flex-row items-center gap-1 px-2">
-                <Text className="flex-1 font-manrope-semibold text-lg text-accent">
-                  {t("recurring.count", { count: visible.length })}
-                </Text>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("recurring.layout")}
-                  onPress={() => setCompact(!compact)}
-                >
-                  <FilledIcon name="copy" size={24} />
-                </Button>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("recurring.sort")}
-                  onPress={() => setSortSheet(true)}
-                >
-                  <FilledIcon name="filter" size={24} />
-                </Button>
-              </View>
-              {!visible.length && (
-                <View className="items-center gap-3 px-5 py-16">
-                  <FilledIcon name="swap-horizontal" size={72} tone="muted" />
-                  <Text className="text-center font-manrope-semibold text-xl text-foreground">
-                    {t(
-                      status === "due"
-                        ? "recurring.emptyDue"
-                        : status === "archived"
-                          ? "recurring.emptyArchived"
-                          : "recurring.empty",
-                    )}
-                  </Text>
-                  <Text className="text-center text-muted">
-                    {t(
-                      status === "due"
-                        ? "recurring.emptyDueHint"
-                        : status === "archived"
-                          ? "recurring.emptyArchivedHint"
-                          : "recurring.emptyHint",
-                    )}
-                  </Text>
-                </View>
-              )}
-              {visible.map((item) => (
-                <RecurringCard
-                  key={item.id}
-                  item={item}
-                  compact={compact}
-                  busy={!!actions.busy}
-                  onProcess={() => actions.process(item)}
-                  onSkip={() => actions.skip(item)}
+
+          {tab === "active" &&
+            (active.length ? (
+              <>
+                <RecurringOverview
+                  summary={summary}
+                  fallbackCurrency={activeProfile.currencyCode}
                 />
-              ))}
-            </>
-          ) : (
-            <>
-              <View className="flex-row items-center justify-between">
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("recurring.previousMonth")}
-                  onPress={() => shift(-1)}
-                >
-                  <FilledIcon
-                    name="chevron-right"
-                    style={{ transform: [{ rotate: "180deg" }] }}
-                    tone="accent"
-                    size={28}
-                  />
-                </Button>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("recurring.today")}
-                  onPress={() => {
-                    setMonth(new Date(now.getFullYear(), now.getMonth(), 1));
-                    setDay(localDateKey(now));
-                  }}
-                >
-                  <Text className="font-manrope-bold text-xl text-foreground">
-                    {month.toLocaleDateString(i18n.resolvedLanguage, {
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </Text>
-                </Pressable>
-                <Button
-                  isIconOnly
-                  variant="ghost"
-                  accessibilityLabel={t("recurring.nextMonth")}
-                  onPress={() => shift(1)}
-                >
-                  <FilledIcon name="chevron-right" tone="accent" size={28} />
-                </Button>
-              </View>
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {Array.from({ length: 7 }, (_, i) => (
-                  <View
-                    key={i}
-                    style={{ width: "14.2857%", paddingVertical: 12 }}
-                  >
-                    <Text className="text-center text-xs text-muted">
-                      {new Date(
-                        2026,
-                        8,
-                        6 + ((i + weekStartDay) % 7),
-                      ).toLocaleDateString(i18n.resolvedLanguage, {
-                        weekday: "short",
-                      })}
-                    </Text>
-                  </View>
-                ))}
-                {Array.from(
-                  {
-                    length:
-                      getCalendarOffset(month, weekStartDay) +
-                      new Date(
-                        month.getFullYear(),
-                        month.getMonth() + 1,
-                        0,
-                      ).getDate(),
-                  },
-                  (_, index) => {
-                    const date =
-                      index - getCalendarOffset(month, weekStartDay) + 1;
-                    if (date <= 0)
-                      return <View key={index} style={{ width: "14.2857%" }} />;
-                    const current = new Date(
-                        month.getFullYear(),
-                        month.getMonth(),
-                        date,
-                      ),
-                      key = localDateKey(current),
-                      entries = events.filter(
-                        (e) =>
-                          localDateKey(e.date) === key &&
-                          e.status !== "skipped",
-                      ),
-                      selected = key === day;
-                    return (
-                      <Pressable
-                        key={index}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        accessibilityLabel={`${current.toLocaleDateString(i18n.resolvedLanguage, { dateStyle: "full" })}, ${t("recurring.count", { count: entries.length })}`}
-                        onPress={() => setDay(key)}
-                        style={{ width: "14.2857%", minHeight: 72, padding: 2 }}
-                      >
-                        <View
-                          style={{
-                            flex: 1,
-                            borderRadius: 12,
-                            borderWidth: selected ? 2 : 1,
-                            borderColor: selected ? c.accent : "transparent",
-                            backgroundColor: selected
-                              ? colorWithAlpha(c.accent, 0.12)
-                              : entries.length
-                                ? c.surface
-                                : "transparent",
-                            alignItems: "center",
-                            gap: 7,
-                            paddingVertical: 10,
-                          }}
+                {attention.length > 0 && (
+                  <RecurringSection
+                    title={t("recurring.needsAttention")}
+                    count={attention.length}
+                    bare
+                    action={
+                      dueCount > 1 ? (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          isDisabled={!!actions.busy}
+                          accessibilityLabel={t(
+                            "recurring.processAllAccessibility",
+                          )}
+                          accessibilityState={{ busy: actions.processingAll }}
+                          onPress={() => actions.processAll(items)}
                         >
-                          <Text
-                            className="font-manrope-semibold"
-                            style={{
-                              color: selected ? c.accent : c.foreground,
-                            }}
-                          >
-                            {date}
-                          </Text>
-                          <View className="flex-row gap-0.5">
-                            {entries.slice(0, 2).map((e, i) => (
-                              <RecurringBadge
-                                key={i}
-                                small
-                                item={e.recurring}
-                              />
-                            ))}
-                            {entries.length > 2 && (
-                              <Text className="text-xs text-accent">
-                                +{entries.length - 2}
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-                      </Pressable>
-                    );
-                  },
-                )}
-              </View>
-              <Text className="font-manrope-semibold text-lg text-foreground">
-                {new Date(`${day}T12:00:00`).toLocaleDateString(
-                  i18n.resolvedLanguage,
-                  { dateStyle: "full" },
-                )}
-              </Text>
-              <View className="flex-row gap-2">
-                {stat(
-                  t("recurring.dailyIncome"),
-                  recurringTotals(
-                    selectedEvents.filter(
-                      (e) => e.type === 1 && e.status !== "skipped",
-                    ),
-                  ),
-                  c.success,
-                )}
-                {stat(
-                  t("recurring.dailyExpense"),
-                  recurringTotals(
-                    selectedEvents.filter(
-                      (e) => e.type === 0 && e.status !== "skipped",
-                    ),
-                  ),
-                  c.danger,
-                )}
-              </View>
-              {!selectedEvents.length && (
-                <Text className="py-6 text-center text-muted">
-                  {t("recurring.noDay")}
-                </Text>
-              )}
-              {selectedEvents.map((event, index) => (
-                <View key={`${event.recurring.id}:${index}`} className="gap-2">
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() =>
-                      event.transactionId
-                        ? setTransactionId(event.transactionId)
-                        : router.push({
-                            pathname: "/recurring/[id]",
-                            params: { id: event.recurring.id },
-                          })
+                          <BusyButtonLabel
+                            label={t("recurring.processAll")}
+                            busy={actions.processingAll}
+                            spinnerColor={c.accentForeground}
+                          />
+                        </Button>
+                      ) : undefined
                     }
-                    className="flex-row items-center gap-3 rounded-2xl bg-surface p-4"
                   >
-                    <RecurringBadge item={event.recurring} />
-                    <View className="flex-1 gap-1">
-                      <Text className="font-manrope-semibold text-foreground">
-                        {event.recurring.name}
-                      </Text>
-                      <Text className="text-sm text-muted">
-                        {event.date.toLocaleTimeString(i18n.resolvedLanguage, {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}{" "}
-                        · {t(`recurring.${event.status}`)}
-                      </Text>
-                    </View>
-                    <MoneyLines values={[event]} />
-                  </Pressable>
-                </View>
-              ))}
-            </>
+                    {attention.map((item) => (
+                      <RecurringDueCard
+                        key={item.id}
+                        item={item}
+                        now={now}
+                        dueCount={
+                          item.due ? dueOccurrenceCount(item.record, now) : 0
+                        }
+                        busyAction={actions.actionFor(item)}
+                        disabled={!!actions.busy}
+                        onOpen={() => openRecurring(item.id)}
+                        onProcess={() => actions.process(item)}
+                        onSkip={() => actions.skip(item)}
+                      />
+                    ))}
+                  </RecurringSection>
+                )}
+                {rest.map((section) => (
+                  <RecurringSection
+                    key={section.group ?? "all"}
+                    title={
+                      section.group
+                        ? groupTitle[
+                            section.group as Exclude<
+                              UpcomingGroup,
+                              "attention"
+                            >
+                          ]
+                        : undefined
+                    }
+                    count={section.group ? section.items.length : undefined}
+                  >
+                    {section.items.map(upcomingRow)}
+                  </RecurringSection>
+                ))}
+              </>
+            ) : (
+              <EmptyState
+                icon="event-repeat"
+                title={t("recurring.empty")}
+                hint={t("recurring.emptyHint")}
+                action={{
+                  label: t("recurring.add"),
+                  onPress: () => router.push("/recurring/create"),
+                }}
+              />
+            ))}
+
+          {tab === "calendar" && (
+            <RecurringCalendar
+              items={items}
+              now={now}
+              weekStartDay={weekStartDay}
+              onOpenRecurring={openRecurring}
+              onOpenTransaction={setTransactionId}
+            />
           )}
+
+          {tab === "archived" &&
+            (archived.length ? (
+              <RecurringSection>
+                {archived.map((item) => (
+                  <RecurringRow
+                    key={item.id}
+                    badge={item}
+                    title={item.name}
+                    subtitle={scheduleSubtitle(item)}
+                    amount={item}
+                    caption={item.next ? undefined : t("recurring.ended")}
+                    muted
+                    onPress={() => openRecurring(item.id)}
+                  />
+                ))}
+              </RecurringSection>
+            ) : (
+              <EmptyState
+                icon="history"
+                title={t("recurring.emptyArchived")}
+                hint={t("recurring.emptyArchivedHint")}
+              />
+            ))}
         </Animated.ScrollView>
       </BlurTargetView>
+
       <CollapsingHeader
         horizontalInset={12}
         headerHidden={headerHidden}
@@ -489,49 +367,57 @@ export function RecurringScreen() {
         topInset={insets.top}
       >
         <BudgetHeader title={t("recurring.title")} horizontalPadding={0}>
+          {tab !== "calendar" && (
+            <Button
+              variant="ghost"
+              isIconOnly
+              accessibilityLabel={t("recurring.sort")}
+              onPress={() => setSheet("sort")}
+            >
+              <FilledIcon name="sort" size={25} />
+            </Button>
+          )}
           <Button
             variant="ghost"
             isIconOnly
             accessibilityLabel={t("recurring.info")}
-            onPress={() =>
-              AppAlert.alert(
-                t("recurring.info"),
-                `${t("recurring.infoBody")}\n\n${t(recurringBackgroundAvailable ? "recurring.background" : "recurring.foreground")}`,
-              )
-            }
+            onPress={() => setSheet("info")}
           >
-            <FilledIcon name="help" size={26} />
+            <FilledIcon name="help" size={25} />
           </Button>
         </BudgetHeader>
       </CollapsingHeader>
+
       <RecurringScrim />
-      {view === "all" && (
-        <View
-          style={{
-            position: "absolute",
-            left: 12,
-            right: 12,
-            bottom: Math.max(insets.bottom, 10),
-            zIndex: 20,
-          }}
-        >
-          <GlassSegmentedControl
-            accessibilityLabel={t("recurring.title")}
-            blurTarget={target}
-            options={(["active", "due", "archived"] as const).map((value) => ({
-              label: t(`recurring.${value}`),
-              value,
-            }))}
-            value={status}
-            onChange={setStatus}
-          />
-        </View>
-      )}
       <View
         style={{
           position: "absolute",
-          right: 20,
-          bottom: Math.max(insets.bottom, 10) + (view === "all" ? 78 : 12),
+          left: 12,
+          right: 12,
+          bottom,
+          zIndex: 20,
+        }}
+      >
+        <GlassSegmentedControl
+          accessibilityLabel={t("recurring.title")}
+          blurTarget={target}
+          options={[
+            {
+              label: t("recurring.active"),
+              value: "active" as const,
+            },
+            { label: t("recurring.calendar"), value: "calendar" as const },
+            { label: t("recurring.archived"), value: "archived" as const },
+          ]}
+          value={tab}
+          onChange={setTab}
+        />
+      </View>
+      <View
+        style={{
+          position: "absolute",
+          ...(isRTL ? { left: 20 } : { right: 20 }),
+          bottom: bottom + 76,
           zIndex: 20,
         }}
       >
@@ -544,28 +430,50 @@ export function RecurringScreen() {
           <FilledIcon name="plus" size={32} tone="accent-foreground" />
         </Button>
       </View>
-      {sortSheet && (
-        <BudgetSheet
-          title={t("recurring.sort")}
-          onClose={() => setSortSheet(false)}
-        >
-          {(["date", "name", "amount"] as const).map((value) => (
+
+      {sheet === "sort" && (
+        <BudgetSheet title={t("recurring.sort")} onClose={() => setSheet(null)}>
+          {(
+            [
+              ["date", t("recurring.sortDate")],
+              ["name", t("recurring.sortName")],
+              ["amount", t("recurring.sortAmount")],
+            ] as const
+          ).map(([value, title]) => (
             <BudgetOption
               key={value}
-              title={t(
-                value === "date"
-                  ? "recurring.sortDate"
-                  : value === "name"
-                    ? "recurring.sortName"
-                    : "recurring.sortAmount",
-              )}
+              title={title}
               selected={sort === value}
               onPress={() => {
                 setSort(value);
-                setSortSheet(false);
+                setSheet(null);
               }}
             />
           ))}
+        </BudgetSheet>
+      )}
+      {sheet === "info" && (
+        <BudgetSheet title={t("recurring.info")} onClose={() => setSheet(null)}>
+          <Text className="text-base leading-7 text-foreground">
+            {t("recurring.infoBody")}
+          </Text>
+          <View
+            className="flex-row gap-3 rounded-[20px] bg-surface p-4"
+            style={CONTINUOUS}
+          >
+            <FilledIcon
+              name={recurringBackgroundAvailable ? "shield-check" : "clock"}
+              size={22}
+              tone="accent"
+            />
+            <Text className="flex-1 text-[15px] leading-6 text-muted">
+              {t(
+                recurringBackgroundAvailable
+                  ? "recurring.background"
+                  : "recurring.foreground",
+              )}
+            </Text>
+          </View>
         </BudgetSheet>
       )}
       {transaction && (

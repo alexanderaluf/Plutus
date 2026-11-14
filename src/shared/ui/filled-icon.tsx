@@ -52,7 +52,20 @@ import { PersonFill } from "@material-symbols-svg/react-native/rounded/icons/per
 import { PhotoLibraryFill } from "@material-symbols-svg/react-native/rounded/icons/photo-library";
 import { RestaurantFill } from "@material-symbols-svg/react-native/rounded/icons/restaurant";
 import { SaveFill } from "@material-symbols-svg/react-native/rounded/icons/save";
+import { HistoryFill } from "@material-symbols-svg/react-native/rounded/icons/history";
+import { KeepFill } from "@material-symbols-svg/react-native/rounded/icons/keep";
+import { KeepOffFill } from "@material-symbols-svg/react-native/rounded/icons/keep-off";
+import { MoreVertFill } from "@material-symbols-svg/react-native/rounded/icons/more-vert";
 import { SendFill } from "@material-symbols-svg/react-native/rounded/icons/send";
+import { QueryStatsFill } from "@material-symbols-svg/react-native/rounded/icons/query-stats";
+import { BackspaceFill } from "@material-symbols-svg/react-native/rounded/icons/backspace";
+import { DialpadFill } from "@material-symbols-svg/react-native/rounded/icons/dialpad";
+import { EditNoteFill } from "@material-symbols-svg/react-native/rounded/icons/edit-note";
+import { EventRepeatFill } from "@material-symbols-svg/react-native/rounded/icons/event-repeat";
+import { FaceFill } from "@material-symbols-svg/react-native/rounded/icons/face";
+import { FingerprintFill } from "@material-symbols-svg/react-native/rounded/icons/fingerprint";
+import { LockFill } from "@material-symbols-svg/react-native/rounded/icons/lock";
+import { LockOpenFill } from "@material-symbols-svg/react-native/rounded/icons/lock-open";
 import { SavingsFill } from "@material-symbols-svg/react-native/rounded/icons/savings";
 import { ScheduleFill } from "@material-symbols-svg/react-native/rounded/icons/schedule";
 import {
@@ -130,6 +143,10 @@ const icons = {
   food: RestaurantFill,
   "format-paint": FormatPaintFill,
   help: HelpFill,
+  history: HistoryFill,
+  "more-vert": MoreVertFill,
+  pin: KeepFill,
+  "pin-off": KeepOffFill,
   home: HomeFill,
   "home-variant": HomeFill,
   magnify: SearchFill,
@@ -143,6 +160,15 @@ const icons = {
   pencil: EditFill,
   "photo-library": PhotoLibraryFill,
   "piggy-bank": SavingsFill,
+  backspace: BackspaceFill,
+  dialpad: DialpadFill,
+  "edit-note": EditNoteFill,
+  "event-repeat": EventRepeatFill,
+  face: FaceFill,
+  fingerprint: FingerprintFill,
+  lock: LockFill,
+  "lock-open": LockOpenFill,
+  "query-stats": QueryStatsFill,
   receipt: ReceiptLongFill,
   plus: AddFill,
   "plus-thick": AddFill,
