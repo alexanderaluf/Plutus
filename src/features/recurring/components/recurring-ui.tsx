@@ -20,9 +20,17 @@ import {
   View,
   type ViewInstance,
 } from "react-native";
+import Reanimated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
-import { FilledIcon } from "@/shared/ui/filled-icon";
+import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { RecordIcon } from "@/shared/ui/record-icon";
 import { Text } from "@/shared/ui/app-text";
@@ -59,19 +67,42 @@ export function BusyButtonLabel({
     </View>
   );
 }
+/**
+ * The save button. Dimmed until the schedule can be saved, then fully lit:
+ * readiness is seen, not read. It stays pressable so a tap explains what is
+ * missing.
+ */
 export function RecurringAction({
   label,
   busy,
   error,
   onPress,
+  ready = true,
+  icon = "save",
 }: {
   label: string;
   busy: boolean;
   error?: string;
   onPress: () => void;
+  ready?: boolean;
+  icon?: FilledIconName;
 }) {
   const insets = useSafeAreaInsets(),
     c = useAppThemeColors();
+  const emphasis = useSharedValue(ready ? 1 : 0);
+  useEffect(() => {
+    emphasis.set(
+      withTiming(ready ? 1 : 0, {
+        duration: 220,
+        easing: Easing.bezier(0.23, 1, 0.32, 1),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [emphasis, ready]);
+  const readyStyle = useAnimatedStyle(() => ({
+    opacity: 0.5 + emphasis.get() * 0.5,
+    transform: [{ scale: 0.98 + emphasis.get() * 0.02 }],
+  }));
   return (
     <>
       <RecurringScrim />
@@ -88,10 +119,15 @@ export function RecurringAction({
         }}
       >
         {!!error && (
-          <Text accessibilityRole="alert" className="text-sm text-danger">
+          <Text
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            className="px-2 text-center font-sans text-sm text-danger"
+          >
             {error}
           </Text>
         )}
+        <Reanimated.View style={readyStyle}>
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ busy, disabled: busy }}
@@ -108,11 +144,12 @@ export function RecurringAction({
             opacity: busy ? 0.5 : pressed ? 0.72 : 1,
           })}
         >
-          <FilledIcon name="save" size={24} tone="accent-foreground" />
-          <Text className="font-manrope-bold text-base text-accent-foreground">
+          <FilledIcon name={icon} size={24} tone="accent-foreground" />
+          <Text className="font-manrope-bold text-[17px] text-accent-foreground">
             {label}
           </Text>
         </Pressable>
+        </Reanimated.View>
       </View>
     </>
   );
@@ -135,6 +172,7 @@ export function RecurringEditorShell({
   onBack: () => void;
   bottomOverlay: ReactNode;
 }>) {
+  const { t } = useTranslation();
   const c = useAppThemeColors(),
     insets = useSafeAreaInsets(),
     target = useRef<ViewInstance | null>(null);
@@ -222,7 +260,7 @@ export function RecurringEditorShell({
               <Button
                 isIconOnly
                 variant="ghost"
-                accessibilityLabel="Go back"
+                accessibilityLabel={t("common.back")}
                 isDisabled={busy}
                 onPress={onBack}
               >

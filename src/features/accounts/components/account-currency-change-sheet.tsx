@@ -33,7 +33,8 @@ export function AccountCurrencyChangeSheet({
   const { document, ensureExchangeRates } = useLocalData();
   const insets = useSafeAreaInsets();
   const isOpen = request !== null;
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const [snapshot, setSnapshot] = useState<ExchangeRateSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -119,6 +120,7 @@ export function AccountCurrencyChangeSheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           topInset={insets.top}

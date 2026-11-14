@@ -148,7 +148,8 @@ export function PinSetupSheet({
 }) {
   const { direction } = useAppLocalization();
   const insets = useSafeAreaInsets();
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const [session, setSession] = useState(0);
   const [wasOpen, setWasOpen] = useState(isOpen);
   const [failures, setFailures] = useState(0);
@@ -177,6 +178,7 @@ export function PinSetupSheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["88%"]}

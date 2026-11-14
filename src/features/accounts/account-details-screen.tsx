@@ -60,7 +60,8 @@ export function AccountDetailsScreen() {
   const menuRequested = useRef(false);
   const menuClosing = useRef(false);
   const pendingEdit = useRef(false);
-  const menuInitialPositionFix = useBottomSheetInitialPositionFix(isMenuOpen);
+  const { bindSheet: bindMenuSheet, ...menuInitialPositionFix } =
+    useBottomSheetInitialPositionFix(isMenuOpen);
   const [deleting, setDeleting] = useState(false);
   const deletingRef = useRef(false);
   const blurTargetRef = useRef<ViewInstance | null>(null);
@@ -411,6 +412,7 @@ export function AccountDetailsScreen() {
         >
           <BottomSheet.Overlay isCloseOnPress={!deleting} />
           <BottomSheet.Content
+            ref={bindMenuSheet}
             containerStyle={menuInitialPositionFix.containerStyle}
             onChange={menuInitialPositionFix.onChange}
             topInset={insets.top}

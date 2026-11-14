@@ -151,7 +151,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<DatePickerMode>(null);
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
-  const actionSheetInitialPositionFix =
+  const { bindSheet: bindActionSheet, ...actionSheetInitialPositionFix } =
     useBottomSheetInitialPositionFix(actionMenuOpen);
   const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
   const [currencyRateLoading, setCurrencyRateLoading] = useState(false);
@@ -1037,6 +1037,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         >
           <BottomSheet.Overlay />
           <BottomSheet.Content
+            ref={bindActionSheet}
             containerStyle={actionSheetInitialPositionFix.containerStyle}
             onChange={actionSheetInitialPositionFix.onChange}
             topInset={insets.top}

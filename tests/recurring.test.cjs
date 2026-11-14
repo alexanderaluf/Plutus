@@ -655,3 +655,49 @@ test("a recurring can use a parent category that has subcategories", () => {
   assert.equal(child.recurrings[0].category, "fuel");
   assert.throws(() => add(d, { category: "salary" }, "mismatch"), /matches/);
 });
+
+test("a new recurring form starts from the profile and borrows its category's look", () => {
+  const {
+    createInitialRecurringDraft,
+    withCategoryLook,
+    REMINDER_OPTIONS,
+  } = require("../src/features/recurring/lib/recurring-form-helpers.ts");
+  const now = new Date(2026, 10, 14, 9, 30);
+  const accounts = [
+    { id: "cash", isDefault: false },
+    { id: "main", isDefault: true },
+  ];
+  const draft = createInitialRecurringDraft(accounts, "ils", now);
+  assert.equal(draft.currencyCode, "ILS", "the profile currency leads");
+  assert.equal(draft.account, "main", "the default account pays");
+  assert.equal(draft.startAt, now.toISOString());
+  assert.equal(draft.automatic, false, "nothing is recorded implicitly");
+  assert.equal(
+    createInitialRecurringDraft([{ id: "only", isDefault: false }], "USD")
+      .account,
+    "only",
+  );
+  assert.equal(
+    createInitialRecurringDraft(
+      [
+        { id: "a", isDefault: false },
+        { id: "b", isDefault: false },
+      ],
+      "USD",
+    ).account,
+    "",
+    "with several accounts and no default, the person chooses",
+  );
+
+  const category = { icon: "food", iconPath: null, color: "#ABCDEF" };
+  assert.deepEqual(
+    (({ icon, color }) => ({ icon, color }))(
+      withCategoryLook(draft, category, false),
+    ),
+    { icon: "food", color: "#ABCDEF" },
+  );
+  // A chosen look, or no category, is never overwritten.
+  assert.equal(withCategoryLook(draft, category, true), draft);
+  assert.equal(withCategoryLook(draft, undefined, false), draft);
+  assert.deepEqual([...REMINDER_OPTIONS], [null, 0, 1, 2, 7]);
+});

@@ -103,7 +103,8 @@ export function TransactionDetailSheet({
   const { document, updateDocument } = useLocalData();
   const { activeProfile } = useProfiles();
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deleteConfirmationVisible, setDeleteConfirmationVisible] =
@@ -257,6 +258,7 @@ export function TransactionDetailSheet({
       >
         <BottomSheet.Overlay isCloseOnPress={!busy} />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={[deleteConfirmationVisible ? "38%" : "80%"]}

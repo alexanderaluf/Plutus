@@ -100,7 +100,8 @@ export function TransactionOptionPickerSheet({
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const opened = useRef(Platform.OS === "ios");
   const openingFrame = useRef<number | null>(null);
 
@@ -145,6 +146,7 @@ export function TransactionOptionPickerSheet({
         <BottomSheet.Overlay />
         <BottomSheet.Content
           backgroundClassName="rounded-t-[28px] bg-surface"
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           contentContainerClassName="h-full px-0 pb-0 pt-2"
           enableDynamicSizing={false}

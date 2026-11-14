@@ -198,7 +198,8 @@ export function PeriodReviewSheet({
   const { direction } = useAppLocalization();
   const theme = useAppThemeColors();
   const insets = useSafeAreaInsets();
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const { formatDayMonth } = useAppDate();
   const { formatCurrency, amountsHidden } = useCurrencyFormat();
   const money = (value: number) => formatCurrency(value, review.currencyCode);
@@ -301,6 +302,7 @@ export function PeriodReviewSheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["82%"]}

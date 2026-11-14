@@ -102,7 +102,8 @@ export function TransactionCategorySheet({
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const opened = useRef(Platform.OS === "ios");
   const openingFrame = useRef<number | null>(null);
 
@@ -150,6 +151,7 @@ export function TransactionCategorySheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["72%"]}

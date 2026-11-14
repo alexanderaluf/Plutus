@@ -24,7 +24,8 @@ export function ProfileDeleteSheet({
   const insets = useSafeAreaInsets();
   const { profiles, deleteProfile } = useProfiles();
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const saving = useRef(false);
@@ -83,6 +84,7 @@ export function ProfileDeleteSheet({
       >
         <BottomSheet.Overlay isCloseOnPress={!busy} />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           topInset={insets.top}

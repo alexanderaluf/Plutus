@@ -53,7 +53,8 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [showOnHome, setShowOnHome] = useState(() => budget?.showOnHome ?? false);
-  const deleteSheetInitialPositionFix = useBottomSheetInitialPositionFix(
+  const { bindSheet: bindDeleteSheet, ...deleteSheetInitialPositionFix } =
+    useBottomSheetInitialPositionFix(
     sheet === "delete",
   );
   const saving = useRef(false);
@@ -305,6 +306,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
         >
           <BottomSheet.Overlay isCloseOnPress={!busy} />
           <BottomSheet.Content
+            ref={bindDeleteSheet}
             containerStyle={deleteSheetInitialPositionFix.containerStyle}
             onChange={deleteSheetInitialPositionFix.onChange}
             topInset={insets.top}

@@ -47,7 +47,8 @@ function BudgetSortSheet({
 }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const options = [
     ["newest", t("budgets.list.sort.newest")],
     ["name", t("budgets.list.sort.name")],
@@ -67,6 +68,7 @@ function BudgetSortSheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["48%"]}

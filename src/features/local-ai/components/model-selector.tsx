@@ -36,7 +36,8 @@ export function ModelSelector({
   const chatgpt = useChatGPT();
   const insets = useSafeAreaInsets();
   const [isOpen, setIsOpen] = useState(Platform.OS === "ios");
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
   const opened = useRef(Platform.OS === "ios");
   const openingFrame = useRef<number | null>(null);
   const [info, setInfo] = useState<LocalAIModelKey | null>(null);
@@ -90,6 +91,7 @@ export function ModelSelector({
       <AppBottomSheetPortal isOpen={isOpen} unstable_accessibilityContainerViewIsModal>
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={[info ? "72%" : deleting ? "52%" : "58%"]}

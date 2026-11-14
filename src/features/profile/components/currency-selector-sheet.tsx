@@ -199,7 +199,8 @@ export function CurrencySelectorSheet({
   onSelect,
 }: CurrencySelectorSheetProps) {
   const insets = useSafeAreaInsets();
-  const initialPositionFix = useBottomSheetInitialPositionFix(isOpen);
+  const { bindSheet, ...initialPositionFix } =
+    useBottomSheetInitialPositionFix(isOpen);
 
   function handleOpenChange(open: boolean) {
     if (!open) Keyboard.dismiss();
@@ -214,6 +215,7 @@ export function CurrencySelectorSheet({
       >
         <BottomSheet.Overlay />
         <BottomSheet.Content
+          ref={bindSheet}
           containerStyle={initialPositionFix.containerStyle}
           onChange={initialPositionFix.onChange}
           snapPoints={["85%"]}
