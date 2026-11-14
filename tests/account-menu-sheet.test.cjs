@@ -58,6 +58,13 @@ function mountScreen(
           effects.push(effect);
         }
       },
+      useLayoutEffect(effect) {
+        const index = cursor++;
+        if (!(index in slots)) {
+          slots[index] = true;
+          effects.push(effect);
+        }
+      },
       useMemo: (compute) => compute(),
     },
     "react-native": {
@@ -130,6 +137,12 @@ function mountScreen(
           await write(updater({ accounts: [{ uuid: "account-id" }] }));
         },
       }),
+    },
+    "@/data/database/month-index": {
+      getDocumentWindowState: () => undefined,
+    },
+    "@/data/database/fast-store-client": {
+      queryScopedTransactionsAsync: async () => [],
     },
     "@/data/model/account-record": {
       deleteAccountFromDocument: (document, id) => ({

@@ -10,11 +10,15 @@ import { DeleteFill } from "@material-symbols-svg/react-native/rounded/icons/del
 import { ReceiptLongFill } from "@material-symbols-svg/react-native/rounded/icons/receipt-long";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ScrollView, View } from "react-native";
+import { queryScopedTransactionsAsync } from "@/data/database/fast-store-client";
+import { getDocumentWindowState } from "@/data/database/month-index";
 import { useLocalData } from "@/data/local-data-provider";
+import type { BackupDocument } from "@/data/model/backup-document";
 import { categoryFamily } from "@/data/model/category-record";
+import type { JsonObject } from "@/data/model/json";
 import {
   accountPeriodRange,
   selectCategories,
@@ -40,7 +44,14 @@ export function CategoryDetailsScreen() {
   const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { document } = useLocalData();
+  const { document, ensurePeriodLoaded } = useLocalData();
+  const windowState = getDocumentWindowState(document);
+  const isPartial = Boolean(windowState?.isPartial);
+  const [scopedState, setScopedState] = useState<{
+    doc: BackupDocument;
+    idsKey: string;
+    rows: JsonObject[];
+  } | null>(null);
   const now = useCategoryClock();
   const [selected, setSelected] = useState<string | null>(null);
   const [period, setPeriod] = useState<AccountPeriod>("Monthly");
@@ -54,12 +65,48 @@ export function CategoryDetailsScreen() {
     () => categoryFamily(document.categories, id),
     [document.categories, id],
   );
+  const familyIds = useMemo(() => [...family], [family]);
+  const idsKey = familyIds.join("\u0000");
+
+  useEffect(() => {
+    if (!isPartial || familyIds.length === 0) return;
+    let active = true;
+    void queryScopedTransactionsAsync(document, {
+      kind: "category",
+      ids: familyIds,
+    }).then((rows) => {
+      if (active && rows) {
+        setScopedState({ doc: document, idsKey, rows });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [document, isPartial, familyIds, idsKey]);
+
+  const scopedDocument = useMemo(
+    () =>
+      scopedState &&
+      scopedState.doc === document &&
+      scopedState.idsKey === idsKey
+        ? { ...document, transactions: scopedState.rows }
+        : document,
+    [scopedState, document, idsKey],
+  );
+
   const members = categories.filter((item) => family.has(item.id));
   const transactions = useMemo(
-    () => selectCategoryTransactions(document, id),
-    [document, id],
+    () => selectCategoryTransactions(scopedDocument, id),
+    [scopedDocument, id],
   );
   const { start, end } = accountPeriodRange(period, anchor ?? now);
+  const startTime = start.getTime();
+  const endTime = end.getTime();
+  useLayoutEffect(() => {
+    if (!allTime && isPartial) {
+      void ensurePeriodLoaded?.(new Date(startTime), new Date(endTime));
+    }
+  }, [ensurePeriodLoaded, allTime, isPartial, startTime, endTime]);
   const selectedId = members.some((item) => item.id === selected)
     ? selected
     : null;
@@ -240,6 +287,10 @@ export function CategoryDetailsScreen() {
               <EdgeToEdgeFlatList
                 data={visible}
                 keyExtractor={(item) => item.id}
+                initialNumToRender={16}
+                maxToRenderPerBatch={14}
+                updateCellsBatchingPeriod={16}
+                windowSize={7}
                 contentContainerStyle={{
                   paddingTop: contentInsets.top + 8,
                   flexGrow: 1,

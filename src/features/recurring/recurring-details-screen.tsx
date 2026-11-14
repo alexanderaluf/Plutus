@@ -20,7 +20,7 @@ import {
   selectRecurringRelations,
   selectRecurrings,
   selectRecurringSummary,
-  selectTransactions,
+  selectTransaction,
 } from "@/data/selectors/document-selectors";
 import type { Recurring } from "@/data/selectors/recurring-selectors";
 import { BudgetHeader } from "@/features/budgets/components/budget-ui";
@@ -560,7 +560,7 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
     [error, setError] = useState(""),
     [transactionId, setTransactionId] = useState<string | null>(null);
   const transaction = transactionId
-    ? selectTransactions(document).find((v) => v.id === transactionId)
+    ? selectTransaction(document, transactionId)
     : null;
   async function change(action: "archive" | "automatic" | "delete") {
     if (busy || !item) return;

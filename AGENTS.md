@@ -74,6 +74,11 @@ Imported backups may contain additional top-level fields. Preserve unknown
 fields and collections. Never rebuild an imported document by selecting only
 fields currently understood by the UI.
 
+Before adding or changing a selector, screen projection or tab navigation, read
+`docs/performance-architecture.md`. Memoize projections per committed document
+with `memoizeForDocument`, read periods through the shared transaction index,
+and never add loading states for local data.
+
 ## Writing Records
 
 All mutations must go through `useLocalData()` and must be awaited.

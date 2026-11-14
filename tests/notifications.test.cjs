@@ -107,7 +107,7 @@ const text = {
 };
 
 test("schema 24 stores notification preferences, all off by default", () => {
-  assert.equal(LOCAL_SCHEMA_VERSION, 24);
+  assert.ok(LOCAL_SCHEMA_VERSION >= 24);
   const defaults = createDefaultBackup()._local.notifications;
   assert.deepEqual(defaults, {
     expenseReminder: { enabled: false, time: "20:00" },

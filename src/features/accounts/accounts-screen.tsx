@@ -8,11 +8,7 @@ import { useLocalDayClock } from "@/shared/lib/use-local-day-clock";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Animated as NativeAnimated, Pressable, View } from "react-native";
-import Animated, {
-  Easing,
-  FadeInDown,
-  ReduceMotion,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text } from "@/shared/ui/app-text";
 import {
@@ -37,15 +33,8 @@ function groupOf(account: Account): AccountGroup {
   return "everyday";
 }
 
-const INITIAL_DELAY = 45;
-const STAGGER_DELAY = 85;
-const REVEAL_DURATION = 420;
-
-function reveal(index: number) {
-  return FadeInDown.duration(REVEAL_DURATION)
-    .delay(INITIAL_DELAY + index * STAGGER_DELAY)
-    .easing(Easing.bezier(0.22, 1, 0.36, 1))
-    .reduceMotion(ReduceMotion.System);
+function reveal(_index: number) {
+  return undefined;
 }
 
 export function AccountsScreen() {

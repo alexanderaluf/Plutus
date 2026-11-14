@@ -1,8 +1,10 @@
 import type { BackupDocument } from "../model/backup-document";
+import { parseRecordTimestampMs } from "../database/month-index";
 import {
   budgetDraft,
   parseBudgetDate,
   type BudgetDraft,
+  type BudgetPeriod,
 } from "../model/budget-record";
 import {
   belongsToProfile,
@@ -15,7 +17,11 @@ import {
 import type { JsonObject } from "../model/json";
 import { transactionMoney } from "../model/transaction-conversion";
 import { selectCategories } from "./category-selectors";
-import { createRecordLookup } from "./transaction-selectors";
+import { memoizeForDocument } from "./document-memo";
+import {
+  createRecordLookup,
+  selectPeriodTransactionCandidates,
+} from "./transaction-selectors";
 import { filterProjection, finishProjection } from "./cooperative";
 
 const day = (date: Date) =>
@@ -87,7 +93,14 @@ export function selectBudgets(
   now = new Date(),
   options: { homeOnly?: boolean; transactions?: readonly JsonObject[] } = {},
 ) {
-  return finishProjection(iterateBudgets(document, now, options));
+  if (options.transactions) {
+    return finishProjection(iterateBudgets(document, now, options));
+  }
+  return memoizeForDocument(
+    document,
+    `budgets:${options.homeOnly ? "home" : "all"}:${now.getTime()}`,
+    () => finishProjection(iterateBudgets(document, now, options)),
+  );
 }
 
 export function* iterateBudgets(
@@ -136,6 +149,24 @@ export function* iterateBudgets(
     return result;
   };
   const fallback = selectBudgetCurrency(document);
+  const nowMs = now.getTime();
+  // Determine each active budget's required period bounds upfront so default
+  // projections only touch transactions inside active/rolling budget windows.
+  const preparedBudgets = records.map((record) => {
+    const draft = budgetDraft(record, fallback);
+    const range = budgetPeriodRange(draft, now);
+    const createdMs = parseRecordTimestampMs({ createdAt: record.createdAt });
+    const startMs =
+      draft.rolling &&
+      draft.period !== "Custom" &&
+      Number.isFinite(createdMs) &&
+      createdMs < range.start.getTime()
+        ? budgetPeriodRange(draft, new Date(createdMs)).start.getTime()
+        : range.start.getTime();
+    const endMs = Math.min(range.end.getTime(), nowMs + 1);
+    return { record, draft, range, startMs, endMs };
+  });
+
   // Project transactions once; each budget then applies its own independent scope.
   const projectTransaction = (t: JsonObject, index: number) => {
     const account = resolve(
@@ -161,8 +192,8 @@ export function* iterateBudgets(
       return [];
     const category = resolve(document.categories, t.category);
     if (category && !belongs(category)) return [];
-    const timestamp = new Date(String(t.date ?? t.createdAt ?? "")).getTime();
-    if (!Number.isFinite(timestamp) || timestamp > now.getTime()) return [];
+    const timestamp = parseRecordTimestampMs(t);
+    if (!Number.isFinite(timestamp) || timestamp > nowMs) return [];
     return [
       {
         id: identity(t) || `display-${index}`,
@@ -184,8 +215,24 @@ export function* iterateBudgets(
       },
     ];
   };
+  let sourceTransactions = options.transactions;
+  if (!sourceTransactions) {
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const item of preparedBudgets) {
+      if (item.startMs < minStart) minStart = item.startMs;
+      if (item.endMs > maxEnd) maxEnd = item.endMs;
+    }
+    sourceTransactions =
+      Number.isFinite(minStart) && Number.isFinite(maxEnd) && minStart < maxEnd
+        ? selectPeriodTransactionCandidates(
+            document,
+            new Date(minStart),
+            new Date(maxEnd),
+          )
+        : [];
+  }
   const transactions: ReturnType<typeof projectTransaction> = [];
-  const sourceTransactions = options.transactions ?? document.transactions;
   const byType = new Map<number, typeof transactions>();
   for (let index = 0; index < sourceTransactions.length; index++) {
     if (index % 64 === 0) yield;
@@ -198,9 +245,11 @@ export function* iterateBudgets(
     group.push(transaction);
     byType.set(transaction.type, group);
   }
-  function* projectBudget(record: JsonObject) {
+  function* projectBudget(
+    prepared: (typeof preparedBudgets)[number],
+  ) {
     yield;
-    const draft = budgetDraft(record, fallback);
+    const { record, draft, range } = prepared;
     const canonical = (records: JsonObject[], ids: string[]) => [
       ...new Set(
         ids.map((id) => {
@@ -247,7 +296,6 @@ export function* iterateBudgets(
           }
         : transaction;
     });
-    const range = budgetPeriodRange(draft, now);
     const base = Math.max(0, Number(draft.amount) || 0);
     let rollover = 0;
     // Calculate carry from the creation cycle, never before the budget existed.
@@ -396,7 +444,63 @@ export function* iterateBudgets(
     };
   }
   const result = [];
-  for (const record of records) result.push(yield* projectBudget(record));
+  for (const prepared of preparedBudgets)
+    result.push(yield* projectBudget(prepared));
   return result;
 }
 export type Budget = ReturnType<typeof selectBudgets>[number];
+
+export type BudgetOptionRecord = {
+  id: string;
+  name: string;
+  period: BudgetPeriod;
+  transactionType: 0 | 1 | 2;
+  currencyCode: string;
+  accounts: string[];
+  icon: string;
+  iconPath: string | null;
+  color: string;
+};
+
+/**
+ * Lightweight, document-memoized metadata projection for pickers and draft
+ * pre-fills. Avoids computing transaction spending, category families, or
+ * current-time period windows when only active budget attributes are needed.
+ */
+export function selectBudgetOptions(
+  document: BackupDocument,
+): BudgetOptionRecord[] {
+  return memoizeForDocument(document, "budget-options", () => {
+    const belongs = createProfileMatcher(document);
+    const active = document.budgets.filter(
+      (b) => !!identity(b) && belongs(b) && b.isArchived !== true,
+    );
+    if (active.length === 0) return [];
+    const fallback = selectBudgetCurrency(document);
+    let accountLookup: ReturnType<typeof createRecordLookup> | null = null;
+    const canonicalAccounts = (ids: string[]) => {
+      if (ids.length === 0) return [];
+      const lookup = (accountLookup ??= createRecordLookup(document.accounts));
+      const unique = new Set<string>();
+      for (const id of ids) {
+        const match = lookup.get(String(id));
+        unique.add(match ? identity(match) : id);
+      }
+      return [...unique];
+    };
+    return active.map((record) => {
+      const draft = budgetDraft(record, fallback);
+      return {
+        id: identity(record),
+        name: draft.name,
+        period: draft.period,
+        transactionType: draft.transactionType,
+        currencyCode: draft.currencyCode,
+        accounts: canonicalAccounts(draft.accounts),
+        icon: draft.icon,
+        iconPath: draft.iconPath,
+        color: draft.color,
+      };
+    });
+  });
+}

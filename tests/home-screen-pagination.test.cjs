@@ -112,6 +112,17 @@ function screenHarness(document, insets, sizes = {}) {
           });
         }
       },
+      useLayoutEffect: (effect, deps) => {
+        const index = cursor++;
+        if (!slots[index] || !equal(slots[index].deps, deps)) {
+          const previous = slots[index];
+          slots[index] = { deps };
+          effects.push(() => {
+            previous?.cleanup?.();
+            slots[index].cleanup = effect();
+          });
+        }
+      },
     },
     "react-native": {
       Animated: { FlatList: "FlatList" },

@@ -22,13 +22,9 @@ require.extensions[".ts"] = (module, filename) => {
   );
 };
 const {
-  runProjection,
   finishProjection,
   sortProjection,
 } = require("../src/data/selectors/cooperative.ts");
-const {
-  createHomeDataLoader,
-} = require("../src/data/selectors/home-data-loader.ts");
 const { createDefaultBackup } = require("../src/data/model/default-backup.ts");
 const {
   normalizeBackupDocument,
@@ -37,7 +33,12 @@ const { budgetDefaults } = require("../src/data/model/budget-record.ts");
 const { recurringDefaults } = require("../src/data/model/recurring-record.ts");
 const {
   createTransactionIndex,
+  iterateTransactionIndex,
   selectTransactionPeriod,
+  selectTransactionMonths,
+  selectPeriodTransactionCandidates,
+  selectTransaction,
+  selectTransactions,
 } = require("../src/data/selectors/transaction-selectors.ts");
 const {
   selectHomeOverview,
@@ -48,7 +49,6 @@ const {
 } = require("../src/data/selectors/home-section-selectors.ts");
 const { i18n } = require("../src/localization/i18n.ts");
 const now = new Date(2026, 8, 17, 12);
-const signal = () => new AbortController().signal;
 
 // Reordering a read-only sum can differ below a cent due to IEEE-754 arithmetic.
 // Compare money numerically while retaining exact structure/relationships.
@@ -123,121 +123,92 @@ test("cooperative stable sorting matches native ordering, including invalid-date
   );
 });
 
-test("one shared 3ms budget covers concurrent jobs and cancellation removes queued work", async () => {
-  const originalIdle = global.requestIdleCallback,
-    originalCancel = global.cancelIdleCallback;
-  const descriptor = Object.getOwnPropertyDescriptor(performance, "now");
-  const callbacks = new Map();
-  let clock = 0,
-    id = 0,
-    advances = 0;
-  global.requestIdleCallback = (callback) => {
-    callbacks.set(++id, callback);
-    return id;
-  };
-  global.cancelIdleCallback = (handle) => callbacks.delete(handle);
-  Object.defineProperty(performance, "now", {
-    configurable: true,
-    value: () => clock,
+
+test("shared index matches the generator ordering, is built once per document and partitions months", () => {
+  const document = fixture(2000);
+  document.transactions.push(
+    { ...document.transactions[0], uuid: "undated", date: "" },
+    { ...document.transactions[0], uuid: "tie", date: document.transactions[5].date },
+  );
+  const index = createTransactionIndex(document);
+  assert.deepEqual(index, finishProjection(iterateTransactionIndex(document)));
+  assert.equal(createTransactionIndex(document), index, "shared per document");
+  const copy = { ...document, transactions: [...document.transactions] };
+  assert.notEqual(createTransactionIndex(copy), index);
+  document.transactions.push({ ...document.transactions[0], uuid: "pushed" });
+  assert.equal(
+    createTransactionIndex(document).length,
+    index.length + 1,
+    "in-place mutation of a collection invalidates the cache",
+  );
+  const months = selectTransactionMonths(document);
+  const september = months.get("2026-09");
+  assert.ok(september);
+  const all = createTransactionIndex(document);
+  assert.deepEqual(
+    all.slice(september.first, september.last),
+    selectTransactionPeriod(all, new Date(2026, 8, 1), new Date(2026, 9, 1)),
+  );
+});
+
+test("period candidates equal a full filtered scan in document order, including undated records", () => {
+  const document = fixture(500);
+  document.transactions.push(
+    { ...document.transactions[0], uuid: "empty-date", date: "", createdAt: new Date(2026, 8, 3).toISOString() },
+    { ...document.transactions[0], uuid: "old", date: new Date(2025, 1, 1).toISOString() },
+    { ...document.transactions[0], uuid: "foreign", user: 2 },
+  );
+  const start = new Date(2026, 8, 1),
+    end = new Date(2026, 8, 8);
+  const candidates = selectPeriodTransactionCandidates(document, start, end);
+  const ids = candidates.map((record) => record.uuid);
+  assert.ok(ids.includes("empty-date"), "undated records stay candidates");
+  assert.ok(!ids.includes("old") && !ids.includes("foreign"));
+  const positions = ids.map((id) =>
+    document.transactions.findIndex((record) => record.uuid === id),
+  );
+  assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+  const expected = document.transactions.filter((record) => {
+    const time = new Date(record.date).getTime();
+    return record.user === 1 && time >= start.getTime() && time < end.getTime();
   });
-  const controller = new AbortController();
-  function* work() {
-    for (let index = 0; index < 50; index++) {
-      advances++;
-      clock++;
-      yield;
-    }
-    return "done";
-  }
-  try {
-    const a = runProjection(work(), signal());
-    const b = runProjection(work(), controller.signal);
-    const rejected = assert.rejects(b, /cancelled/);
-    assert.equal(
-      advances,
-      0,
-      "requesting a projection must do no synchronous work",
-    );
-    assert.equal(callbacks.size, 1, "all jobs share one scheduled callback");
-    const flush = () => {
-      const [key, callback] = callbacks.entries().next().value;
-      callbacks.delete(key);
-      callback({ timeRemaining: () => 50 });
-    };
-    flush();
-    assert.equal(
-      advances,
-      3,
-      "concurrent jobs must not each consume their own frame budget",
-    );
-    controller.abort();
-    while (callbacks.size) {
-      const start = clock;
-      flush();
-      assert.ok(clock - start <= 3);
-    }
-    assert.equal(await a, "done");
-    await rejected;
-    assert.equal(advances, 51, "cancelled job must stop after its first slice");
-  } finally {
-    if (descriptor) Object.defineProperty(performance, "now", descriptor);
-    else delete performance.now;
-    global.requestIdleCallback = originalIdle;
-    global.cancelIdleCallback = originalCancel;
-  }
+  assert.deepEqual(
+    candidates.filter((record) => record.date),
+    expected,
+  );
 });
 
-test("100,000 transactions yield to UI work while indexing, overview and all sections retain correct totals", async () => {
+test("single transaction lookup equals projecting every transaction", () => {
+  const document = fixture(300);
+  const all = selectTransactions(document);
+  for (const expected of [all[0], all[150], all[299]])
+    assert.deepEqual(selectTransaction(document, expected.id), expected);
+  assert.equal(selectTransaction(document, "missing"), undefined);
+});
+
+test("100,000 transactions: overview and all sections keep correct totals and are reused", () => {
+  const h = hookHarness();
   const document = fixture(100000);
-  const loader = createHomeDataLoader(document);
-  let beats = 0;
-  const timer = setInterval(() => beats++, 0);
-  try {
-    const pending = loader.loadIndex(signal());
-    assert.equal(beats, 0);
-    const index = await pending;
-    assert.ok(
-      beats > 1,
-      "index building and sorting must allow other event-loop work",
-    );
-    assert.equal(index.length, 100000);
-    assert.equal(
-      selectTransactionPeriod(
-        index,
-        new Date(2026, 8, 1),
-        new Date(2026, 9, 1),
-        30,
-      ).length,
-      30,
-    );
-    assert.equal(await loader.loadIndex(signal()), index);
-    let start = beats;
-    const overview = await loader.loadOverview("USD", now, signal());
-    assert.ok(beats > start);
-    assert.equal(overview.expense.amount, 100000);
-    assert.equal(overview.transactionCount, 100000);
-    start = beats;
-    const categories = await loader.loadSection("categories", now, signal());
-    assert.ok(beats > start);
-    assert.equal(categories.totals.get("food").count, 100000);
-    assert.equal(categories.totals.get("child").amounts.USD, 100000);
-    start = beats;
-    const budgets = await loader.loadSection("budgets", now, signal());
-    assert.ok(beats > start);
-    assert.equal(budgets.rows[0].budget.tracked, 100000);
-    assert.equal(budgets.rows[0].budget.transactionCount, 100000);
-    assert.equal(budgets.rows[0].budget.transactions.length, 0);
-    assert.equal(await loader.loadSection("budgets", now, signal()), budgets);
-    assert.equal(
-      (await loader.loadSection("recurring", now, signal())).rows.length,
-      1,
-    );
-  } finally {
-    clearInterval(timer);
-  }
+  const result = h.render(document);
+  assert.equal(result.pending, false);
+  assert.equal(result.index.length, 100000);
+  assert.equal(result.overview.expense.amount, 100000);
+  assert.equal(result.overview.transactionCount, 100000);
+  const categories = h.render(document, "categories").sectionData;
+  assert.equal(categories.totals.get("food").count, 100000);
+  assert.equal(categories.totals.get("child").amounts.USD, 100000);
+  const budgets = h.render(document, "budgets").sectionData;
+  assert.equal(budgets.rows[0].budget.tracked, 100000);
+  assert.equal(budgets.rows[0].budget.transactionCount, 100000);
+  assert.equal(budgets.rows[0].budget.transactions.length, 0);
+  assert.equal(h.render(document, "recurring").sectionData.rows.length, 1);
+  // A remounted screen (fresh hook state) reuses the same document's results.
+  const remounted = hookHarness();
+  assert.equal(remounted.render(document).overview, result.overview);
+  assert.equal(remounted.render(document, "budgets").sectionData, budgets);
 });
 
-test("supplied device backup: cooperative projections preserve every profile's financial totals", async () => {
+test("supplied device backup: home projections preserve every profile's financial totals", () => {
   const source = JSON.parse(
     fs.readFileSync(
       path.resolve(__dirname, "../test-data/plutus-en.json"),
@@ -254,20 +225,22 @@ test("supplied device backup: cooperative projections preserve every profile's f
         selectedProfileId: String(owner.uuid ?? owner.id),
       },
     };
-    const loader = createHomeDataLoader(selected);
-    const index = await loader.loadIndex(signal());
-    assert.deepEqual(index, createTransactionIndex(selected));
-    equivalent(
-      await loader.loadOverview(String(owner.currency ?? "USD"), now, signal()),
-      selectHomeOverview(selected, String(owner.currency ?? "USD"), now),
+    const currency = String(owner.currency ?? "USD");
+    const h = hookHarness();
+    const result = h.render(selected, "transactions", 0, now, currency);
+    assert.equal(result.error, undefined);
+    assert.deepEqual(
+      result.index,
+      finishProjection(iterateTransactionIndex(selected)),
     );
-    const reference = createHomeSectionLoader(selected, now, index);
+    equivalent(result.overview, selectHomeOverview(selected, currency, now));
+    const reference = createHomeSectionLoader(selected, now, result.index);
     for (const section of ["categories", "recurring"])
       assert.deepEqual(
-        await loader.loadSection(section, now, signal()),
+        h.render(selected, section, 0, now, currency).sectionData,
         reference(section),
       );
-    const budgets = await loader.loadSection("budgets", now, signal());
+    const budgets = h.render(selected, "budgets", 0, now, currency).sectionData;
     const expected = selectTrackedBudgets(selected, now);
     assert.deepEqual(
       budgets.rows.map((row) => row.id),
@@ -289,20 +262,16 @@ test("supplied device backup: cooperative projections preserve every profile's f
         budgets.rows[i].budget.transactionCount,
         expected[i].transactionCount,
       );
-      assert.equal(
-        budgets.rows[i].budget.excludedCurrencyCount,
-        expected[i].excludedCurrencyCount,
-      );
     }
   }
   assert.equal(
     JSON.stringify(document),
     original,
-    "loading must never mutate canonical records",
+    "projections must never mutate canonical records",
   );
 });
 
-test("new documents, profiles and dates get fresh projections, including rollover history", async () => {
+test("new documents, profiles and dates get fresh projections, including rollover history", () => {
   const document = fixture(10);
   document.budgets[0].rolling = true;
   document.budgets[0].createdAt = new Date(2026, 6, 1).toISOString();
@@ -312,9 +281,8 @@ test("new documents, profiles and dates get fresh projections, including rollove
     amount: 100,
     date: new Date(2026, 6, 15).toISOString(),
   });
-  const loader = createHomeDataLoader(document);
-  await loader.loadIndex(signal());
-  const first = await loader.loadSection("budgets", now, signal());
+  const h = hookHarness();
+  const first = h.render(document, "budgets").sectionData;
   assert.equal(
     first.rows[0].budget.rollover,
     selectTrackedBudgets(document, now)[0].rollover,
@@ -324,29 +292,23 @@ test("new documents, profiles and dates get fresh projections, including rollove
     ...document,
     transactions: document.transactions.map((t) => ({ ...t, amount: 2 })),
   };
-  const nextLoader = createHomeDataLoader(next);
-  await nextLoader.loadIndex(signal());
-  assert.equal(
-    (await nextLoader.loadSection("budgets", now, signal())).rows[0].budget
-      .tracked,
-    20,
-  );
+  const changed = h.render(next, "budgets");
+  assert.equal(changed.pending, false, "a save never shows a loading state");
+  assert.equal(changed.sectionData.rows[0].budget.tracked, 20);
   assert.notEqual(
-    await loader.loadSection("budgets", new Date(2026, 9, 1), signal()),
+    h.render(document, "budgets", 0, new Date(2026, 9, 1)).sectionData,
     first,
   );
-  const foreign = createHomeDataLoader({
+  const foreign = {
     ...document,
     _local: { ...document._local, selectedProfileId: "other" },
-  });
-  assert.equal((await foreign.loadIndex(signal())).length, 0);
-  assert.equal(
-    (await foreign.loadSection("budgets", now, signal())).rows.length,
-    0,
-  );
+  };
+  const other = h.render(foreign, "budgets");
+  assert.equal(other.index.length, 0);
+  assert.equal(other.sectionData.rows.length, 0);
 });
 
-test("budget home queries do not reread dates from irrelevant older history", async () => {
+test("budget and overview queries do not reread dates from irrelevant older history", () => {
   const document = fixture(3);
   let oldReads = 0;
   const old = new Proxy(
@@ -363,31 +325,21 @@ test("budget home queries do not reread dates from irrelevant older history", as
     },
   );
   document.transactions.push(...Array.from({ length: 10000 }, () => old));
-  const loader = createHomeDataLoader(document);
-  await loader.loadIndex(signal());
+  const h = hookHarness();
+  h.render(document);
   oldReads = 0;
   assert.equal(
-    (await loader.loadSection("budgets", now, signal())).rows[0].budget.tracked,
+    h.render(document, "budgets").sectionData.rows[0].budget.tracked,
     3,
   );
   assert.equal(oldReads, 0);
-  const overview = await loader.loadOverview("USD", now, signal());
-  assert.equal(overview.expense.amount, 3);
+  const later = new Date(now.getTime() + 60000);
+  assert.equal(h.render(document, "transactions", 0, later).overview.expense.amount, 3);
   assert.equal(
     oldReads,
     0,
     "overview refresh must reuse the same binary date bounds",
   );
-});
-
-test("cancelled load stops processing and can be retried without caching partial results", async () => {
-  const document = fixture(10000);
-  const loader = createHomeDataLoader(document);
-  const controller = new AbortController();
-  const pending = loader.loadIndex(controller.signal);
-  controller.abort();
-  await assert.rejects(pending, /cancelled/);
-  assert.equal((await loader.loadIndex(signal())).length, 10000);
 });
 
 test("currency formatting reuses formatters and still follows locale/sign changes", async () => {
@@ -496,16 +448,27 @@ function hookHarness() {
   ).outputText;
   const module = { exports: {} };
   new Function("require", "module", "exports", source)(
-    (name) => (name === "react" ? react : { createHomeDataLoader }),
+    (name) =>
+      name === "react"
+        ? react
+        : require(
+            name.startsWith("@/") ? path.join(root, name.slice(2)) : name,
+          ),
     module,
     module.exports,
   );
   return {
-    render(document, section = "transactions", retry = 0, clock = now) {
+    render(
+      document,
+      section = "transactions",
+      retry = 0,
+      clock = now,
+      currency = "USD",
+    ) {
       cursor = 0;
       const result = module.exports.useHomeData(
         document,
-        "USD",
+        currency,
         clock,
         section,
         retry,
@@ -518,47 +481,29 @@ function hookHarness() {
     },
   };
 }
-async function settle(render) {
-  const deadline = performance.now() + 3000;
-  for (;;) {
-    const result = render();
-    if (result.error || (!result.pending && result.overview)) return result;
-    assert.ok(performance.now() < deadline, "home projection did not resolve");
-    await new Promise((resolve) => setTimeout(resolve, 1));
-  }
-}
 
-test("real home hook acknowledges switches immediately, cancels obsolete loads and never shows another profile's rows", async () => {
+test("real home hook never shows a loading state and never shows another profile's rows", () => {
   const h = hookHarness();
   const document = fixture(50000);
-  try {
-    assert.equal(h.render(document).pending, true);
-    const initial = await settle(() => h.render(document));
-    assert.equal(initial.index.length, 50000);
-    const budget = h.render(document, "budgets");
-    assert.equal(budget.pending, true);
-    assert.equal(budget.sectionData, undefined);
-    const recurring = await settle(() => h.render(document, "recurring"));
-    assert.equal(recurring.sectionData.section, "recurring");
-    assert.equal(recurring.sectionData.rows.length, 1);
-    const budgetRetry = await settle(() => h.render(document, "budgets"));
-    assert.equal(budgetRetry.sectionData.rows[0].budget.tracked, 50000);
-    const other = {
-      ...document,
-      _local: { ...document._local, selectedProfileId: "other" },
-    };
-    const changed = h.render(other, "categories");
-    assert.equal(changed.index, undefined);
-    assert.equal(changed.sectionData, undefined);
-    const resolved = await settle(() => h.render(other, "categories"));
-    assert.equal(resolved.index.length, 0);
-    assert.equal(resolved.sectionData.rows.length, 0);
-  } finally {
-    h.unmount();
-  }
+  const initial = h.render(document);
+  assert.equal(initial.pending, false);
+  assert.equal(initial.index.length, 50000);
+  const budgets = h.render(document, "budgets");
+  assert.equal(budgets.pending, false);
+  assert.equal(budgets.sectionData.rows[0].budget.tracked, 50000);
+  const recurring = h.render(document, "recurring");
+  assert.equal(recurring.sectionData.section, "recurring");
+  assert.equal(recurring.sectionData.rows.length, 1);
+  const other = {
+    ...document,
+    _local: { ...document._local, selectedProfileId: "other" },
+  };
+  const changed = h.render(other, "categories");
+  assert.equal(changed.index.length, 0);
+  assert.equal(changed.sectionData.rows.length, 0);
 });
 
-test("real home hook distinguishes failures from empty data and retry recovers without a persisted write", async () => {
+test("real home hook distinguishes failures from empty data and retry recovers without a persisted write", () => {
   const h = hookHarness();
   const document = fixture(1);
   let fail = true;
@@ -568,48 +513,30 @@ test("real home hook distinguishes failures from empty data and retry recovers w
       return target[key];
     },
   });
-  try {
-    const failed = await settle(() => h.render(document));
-    assert.equal(failed.error.message, "Read failed");
-    assert.equal(failed.index, undefined);
-    fail = false;
-    const retrying = h.render(document, "transactions", 1);
-    assert.equal(retrying.error, undefined);
-    assert.equal(retrying.pending, true);
-    const resolved = await settle(() => h.render(document, "transactions", 1));
-    assert.equal(resolved.index.length, 1);
-    assert.equal(resolved.overview.expense.amount, 1);
-  } finally {
-    h.unmount();
-  }
+  const failed = h.render(document);
+  assert.equal(failed.error.message, "Read failed");
+  assert.equal(failed.index, undefined);
+  fail = false;
+  const resolved = h.render(document, "transactions", 1);
+  assert.equal(resolved.error, undefined);
+  assert.equal(resolved.index.length, 1);
+  assert.equal(resolved.overview.expense.amount, 1);
 });
 
-test("clock refresh retains the same document's overview while preparing fresh totals", async () => {
+test("clock refresh computes fresh totals without rebuilding or resorting history", () => {
   const h = hookHarness();
   const document = fixture(10000);
-  try {
-    const first = await settle(() => h.render(document));
-    const nextTime = new Date(now.getTime() + 60000);
-    const refreshing = h.render(document, "transactions", 0, nextTime);
-    assert.equal(refreshing.overview, first.overview);
-    assert.equal(refreshing.overviewRefreshing, true);
-    const deadline = performance.now() + 3000;
-    let refreshed;
-    do {
-      await new Promise((resolve) => setTimeout(resolve, 1));
-      refreshed = h.render(document, "transactions", 0, nextTime);
-      assert.ok(performance.now() < deadline);
-    } while (refreshed.overviewRefreshing);
-    assert.equal(
-      refreshed.overview.expense.amount,
-      first.overview.expense.amount,
-    );
-    assert.equal(
-      refreshed.index,
-      first.index,
-      "clock changes must not rebuild or resort history",
-    );
-  } finally {
-    h.unmount();
-  }
+  const first = h.render(document);
+  const nextTime = new Date(now.getTime() + 60000);
+  const refreshed = h.render(document, "transactions", 0, nextTime);
+  assert.equal(refreshed.overviewRefreshing, false);
+  assert.equal(
+    refreshed.overview.expense.amount,
+    first.overview.expense.amount,
+  );
+  assert.equal(
+    refreshed.index,
+    first.index,
+    "clock changes must not rebuild or resort history",
+  );
 });

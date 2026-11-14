@@ -11,7 +11,7 @@ import {
   selectAppPreferences,
   selectRecurrings,
   selectRecurringSummary,
-  selectTransactions,
+  selectTransaction,
 } from "@/data/selectors/document-selectors";
 import type { Recurring } from "@/data/selectors/recurring-selectors";
 import {
@@ -58,12 +58,23 @@ type Sort = "date" | "name" | "amount";
 export function useRecurringClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 15_000);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+    const scheduleMinuteTick = () => {
+      if (disposed) return;
+      const msUntilNextMinute = Math.max(1000, 60_000 - (Date.now() % 60_000));
+      timer = setTimeout(() => {
+        setNow(new Date());
+        scheduleMinuteTick();
+      }, msUntilNextMinute);
+    };
+    scheduleMinuteTick();
     const listener = AppState.addEventListener("change", (state) => {
       if (state === "active") setNow(new Date());
     });
     return () => {
-      clearInterval(timer);
+      disposed = true;
+      if (timer) clearTimeout(timer);
       listener.remove();
     };
   }, []);
@@ -164,7 +175,7 @@ export function RecurringScreen() {
     later: t("recurring.later"),
   };
   const transaction = transactionId
-    ? selectTransactions(document).find((v) => v.id === transactionId)
+    ? selectTransaction(document, transactionId)
     : null;
   const openRecurring = (id: string) =>
     router.push({ pathname: "/recurring/[id]", params: { id } });

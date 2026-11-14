@@ -12,7 +12,7 @@ import {
 } from "./components/category-motion";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { Fragment, useMemo, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   I18nManager,
@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalData } from "@/data/local-data-provider";
+import { financialMonth } from "@/data/model/financial-month";
 import type { CategoryType } from "@/data/model/category-record";
 import {
   selectCategories,
@@ -206,9 +207,22 @@ export function CategoriesScreen() {
   const insets = useSafeAreaInsets();
   const theme = useAppThemeColors();
   const blurTargetRef = useRef<ViewInstance | null>(null);
-  const { document } = useLocalData();
+  const { document, ensurePeriodLoaded } = useLocalData();
   const { activeProfile } = useProfiles();
   const now = useCategoryClock();
+  const { start: monthStart, end: monthEnd } = financialMonth(
+    now,
+    document._local.monthStartDay,
+    0,
+  );
+  const monthStartTime = monthStart.getTime();
+  const monthEndTime = monthEnd.getTime();
+  useLayoutEffect(() => {
+    void ensurePeriodLoaded?.(
+      new Date(monthStartTime),
+      new Date(monthEndTime),
+    );
+  }, [ensurePeriodLoaded, monthStartTime, monthEndTime]);
   const [type, setType] = useState<CategoryType>(0);
   const [sort, setSort] = useState<CategorySort>("original");
   const [sheet, setSheet] = useState<"sort" | "info" | null>(null);

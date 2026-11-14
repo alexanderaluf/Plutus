@@ -3,11 +3,7 @@ import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
-import Animated, {
-  Easing,
-  FadeInDown,
-  ReduceMotion,
-} from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
@@ -129,11 +125,8 @@ function SettingsGroup({
   );
 }
 
-function createRevealAnimation(delay: number) {
-  return FadeInDown.duration(420)
-    .delay(delay)
-    .easing(Easing.bezier(0.22, 1, 0.36, 1))
-    .reduceMotion(ReduceMotion.System);
+function createRevealAnimation(_delay: number) {
+  return undefined;
 }
 
 export function ProfileSettingsPage({

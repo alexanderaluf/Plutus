@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { View } from "react-native";
 
 import { useLocalData } from "@/data/local-data-provider";
+import { financialMonth } from "@/data/model/financial-month";
 import {
   selectConsumptionReport,
   selectPeriodReview,
@@ -36,10 +37,28 @@ export function ReportsScreen() {
 function ProfileReports() {
   const { activeProfile } = useProfiles();
   const { t, i18n } = useTranslation();
-  const { document } = useLocalData();
+  const { document, ensurePeriodLoaded } = useLocalData();
   const [offset, setOffset] = useState(0);
   const [currency, setCurrency] = useState(activeProfile.currencyCode);
   const now = useCategoryClock(document);
+  const { start: windowStart } = financialMonth(
+    now,
+    document._local.monthStartDay,
+    offset - 5,
+  );
+  const { end: windowEnd } = financialMonth(
+    now,
+    document._local.monthStartDay,
+    offset,
+  );
+  const windowStartTime = windowStart.getTime();
+  const windowEndTime = windowEnd.getTime();
+  useLayoutEffect(() => {
+    void ensurePeriodLoaded?.(
+      new Date(windowStartTime),
+      new Date(windowEndTime),
+    );
+  }, [ensurePeriodLoaded, windowStartTime, windowEndTime]);
   const report = useMemo(
     () =>
       selectConsumptionReport(

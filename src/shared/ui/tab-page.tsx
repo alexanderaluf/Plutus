@@ -8,7 +8,6 @@ import { Animated as NativeAnimated, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Easing,
-  FadeInDown,
   LinearTransition,
   ReduceMotion,
 } from "react-native-reanimated";
@@ -17,10 +16,6 @@ import {
   CollapsingHeaderSpacer,
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
-
-const INITIAL_DELAY = 45;
-const STAGGER_DELAY = 85;
-const REVEAL_DURATION = 420;
 
 export function TabPage({
   children,
@@ -54,28 +49,24 @@ export function TabPage({
         showsVerticalScrollIndicator={false}
       >
         {header ? <CollapsingHeaderSpacer height={headerHeight} /> : null}
-        {sections.map((section, index) => (
-          <Animated.View
-            layout={
-              animateLayout
-                ? LinearTransition.duration(240)
-                    .easing(Easing.bezier(0.77, 0, 0.175, 1))
-                    .reduceMotion(ReduceMotion.System)
-                : undefined
-            }
-            key={
-              isValidElement(section) && section.key != null
-                ? section.key
-                : `section-${index}`
-            }
-            entering={FadeInDown.duration(REVEAL_DURATION)
-              .delay(INITIAL_DELAY + index * STAGGER_DELAY)
-              .easing(Easing.bezier(0.22, 1, 0.36, 1))
-              .reduceMotion(ReduceMotion.System)}
-          >
-            {section}
-          </Animated.View>
-        ))}
+        {sections.map((section, index) => {
+          const key =
+            isValidElement(section) && section.key != null
+              ? section.key
+              : `section-${index}`;
+          return animateLayout ? (
+            <Animated.View
+              layout={LinearTransition.duration(180)
+                .easing(Easing.bezier(0.77, 0, 0.175, 1))
+                .reduceMotion(ReduceMotion.System)}
+              key={key}
+            >
+              {section}
+            </Animated.View>
+          ) : (
+            <View key={key}>{section}</View>
+          );
+        })}
       </NativeAnimated.ScrollView>
       {header ? (
         <CollapsingHeader

@@ -4,20 +4,11 @@ import { useTranslation } from "react-i18next";
 import { Pressable, View } from "react-native";
 
 import { Text } from "@/shared/ui/app-text";
-import Animated, {
-  Easing,
-  FadeInDown,
-  ReduceMotion,
-} from "react-native-reanimated";
 
 import { useLocalData } from "@/data/local-data-provider";
 import type { AppLanguage } from "@/data/model/backup-document";
 import { LANGUAGE_OPTIONS } from "@/localization/languages";
 import { FilledIcon } from "@/shared/ui/filled-icon";
-
-const reveal = FadeInDown.duration(400)
-  .easing(Easing.bezier(0.22, 1, 0.36, 1))
-  .reduceMotion(ReduceMotion.System);
 
 export function LanguageSettingsPage() {
   const { t } = useTranslation();
@@ -45,19 +36,16 @@ export function LanguageSettingsPage() {
       contentContainerStyle={{ paddingBottom: 32 }}
       showsVerticalScrollIndicator={false}
     >
-      <Animated.View entering={reveal} className="gap-1 px-1">
+      <View className="gap-1 px-1">
         <Text className="font-manrope-bold text-lg text-foreground">
           {t("language.heading")}
         </Text>
         <Text className="font-sans text-sm leading-5 text-muted">
           {t("language.description")}
         </Text>
-      </Animated.View>
+      </View>
 
-      <Animated.View
-        entering={reveal.delay(70)}
-        className="overflow-hidden rounded-3xl bg-surface"
-      >
+      <View className="overflow-hidden rounded-3xl bg-surface">
         {LANGUAGE_OPTIONS.map((option, index) => {
           const isSelected = option.code === selectedLanguage;
           return (
@@ -107,7 +95,7 @@ export function LanguageSettingsPage() {
             </Pressable>
           );
         })}
-      </Animated.View>
+      </View>
 
       {error ? (
         <Text

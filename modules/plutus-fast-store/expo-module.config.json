@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PlutusFastStoreModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.plutusfaststore.PlutusFastStoreModule"]
+  }
+}

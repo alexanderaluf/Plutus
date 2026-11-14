@@ -19,6 +19,7 @@ import {
   clearPin,
   isShowingSystemPrompt,
   readAppLock,
+  readAppLockSync,
   readBiometricSupport,
   savePin,
   verifyPin,
@@ -47,28 +48,46 @@ const AppLockContext = createContext<AppLockContextValue | null>(null);
  * While the app is hidden, a cover keeps finances out of the app switcher.
  */
 export function AppLockProvider({ children }: PropsWithChildren) {
-  const [ready, setReady] = useState(false);
-  const [settings, setSettings] = useState<AppLockSettings>(DEFAULT_APP_LOCK);
-  const [hasPin, setHasPin] = useState(false);
+  const [initialLock] = useState(() => readAppLockSync());
+  const [ready, setReady] = useState(() => initialLock !== null);
+  const [settings, setSettings] = useState<AppLockSettings>(
+    () => initialLock?.settings ?? DEFAULT_APP_LOCK,
+  );
+  const [hasPin, setHasPin] = useState(() => initialLock?.hasPin ?? false);
   const [biometric, setBiometric] = useState<BiometricSupport>({
     available: false,
     kind: null,
     deviceSecure: false,
   });
-  const [locked, setLocked] = useState(false);
+  const [locked, setLocked] = useState(
+    () => initialLock?.settings.enabled ?? false,
+  );
   const [covered, setCovered] = useState(false);
   const settingsRef = useRef(settings);
   const leftAt = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    void Promise.all([readAppLock(), readBiometricSupport()])
-      .then(([stored, support]) => {
+    // Biometric hardware introspection runs in the background so hardware
+    // queries never delay Frame-1 render when App Lock is inactive or known.
+    void readBiometricSupport()
+      .then((support) => {
+        if (!cancelled) setBiometric(support);
+      })
+      .catch(() => undefined);
+
+    if (initialLock !== null) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void readAppLock()
+      .then((stored) => {
         if (cancelled) return;
         settingsRef.current = stored.settings;
         setSettings(stored.settings);
         setHasPin(stored.hasPin);
-        setBiometric(support);
         setLocked(stored.settings.enabled);
       })
       // An unreadable keystore must not brick the app; it opens unlocked.
@@ -79,7 +98,7 @@ export function AppLockProvider({ children }: PropsWithChildren) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialLock]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {

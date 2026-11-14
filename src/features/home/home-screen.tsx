@@ -1,7 +1,14 @@
 import { BlurTargetView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { useAmountVisibility } from "@/shared/lib/use-currency-format";
 import { useTranslation } from "react-i18next";
@@ -86,7 +93,7 @@ export function HomeScreen() {
   const router = useRouter();
   const { i18n, t } = useTranslation();
   const { activeProfile } = useProfiles();
-  const { document } = useLocalData();
+  const { document, ensurePeriodLoaded } = useLocalData();
   const [transactionPage, setTransactionPage] = useState({
     key: "",
     limit: TRANSACTION_PAGE_SIZE,
@@ -140,12 +147,31 @@ export function HomeScreen() {
     document._local.monthStartDay,
     monthOffset,
   );
+  const { start: prevPrefetchStart, end: prevPrefetchEnd } = financialMonth(
+    now,
+    document._local.monthStartDay,
+    monthOffset - 1,
+  );
+  const prevPrefetchStartTime = prevPrefetchStart.getTime();
+  const prevPrefetchEndTime = prevPrefetchEnd.getTime();
   const projectTransaction = useMemo(
     () => createTransactionProjector(document, i18n.resolvedLanguage),
     [document, i18n.resolvedLanguage],
   );
   const monthStartTime = monthStart.getTime();
   const monthEndTime = monthEnd.getTime();
+  useLayoutEffect(() => {
+    void ensurePeriodLoaded?.(
+      new Date(monthStartTime),
+      new Date(monthEndTime),
+    );
+  }, [ensurePeriodLoaded, monthStartTime, monthEndTime]);
+  useEffect(() => {
+    void ensurePeriodLoaded?.(
+      new Date(prevPrefetchStartTime),
+      new Date(prevPrefetchEndTime),
+    );
+  }, [ensurePeriodLoaded, prevPrefetchStartTime, prevPrefetchEndTime]);
   const pageKey = `${activeProfile.id}:${monthStartTime}:${monthEndTime}`;
   const revealScope = section === "transactions" ? pageKey : activeProfile.id;
   // A new section/month visit resets reveal history, but pagination does not.
@@ -317,7 +343,6 @@ export function HomeScreen() {
   const onSectionChange = useCallback(
     (next: HomeSection) => {
       if (next === section) return;
-      sectionOpacity.set(0);
       // When switching from a scrolled section, start the new content directly
       // below the pinned controls rather than retaining a deep list offset.
       if (isSelectorSticky && selectorTop !== null) {

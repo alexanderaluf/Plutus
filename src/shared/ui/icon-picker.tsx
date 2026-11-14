@@ -53,12 +53,22 @@ const PACK_SELECTOR_HEIGHT = 44;
 const HEADER_HEIGHT = 64;
 type PickerSection = { title: string; data: PickerIcon[][] };
 
-const materialIconsByName = new Map(
-  MATERIAL_ROUNDED_FILLED_ICONS.map((icon) => [
-    `material:${icon.name}`,
-    icon,
-  ]),
-);
+let cachedMaterialIconsByName: Map<
+  string,
+  (typeof MATERIAL_ROUNDED_FILLED_ICONS)[number]
+> | null = null;
+
+function getMaterialIconsByName() {
+  if (!cachedMaterialIconsByName) {
+    cachedMaterialIconsByName = new Map(
+      MATERIAL_ROUNDED_FILLED_ICONS.map((icon) => [
+        `material:${icon.name}`,
+        icon,
+      ]),
+    );
+  }
+  return cachedMaterialIconsByName;
+}
 
 function rowsOfSix(icons: PickerIcon[]) {
   const rows: PickerIcon[][] = [];
@@ -200,6 +210,8 @@ function IconPickerContent({
   }, [deferredQuery, t]);
   const minimalSections = useMemo<PickerSection[]>(() => {
     const search = deferredQuery.trim().toLowerCase();
+
+    const materialIconsByName = getMaterialIconsByName();
 
     // One section per default category; only these curated icons are
     // offered. Searching matches the icon name and its section title.

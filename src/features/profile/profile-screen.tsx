@@ -7,8 +7,7 @@ import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BackHandler } from "react-native";
-import Animated, { Easing, FadeInDown } from "react-native-reanimated";
+import { BackHandler, View } from "react-native";
 
 import { CurrencyConverterPage } from "./components/currency-converter-page";
 import { DataBackupPage } from "./components/data-backup-page";
@@ -116,12 +115,7 @@ export function ProfileScreen() {
           contentContainerClassName="px-5"
           contentContainerStyle={{ paddingTop: 40 }}
         >
-          <Animated.View
-            entering={FadeInDown.duration(380).easing(
-              Easing.bezier(0.22, 1, 0.36, 1),
-            )}
-            className="items-center"
-          >
+          <View className="items-center">
             <ProfileAvatar
               // Left undefined so the avatar follows the theme accent color.
               color={activeProfile.imageUri ? "#242424" : undefined}
@@ -148,14 +142,9 @@ export function ProfileScreen() {
                 {t("profile.manageProfile")}
               </Button.Label>
             </Button>
-          </Animated.View>
+          </View>
 
-          <Animated.View
-            entering={FadeInDown.delay(90)
-              .duration(380)
-              .easing(Easing.bezier(0.22, 1, 0.36, 1))}
-            className="mt-7"
-          >
+          <View className="mt-7">
             <ProfileHubActions
               onAddProfile={() =>
                 router.push({
@@ -166,7 +155,7 @@ export function ProfileScreen() {
               onManageProfiles={() => router.push("/profile/manage")}
               onSettings={() => setPage("settings")}
             />
-          </Animated.View>
+          </View>
         </EdgeToEdgeScrollView>
       )}
     </EdgeToEdgeLayout>

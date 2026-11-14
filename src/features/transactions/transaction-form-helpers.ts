@@ -1,10 +1,13 @@
 import type { TFunction } from "i18next";
 
+import { selectCatalogCategoryCounts } from "@/data/database/fast-store-client";
+import { getDocumentWindowState } from "@/data/database/month-index";
 import type { BackupDocument } from "@/data/model/backup-document";
 import {
   belongsToProfile,
   createProfileMatcher,
   identity,
+  type CategoryType,
 } from "@/data/model/category-record";
 import type { JsonObject } from "@/data/model/json";
 import {
@@ -12,11 +15,14 @@ import {
   type TransactionDraft,
   type TransactionType,
 } from "@/data/model/transaction-record";
-import type { Budget } from "@/data/selectors/budget-selectors";
+import type {
+  Budget,
+  BudgetOptionRecord,
+} from "@/data/selectors/budget-selectors";
 import {
-  categoryRootIdIn,
   type Category,
 } from "@/data/selectors/category-selectors";
+import { memoizeForDocument } from "@/data/selectors/document-memo";
 import type { selectAccounts } from "@/data/selectors/document-selectors";
 import type { FilledIconName } from "@/shared/ui/filled-icon";
 
@@ -138,7 +144,10 @@ export function resolveInitialTransactionDraft({
 }: {
   sourceDraft: TransactionDraft | null;
   isCopy: boolean;
-  presetBudget: Budget | null | undefined;
+  presetBudget:
+    | Pick<Budget | BudgetOptionRecord, "id" | "transactionType" | "currencyCode" | "accounts">
+    | null
+    | undefined;
   accounts: readonly Account[];
   defaultAccount: Account | undefined;
   paramType?: string;
@@ -324,27 +333,65 @@ export function rankRootCategories(
   categories: readonly Category[],
   type: TransactionType,
 ): Category[] {
-  const belongs = createProfileMatcher(document);
-  const ids = new Set(categories.map((category) => category.id));
-  const usage = new Map<string, number>();
-  for (const record of document.transactions) {
-    if (!belongs(record) || record.type !== type) continue;
-    const categoryId = String(record.category ?? "");
-    if (!ids.has(categoryId)) continue;
-    const rootId = categoryRootIdIn(categories, categoryId);
-    usage.set(rootId, (usage.get(rootId) ?? 0) + 1);
-  }
-  return categories
-    .map((category, index) => ({ category, index }))
-    .filter(
-      ({ category }) => category.type === type && category.parentId === null,
-    )
-    .sort(
-      (a, b) =>
-        (usage.get(b.category.id) ?? 0) - (usage.get(a.category.id) ?? 0) ||
-        a.index - b.index,
-    )
-    .map(({ category }) => category);
+  return memoizeForDocument(
+    document,
+    `rankRootCategories:${type}:${categories.map((c) => c.id).join("\0")}`,
+    () => {
+      const byId = new Map<string, Category>();
+      const typeById = new Map<string, CategoryType>();
+      for (const category of categories) {
+        byId.set(category.id, category);
+        typeById.set(category.id, category.type);
+      }
+      const rootById = new Map<string, string>();
+      for (const category of categories) {
+        let current: Category | undefined = category;
+        const visited = new Set<string>();
+        while (current?.parentId && !visited.has(current.id)) {
+          visited.add(current.id);
+          const parent = byId.get(current.parentId);
+          if (!parent) break;
+          current = parent;
+        }
+        if (current) rootById.set(category.id, current.id);
+      }
+
+      const usage = new Map<string, number>();
+      const indexedCounts = getDocumentWindowState(document)?.isPartial
+        ? selectCatalogCategoryCounts(document)
+        : null;
+
+      if (indexedCounts) {
+        for (const [categoryId, count] of indexedCounts) {
+          if (typeById.get(categoryId) !== type) continue;
+          const rootId = rootById.get(categoryId);
+          if (!rootId) continue;
+          usage.set(rootId, (usage.get(rootId) ?? 0) + count);
+        }
+      } else {
+        const belongs = createProfileMatcher(document);
+        for (const record of document.transactions) {
+          if (record.type !== type || !belongs(record)) continue;
+          const categoryId = String(record.category ?? "");
+          const rootId = rootById.get(categoryId);
+          if (!rootId) continue;
+          usage.set(rootId, (usage.get(rootId) ?? 0) + 1);
+        }
+      }
+
+      return categories
+        .map((category, index) => ({ category, index }))
+        .filter(
+          ({ category }) => category.type === type && category.parentId === null,
+        )
+        .sort(
+          (a, b) =>
+            (usage.get(b.category.id) ?? 0) - (usage.get(a.category.id) ?? 0) ||
+            a.index - b.index,
+        )
+        .map(({ category }) => category);
+    },
+  );
 }
 
 /** The profile's default account leads the picker; the rest keep their order. */

@@ -28,6 +28,20 @@ export type BiometricSupport = {
   deviceSecure: boolean;
 };
 
+export function readAppLockSync(): {
+  settings: AppLockSettings;
+  hasPin: boolean;
+} | null {
+  if (typeof SecureStore.getItem !== "function") return null;
+  try {
+    const settings = SecureStore.getItem(SETTINGS_KEY, OPTIONS);
+    const pin = SecureStore.getItem(PIN_KEY, OPTIONS);
+    return { settings: parseAppLockSettings(settings), hasPin: !!pin };
+  } catch {
+    return null;
+  }
+}
+
 export async function readAppLock() {
   const [settings, pin] = await Promise.all([
     SecureStore.getItemAsync(SETTINGS_KEY, OPTIONS),

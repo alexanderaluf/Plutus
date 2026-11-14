@@ -3,11 +3,6 @@ import { Button, Switch as HeroSwitch } from "heroui-native";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Platform, Pressable, View } from "react-native";
-import Animated, {
-  Easing,
-  FadeInDown,
-  ReduceMotion,
-} from "react-native-reanimated";
 
 import { useLocalData } from "@/data/local-data-provider";
 import {
@@ -43,10 +38,6 @@ import { DateTimePopover } from "@/shared/ui/date-time-popover";
 import { EdgeToEdgeScrollView } from "@/shared/ui/edge-to-edge-layout";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 
-const reveal = FadeInDown.duration(400)
-  .easing(Easing.bezier(0.22, 1, 0.36, 1))
-  .reduceMotion(ReduceMotion.System);
-
 const NOTIFICATION_ICONS: Record<NotificationKind, FilledIconName> = {
   expenseReminder: "edit-note",
   dailySummary: "query-stats",
@@ -70,7 +61,6 @@ function Section({
   title,
   description,
   children,
-  delay = 0,
 }: {
   title: string;
   description: string;
@@ -78,7 +68,7 @@ function Section({
   delay?: number;
 }) {
   return (
-    <Animated.View entering={reveal.delay(delay)} className="gap-3">
+    <View className="gap-3">
       <View className="gap-1 px-1">
         <Text
           accessibilityRole="header"
@@ -91,7 +81,7 @@ function Section({
         </Text>
       </View>
       {children}
-    </Animated.View>
+    </View>
   );
 }
 

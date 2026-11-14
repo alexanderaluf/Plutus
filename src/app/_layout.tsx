@@ -133,11 +133,10 @@ function AppSystemBars() {
 export default function RootLayout() {
   const { theme } = useUniwind();
   usePhonePortraitLock();
-  const [fontsLoaded, fontError] = useFonts({
+  // Register bundled display font without blanking the entire SQLite/provider tree.
+  useFonts({
     Huninn_400Regular,
   });
-
-  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView

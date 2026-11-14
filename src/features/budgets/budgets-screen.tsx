@@ -1,5 +1,5 @@
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { BlurTargetView } from "expo-blur";
 import { Button } from "heroui-native";
@@ -7,7 +7,10 @@ import { BottomSheet } from "@/shared/ui/app-bottom-sheet";
 import { Animated, I18nManager, View, type ViewInstance } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getDocumentWindowState } from "@/data/database/month-index";
 import { useLocalData } from "@/data/local-data-provider";
+import { budgetDraft } from "@/data/model/budget-record";
+import { budgetPeriodRange } from "@/data/selectors/budget-selectors";
 import { selectBudgets } from "@/data/selectors/document-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
@@ -109,7 +112,7 @@ export function BudgetsScreen() {
   const { formatCurrency } = useCurrencyFormat();
   const { t, i18n } = useTranslation();
   const labels = useBudgetLabels();
-  const { document } = useLocalData(),
+  const { document, ensurePeriodLoaded } = useLocalData(),
     now = useCategoryClock(document);
   const router = useRouter(),
     insets = useSafeAreaInsets(),
@@ -119,6 +122,22 @@ export function BudgetsScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sort, setSort] = useState<BudgetSort>("newest"),
     [sheet, setSheet] = useState<"info" | "sort" | null>(null);
+  const isPartial = Boolean(getDocumentWindowState(document)?.isPartial);
+  useLayoutEffect(() => {
+    if (!isPartial || !document.budgets.length) return;
+    let minStart = Infinity;
+    let maxEnd = -Infinity;
+    for (const record of document.budgets) {
+      const { start, end } = budgetPeriodRange(budgetDraft(record), now);
+      const s = start.getTime();
+      const e = end.getTime();
+      if (s < minStart) minStart = s;
+      if (e > maxEnd) maxEnd = e;
+    }
+    if (Number.isFinite(minStart) && Number.isFinite(maxEnd)) {
+      void ensurePeriodLoaded?.(new Date(minStart), new Date(maxEnd));
+    }
+  }, [document, now, isPartial, ensurePeriodLoaded]);
   const all = useMemo(() => selectBudgets(document, now), [document, now]);
   const budgets = all
     .filter((b) => b.transactionType === type)

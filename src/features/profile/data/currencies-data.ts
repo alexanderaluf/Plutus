@@ -1,4 +1,7 @@
 import {
+  CURRENCY_SYMBOLS,
+} from "./currency-symbols";
+import {
   currencySearchAliases,
   currencyTranslations,
 } from "./currency-translations";
@@ -216,18 +219,14 @@ const currencyNames: Record<string, string> = {
   zwl: "Zimbabwean Dollar",
 };
 
-const currencySymbols: Record<string, string> = {
-  USD: "$",
-  EUR: "€",
-  GBP: "£",
-  ILS: "₪",
-  JPY: "¥",
-};
-
 export const currencies: CurrencyOption[] = Object.entries(currencyNames).map(
   ([key, name]) => {
     const code = key.toUpperCase();
-    return { code, name: name || code, symbol: currencySymbols[code] ?? code };
+    return {
+      code,
+      name: name || code,
+      symbol: CURRENCY_SYMBOLS[code] ?? code,
+    };
   },
 );
 

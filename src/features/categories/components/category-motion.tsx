@@ -8,11 +8,7 @@ import Animated, {
   ReduceMotion,
 } from "react-native-reanimated";
 
-export const categoryEntrance = (delay = 0) =>
-  FadeInDown.duration(320)
-    .delay(delay)
-    .easing(Easing.bezier(0.22, 1, 0.36, 1))
-    .reduceMotion(ReduceMotion.System);
+export const categoryEntrance = (_delay = 0) => undefined;
 export const categoryExit = FadeOutUp.duration(160).reduceMotion(
   ReduceMotion.System,
 );
@@ -26,13 +22,9 @@ export function CategoryFormSections({
 }: PropsWithChildren<ViewProps>) {
   return (
     <Animated.View {...props} layout={categoryLayout}>
-      {Children.map(children, (child, index) =>
+      {Children.map(children, (child) =>
         child ? (
-          <Animated.View
-            entering={categoryEntrance(Math.min(index * 35, 210))}
-            exiting={categoryExit}
-            layout={categoryLayout}
-          >
+          <Animated.View exiting={categoryExit} layout={categoryLayout}>
             {child}
           </Animated.View>
         ) : null,

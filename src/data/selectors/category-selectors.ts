@@ -11,7 +11,12 @@ import {
   type CategoryType,
 } from "../model/category-record";
 import type { JsonObject, JsonValue } from "../model/json";
-import { createRecordLookup } from "./transaction-selectors";
+import { parseRecordTimestampMs } from "../database/month-index";
+import { memoizeForDocument } from "./document-memo";
+import {
+  createRecordLookup,
+  selectPeriodTransactionCandidates,
+} from "./transaction-selectors";
 import { finishProjection } from "./cooperative";
 import { transactionMoney } from "../model/transaction-conversion";
 
@@ -21,38 +26,40 @@ const string = (value: JsonValue | undefined, fallback = "") =>
   typeof value === "string" ? value : fallback;
 
 export function selectCategories(document: BackupDocument): Category[] {
-  const records = document.categories.filter(
-    (record) => belongsToProfile(document, record) && identity(record),
-  );
-  const byId = createRecordLookup(records);
-  return records.map((record) => {
-    const parent = byId.get(categoryParent(record));
-    return {
-      id: identity(record),
-      name: string(record.name, "Untitled category"),
-      description: string(record.description),
-      type: (record.type === 1 ? 1 : record.type === 2 ? 2 : 0) as CategoryType,
-      parentId:
-        parent && identity(parent) !== identity(record)
-          ? identity(parent)
-          : null,
-      icon: string(record.icon, "shopping"),
-      iconPath:
-        /^[Mm]/.test(string(record.iconPath)) &&
-        string(record.iconPath).length <= 20_000
-          ? string(record.iconPath)
-          : null,
-      color: /^#[a-f\d]{6}$/i.test(string(record.color))
-        ? string(record.color)
-        : "#70d2eb",
-      isDefault: record.isDefault === true,
-    };
+  return memoizeForDocument(document, "categories", () => {
+    const records = document.categories.filter(
+      (record) => belongsToProfile(document, record) && identity(record),
+    );
+    const byId = createRecordLookup(records);
+    return records.map((record) => {
+      const parent = byId.get(categoryParent(record));
+      return {
+        id: identity(record),
+        name: string(record.name, "Untitled category"),
+        description: string(record.description),
+        type: (record.type === 1 ? 1 : record.type === 2 ? 2 : 0) as CategoryType,
+        parentId:
+          parent && identity(parent) !== identity(record)
+            ? identity(parent)
+            : null,
+        icon: string(record.icon, "shopping"),
+        iconPath:
+          /^[Mm]/.test(string(record.iconPath)) &&
+          string(record.iconPath).length <= 20_000
+            ? string(record.iconPath)
+            : null,
+        color: /^#[a-f\d]{6}$/i.test(string(record.color))
+          ? string(record.color)
+          : "#70d2eb",
+        isDefault: record.isDefault === true,
+      };
+    });
   });
 }
 
 export function selectTopLevelCategories(document: BackupDocument): Category[] {
-  return selectCategories(document).filter(
-    (category) => category.parentId === null,
+  return memoizeForDocument(document, "top-level-categories", () =>
+    selectCategories(document).filter((category) => category.parentId === null),
   );
 }
 
@@ -63,29 +70,48 @@ export function selectCategoryRootId(
   return categoryRootIdIn(selectCategories(document), categoryId);
 }
 
+const rootAncestorsCache = new WeakMap<readonly Category[], Map<string, string>>();
+const parentIdsCache = new WeakMap<readonly Category[], Set<string>>();
+
 /** Root ancestor of a category inside an already-selected list. */
 export function categoryRootIdIn(
   categories: readonly Category[],
   categoryId: string,
 ): string {
-  const byId = new Map(categories.map((category) => [category.id, category]));
-  let current = byId.get(categoryId);
-  if (!current) return "";
-  const visited = new Set<string>();
-  while (current.parentId && !visited.has(current.id)) {
-    visited.add(current.id);
-    const parent = byId.get(current.parentId);
-    if (!parent) break;
-    current = parent;
+  let rootMap = rootAncestorsCache.get(categories);
+  if (!rootMap) {
+    rootMap = new Map<string, string>();
+    const byId = new Map<string, Category>();
+    for (const category of categories) byId.set(category.id, category);
+    for (const category of categories) {
+      let current: Category | undefined = category;
+      const visited = new Set<string>();
+      while (current.parentId && !visited.has(current.id)) {
+        visited.add(current.id);
+        const parent = byId.get(current.parentId);
+        if (!parent) break;
+        current = parent;
+      }
+      rootMap.set(category.id, current.id);
+    }
+    rootAncestorsCache.set(categories, rootMap);
   }
-  return current.id;
+  return rootMap.get(categoryId) ?? "";
 }
 
 export function categoryHasChildren(
   categories: readonly Category[],
   categoryId: string,
 ): boolean {
-  return categories.some((category) => category.parentId === categoryId);
+  let parentIds = parentIdsCache.get(categories);
+  if (!parentIds) {
+    parentIds = new Set<string>();
+    for (const category of categories) {
+      if (category.parentId) parentIds.add(category.parentId);
+    }
+    parentIdsCache.set(categories, parentIds);
+  }
+  return parentIds.has(categoryId);
 }
 
 /**
@@ -163,9 +189,7 @@ function transactionValues(
       string(account?.currencyCode, context.fallback),
     ),
   ).toUpperCase();
-  const date = new Date(
-    string(record.date, string(record.createdAt)),
-  ).getTime();
+  const date = parseRecordTimestampMs(record);
   const captured = transactionMoney(record, context.fallback);
   return {
     categoryId: identity(category),
@@ -188,10 +212,34 @@ export function selectCategoryMonthlyTotals(
   document: BackupDocument,
   anchor = new Date(),
   categories = selectCategories(document),
-  transactions: readonly JsonObject[] = document.transactions,
+  transactions?: readonly JsonObject[],
 ): Map<string, CategoryTotal> {
+  const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+  const sourceTransactions =
+    transactions ?? selectPeriodTransactionCandidates(document, start, end);
+  if (!transactions && categories === selectCategories(document)) {
+    return memoizeForDocument(
+      document,
+      `category-monthly-totals:${anchor.getFullYear()}-${anchor.getMonth()}`,
+      () =>
+        finishProjection(
+          iterateCategoryMonthlyTotals(
+            document,
+            anchor,
+            categories,
+            sourceTransactions,
+          ),
+        ),
+    );
+  }
   return finishProjection(
-    iterateCategoryMonthlyTotals(document, anchor, categories, transactions),
+    iterateCategoryMonthlyTotals(
+      document,
+      anchor,
+      categories,
+      sourceTransactions,
+    ),
   );
 }
 
@@ -248,36 +296,39 @@ export function selectCategoryTransactions(
   document: BackupDocument,
   categoryId: string,
 ) {
-  const category = selectCategories(document).find(
-    (item) => item.id === categoryId,
-  );
-  if (!category) return [];
-  const family = categoryFamily(document.categories, categoryId);
-  const context = transactionContext(document);
-  return document.transactions
-    .flatMap((record, index) => {
+  return memoizeForDocument(document, `category-tx:${categoryId}`, () => {
+    const category = selectCategories(document).find(
+      (item) => item.id === categoryId,
+    );
+    if (!category) return [];
+    const family = categoryFamily(document.categories, categoryId);
+    const context = transactionContext(document);
+    const results = [];
+    for (let index = 0; index < document.transactions.length; index++) {
+      const record = document.transactions[index];
       const values = transactionValues(document, record, context);
       if (
         !values ||
         !family.has(values.categoryId) ||
         values.type !== category.type
       )
-        return [];
-      return [
-        {
-          ...values,
-          id: identity(record) || `display-${index}`,
-          name: string(record.name, "Untitled transaction"),
-          categoryName: string(
-            context.categories.get(String(record.category))?.name,
-            "Uncategorized",
-          ),
-          accountName: string(
-            context.accounts.get(String(record.account))?.name,
-            "No account",
-          ),
-        },
-      ];
-    })
-    .sort((a, b) => (b.timestamp ?? -Infinity) - (a.timestamp ?? -Infinity));
+        continue;
+      results.push({
+        ...values,
+        id: identity(record) || `display-${index}`,
+        name: string(record.name, "Untitled transaction"),
+        categoryName: string(
+          context.categories.get(String(record.category))?.name,
+          "Uncategorized",
+        ),
+        accountName: string(
+          context.accounts.get(String(record.account))?.name,
+          "No account",
+        ),
+      });
+    }
+    return results.sort(
+      (a, b) => (b.timestamp ?? -Infinity) - (a.timestamp ?? -Infinity),
+    );
+  });
 }

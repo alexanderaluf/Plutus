@@ -7,30 +7,26 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
   Animated,
   type FlatList,
   StyleSheet,
   View,
   type ListViewToken,
 } from "react-native";
-import Reanimated, {
-  Easing,
-  FadeInDown,
-  ReduceMotion,
-} from "react-native-reanimated";
+import Reanimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { getDocumentWindowState } from "@/data/database/month-index";
 import { localDateKey } from "@/data/model/recurring-record";
 import { useLocalData } from "@/data/local-data-provider";
 import {
   countActiveFilters,
-  createSearchContext,
   DEFAULT_SEARCH_FILTERS,
   searchTransactions,
+  selectSearchContext,
   type SearchFilters,
 } from "@/data/selectors/search-selectors";
-import { createTransactionProjector } from "@/data/selectors/transaction-selectors";
+import { selectTransactionProjector } from "@/data/selectors/transaction-selectors";
 import { useCategoryClock } from "@/features/categories/use-category-clock";
 import { VisibleFadeRow } from "@/features/home/components/visible-fade-row";
 import type { Transaction } from "@/features/home/types";
@@ -66,18 +62,12 @@ const HEADER_HEIGHT = TAB_HEADER_HEIGHT;
 // Tab bar clearance, matching TabPage.
 const BOTTOM_INSET = 106;
 // Page entry runs top to bottom: header sections first, then visible rows.
-const SECTION_DELAY = 45;
-const SECTION_STAGGER = 85;
-const ROWS_AFTER_MS = 260;
 const ROW_RISE = 14;
 const ROW_VIEWABILITY = { itemVisiblePercentThreshold: 1 };
 const rowKey = (row: SearchRow) => row.key;
 
-function sectionEntry(index: number) {
-  return FadeInDown.duration(420)
-    .delay(SECTION_DELAY + index * SECTION_STAGGER)
-    .easing(Easing.bezier(0.22, 1, 0.36, 1))
-    .reduceMotion(ReduceMotion.System);
+function sectionEntry(_index: number) {
+  return undefined;
 }
 
 export function SearchScreen() {
@@ -101,14 +91,18 @@ function ProfileSearch() {
   const query = useDeferredValue(filters.query);
 
   // Relation names are resolved once per document; typing only filters.
+  // Shared per committed document, so it is usually pre-warmed while idle.
   const context = useMemo(
-    () => createSearchContext(document, activeProfile.currencyCode),
-    // Unnamed relations are localized when the context is built.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () =>
+      selectSearchContext(
+        document,
+        activeProfile.currencyCode,
+        i18n.resolvedLanguage,
+      ),
     [document, activeProfile.currencyCode, i18n.resolvedLanguage],
   );
   const project = useMemo(
-    () => createTransactionProjector(document, i18n.resolvedLanguage),
+    () => selectTransactionProjector(document, i18n.resolvedLanguage),
     [document, i18n.resolvedLanguage],
   );
   const applied = useMemo(() => ({ ...filters, query }), [filters, query]);
@@ -162,7 +156,6 @@ function ProfileSearch() {
   const [rowFade] = useState(() =>
     createVisibleRowFade(Date.now, {
       entryOnly: true,
-      revealAfter: Date.now() + ROWS_AFTER_MS,
     }),
   );
   const onViewableItemsChanged = useCallback(
@@ -222,7 +215,10 @@ function ProfileSearch() {
           />
         </Reanimated.View>
 
-        {idle && context.facts.length ? (
+        {idle &&
+        (context.facts.length > 0 ||
+          (getDocumentWindowState(document)?.totalTransactionCount ?? 0) >
+            0) ? (
           <Reanimated.View entering={sectionEntry(1)}>
             <CategoryShortcuts
               categories={context.facets.categories}
@@ -232,7 +228,9 @@ function ProfileSearch() {
         ) : null}
 
         <Reanimated.View entering={sectionEntry(2)}>
-          {context.facts.length === 0 ? (
+          {context.facts.length === 0 &&
+          (getDocumentWindowState(document)?.totalTransactionCount ?? 0) ===
+            0 ? (
             <SearchEmptyState
               icon="receipt"
               title={t("search.results.noDataTitle")}
@@ -259,13 +257,8 @@ function ProfileSearch() {
     [filters, refinements, update, context, idle, outcome, groupByDay, t],
   );
   const footer = useMemo(
-    () =>
-      hasMore ? (
-        <View style={styles.footer}>
-          <ActivityIndicator accessibilityLabel={t("search.results.loading")} />
-        </View>
-      ) : undefined,
-    [hasMore, t],
+    () => (hasMore ? <View style={styles.footer} /> : undefined),
+    [hasMore],
   );
 
   return (
@@ -283,10 +276,10 @@ function ProfileSearch() {
           // About four screens stay mounted on each side of the viewport, so
           // reversing direction finds rows ready; farther rows are released.
           // Batches of 10 every 30ms fill ahead of a fling without long frames.
-          initialNumToRender={12}
-          maxToRenderPerBatch={10}
-          updateCellsBatchingPeriod={30}
-          windowSize={9}
+          initialNumToRender={16}
+          maxToRenderPerBatch={14}
+          updateCellsBatchingPeriod={16}
+          windowSize={7}
           // Add the next page two screens before the end: rows are local and
           // instant, so a normal scroll never reaches the spinner.
           onEndReached={loadMore}

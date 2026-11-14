@@ -1,5 +1,7 @@
 import { i18n } from "@/localization/i18n";
+import { parseRecordTimestampMs } from "../database/month-index";
 import type { BackupDocument } from "../model/backup-document";
+import { memoizeForDocument } from "./document-memo";
 import {
   categoryParent,
   createProfileMatcher,
@@ -9,7 +11,10 @@ import { financialMonth } from "../model/financial-month";
 import type { JsonObject } from "../model/json";
 import { localDateKey } from "../model/recurring-record";
 import { transactionMoney } from "../model/transaction-conversion";
-import { createRecordLookup } from "./transaction-selectors";
+import {
+  createRecordLookup,
+  selectPeriodTransactionCandidates,
+} from "./transaction-selectors";
 
 const UNASSIGNED_COLOR = "#A1A6B8";
 const string = (value: unknown, fallback = "") =>
@@ -51,6 +56,19 @@ export function selectConsumptionReport(
   now = new Date(),
   offset = 0,
 ) {
+  return memoizeForDocument(
+    document,
+    `consumption-report:${profileCurrency}:${now.getTime()}:${offset}:${i18n.resolvedLanguage ?? ""}`,
+    () => buildConsumptionReport(document, profileCurrency, now, offset),
+  );
+}
+
+function buildConsumptionReport(
+  document: BackupDocument,
+  profileCurrency: string,
+  now: Date,
+  offset: number,
+) {
   const period = financialMonth(
     now,
     document._local.monthStartDay,
@@ -84,19 +102,28 @@ export function selectConsumptionReport(
     return current;
   };
   const entries: ConsumptionEntry[] = [];
-  for (const record of document.transactions) {
+  const periodStartMs = period.start.getTime();
+  const periodEndMs = period.end.getTime();
+  const nowMs = now.getTime();
+  // Only this period's records are visited; the checks below still apply.
+  for (const record of selectPeriodTransactionCandidates(
+    document,
+    period.start,
+    period.end,
+  )) {
     if (!belongs(record) || record.type === 2) continue;
     const account = accountLookup.get(record.account);
     if (account?.isExcluded === true || (account && !belongs(account)))
       continue;
-    const date = new Date(string(record.date, string(record.createdAt)));
+    const ts = parseRecordTimestampMs(record);
     if (
-      !Number.isFinite(date.getTime()) ||
-      date < period.start ||
-      date >= period.end ||
-      date > now
+      !Number.isFinite(ts) ||
+      ts < periodStartMs ||
+      ts >= periodEndMs ||
+      ts > nowMs
     )
       continue;
+    const date = new Date(ts);
     if (typeof record.amount !== "number" || !Number.isFinite(record.amount))
       continue;
     const sourceCurrency = currency(
@@ -379,6 +406,21 @@ export function selectPeriodReview(
   now = new Date(),
   offset = 0,
   currencyCode = profileCurrency,
+) {
+  return memoizeForDocument(
+    document,
+    `period-review:${profileCurrency}:${currencyCode}:${now.getTime()}:${offset}:${i18n.resolvedLanguage ?? ""}`,
+    () =>
+      buildPeriodReview(document, profileCurrency, now, offset, currencyCode),
+  );
+}
+
+function buildPeriodReview(
+  document: BackupDocument,
+  profileCurrency: string,
+  now: Date,
+  offset: number,
+  currencyCode: string,
 ) {
   const current = selectConsumptionReport(
     document,

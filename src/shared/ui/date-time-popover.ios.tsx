@@ -11,6 +11,7 @@ import { View, useWindowDimensions, type ViewInstance } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { DateTimePopoverProps } from "./date-time-popover.types";
+import { useLazySheetMount } from "@/shared/lib/use-post-frame-ready";
 
 const PICKER_LAYOUT = {
   date: {
@@ -44,6 +45,7 @@ export function DateTimePopover({
   const pickerLayout = PICKER_LAYOUT[mode];
   const [isPlacementReady, setIsPlacementReady] = useState(false);
   const [opensBelow, setOpensBelow] = useState(true);
+  const hasMountedPopover = useLazySheetMount(isPresented);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,59 +87,61 @@ export function DateTimePopover({
         inset: 0,
       }}
     >
-      <Host
-        colorScheme={isDark ? "dark" : "light"}
-        seedColor={accentColor}
-        style={{
-          position: "absolute",
-          ...(opensBelow ? { bottom: 0 } : { top: 0 }),
-          left: "50%",
-          width: 1,
-          height: 1,
-        }}
-      >
-        <Popover
-          isPresented={isPresented && isPlacementReady}
-          attachmentAnchor={opensBelow ? "bottom" : "top"}
-          arrowEdge={opensBelow ? "top" : "bottom"}
-          onIsPresentedChange={(presented) => {
-            if (!presented) {
-              setIsPlacementReady(false);
-              if (isPresented) onDismiss();
-            }
+      {hasMountedPopover ? (
+        <Host
+          colorScheme={isDark ? "dark" : "light"}
+          seedColor={accentColor}
+          style={{
+            position: "absolute",
+            ...(opensBelow ? { bottom: 0 } : { top: 0 }),
+            left: "50%",
+            width: 1,
+            height: 1,
           }}
         >
-          <Popover.Trigger>
-            <Spacer modifiers={[frame({ width: 1, height: 1 })]} />
-          </Popover.Trigger>
-          <Popover.Content>
-            <VStack
-              spacing={12}
-              modifiers={[
-                frame(pickerLayout.frame),
-                padding({ all: POPOVER_PADDING }),
-              ]}
-            >
-              <DatePicker
-                title={title}
-                selection={value}
-                displayedComponents={[
-                  mode === "time" ? "hourAndMinute" : "date",
-                ]}
-                range={maximumDate ? { end: maximumDate } : undefined}
+          <Popover
+            isPresented={isPresented && isPlacementReady}
+            attachmentAnchor={opensBelow ? "bottom" : "top"}
+            arrowEdge={opensBelow ? "top" : "bottom"}
+            onIsPresentedChange={(presented) => {
+              if (!presented) {
+                setIsPlacementReady(false);
+                if (isPresented) onDismiss();
+              }
+            }}
+          >
+            <Popover.Trigger>
+              <Spacer modifiers={[frame({ width: 1, height: 1 })]} />
+            </Popover.Trigger>
+            <Popover.Content>
+              <VStack
+                spacing={12}
                 modifiers={[
-                  datePickerStyle(mode === "time" ? "wheel" : "graphical"),
-                  tint(accentColor),
-                  frame(pickerLayout.contentFrame),
-                  scaleEffect(pickerLayout.contentScale),
                   frame(pickerLayout.frame),
+                  padding({ all: POPOVER_PADDING }),
                 ]}
-                onDateChange={onValueChange}
-              />
-            </VStack>
-          </Popover.Content>
-        </Popover>
-      </Host>
+              >
+                <DatePicker
+                  title={title}
+                  selection={value}
+                  displayedComponents={[
+                    mode === "time" ? "hourAndMinute" : "date",
+                  ]}
+                  range={maximumDate ? { end: maximumDate } : undefined}
+                  modifiers={[
+                    datePickerStyle(mode === "time" ? "wheel" : "graphical"),
+                    tint(accentColor),
+                    frame(pickerLayout.contentFrame),
+                    scaleEffect(pickerLayout.contentScale),
+                    frame(pickerLayout.frame),
+                  ]}
+                  onDateChange={onValueChange}
+                />
+              </VStack>
+            </Popover.Content>
+          </Popover>
+        </Host>
+      ) : null}
     </View>
   );
 }

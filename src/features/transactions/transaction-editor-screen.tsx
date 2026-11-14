@@ -1,11 +1,37 @@
-import { DateTimePicker } from "@expo/ui/community/datetime-picker";
+import type { DateTimePickerProps } from "@expo/ui/community/datetime-picker";
+
+type ImagePickerModule = typeof import("expo-image-picker");
+let cachedDateTimePicker: ComponentType<DateTimePickerProps> | null = null;
+function LazyDateTimePicker(props: DateTimePickerProps) {
+  if (!cachedDateTimePicker) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedDateTimePicker = require("@expo/ui/community/datetime-picker")
+      .DateTimePicker as ComponentType<DateTimePickerProps>;
+  }
+  const Picker = cachedDateTimePicker;
+  return <Picker {...props} />;
+}
+let cachedImagePicker: ImagePickerModule | null = null;
+function getImagePicker(): ImagePickerModule {
+  if (!cachedImagePicker) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedImagePicker = require("expo-image-picker") as ImagePickerModule;
+  }
+  return cachedImagePicker;
+}
 import { uuid } from "expo";
 import { BlurTargetView } from "expo-blur";
-import * as ImagePicker from "expo-image-picker";
+import { useLazySheetMount, usePostFrameReady } from "@/shared/lib/use-post-frame-ready";
 import { useCalendars } from "expo-localization";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Animated,
@@ -45,12 +71,11 @@ import {
 import {
   selectAccounts,
   selectAppPreferences,
-  selectBudgets,
+  selectBudgetOptions,
   selectCategories,
 } from "@/data/selectors/document-selectors";
 import { selectExchangeRates } from "@/data/selectors/exchange-rate-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
-import { currencies } from "@/features/profile/data/currencies-data";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { useAppLocalization } from "@/localization/localization-provider";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
@@ -122,10 +147,13 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   );
   const [isEditingRecord, setIsEditingRecord] = useState(Boolean(editId));
 
-  const accounts = selectAccounts(document);
-  const categories = selectCategories(document);
-  const budgets = selectBudgets(document);
-  const preferences = selectAppPreferences(document);
+  const accounts = useMemo(() => selectAccounts(document), [document]);
+  const categories = useMemo(() => selectCategories(document), [document]);
+  const budgets = useMemo(() => selectBudgetOptions(document), [document]);
+  const preferences = useMemo(
+    () => selectAppPreferences(document),
+    [document],
+  );
   const presetBudget =
     !sourceId && params.budgetId
       ? budgets.find((budget) => budget.id === params.budgetId)
@@ -150,9 +178,11 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     mimeType: string;
   } | null>(null);
   const [datePickerMode, setDatePickerMode] = useState<DatePickerMode>(null);
+  const postFrameReady = usePostFrameReady();
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const actionMenuMounted = useLazySheetMount(Boolean(sourceId) && actionMenuOpen);
   const { bindSheet: bindActionSheet, ...actionSheetInitialPositionFix } =
-    useBottomSheetInitialPositionFix(actionMenuOpen);
+    useBottomSheetInitialPositionFix(actionMenuMounted ? actionMenuOpen : false);
   const [currencySheetOpen, setCurrencySheetOpen] = useState(false);
   const [currencyRateLoading, setCurrencyRateLoading] = useState(false);
   const [currencyRateError, setCurrencyRateError] = useState("");
@@ -236,8 +266,14 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   });
   const transactionNamePlaceholder = fallbackName || typeNamePlaceholder;
   const savedName = draft.name.trim() || fallbackName;
-  const pickerAccounts = orderAccountsForPicker(accounts);
-  const rootCategories = rankRootCategories(document, categories, draft.type);
+  const pickerAccounts = useMemo(
+    () => orderAccountsForPicker(accounts),
+    [accounts],
+  );
+  const rootCategories = useMemo(
+    () => rankRootCategories(document, categories, draft.type),
+    [document, categories, draft.type],
+  );
   const isReady = isTransactionDraftReady({
     draft,
     name: savedName,
@@ -246,51 +282,83 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
     rateLoading: currencyRateLoading,
   });
 
-  const budgetOptions: TransactionOption[] = budgets
-    .filter((budget) => budget.transactionType === draft.type)
-    .map((budget) => ({
-      id: budget.id,
-      name: budget.name,
-      description: t("transactions.common.budgetDescription", {
-        period: localizeBudgetPeriod(budget.period, t),
-        currency: budget.currencyCode,
-      }),
-      icon: budget.icon,
-      iconPath: budget.iconPath,
-      color: budget.color,
-    }));
+  const emptyOptions = useMemo<TransactionOption[]>(() => [], []);
+  const budgetOptions = useMemo<TransactionOption[]>(
+    () =>
+      postFrameReady
+        ? budgets
+            .filter((budget) => budget.transactionType === draft.type)
+            .map((budget) => ({
+              id: budget.id,
+              name: budget.name,
+              description: t("transactions.common.budgetDescription", {
+                period: localizeBudgetPeriod(budget.period, t),
+                currency: budget.currencyCode,
+              }),
+              icon: budget.icon,
+              iconPath: budget.iconPath,
+              color: budget.color,
+            }))
+        : emptyOptions,
+    [budgets, draft.type, emptyOptions, postFrameReady, t],
+  );
 
-  const labelOptions = recordOptions(
-    document.labels,
-    profileId,
-    document,
-    "check",
-    "#70d2eb",
-    t("transactions.common.untitledOption"),
+  const untitledOption = t("transactions.common.untitledOption");
+  const labelOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.labels,
+            profileId,
+            document,
+            "check",
+            "#70d2eb",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
   );
-  const loanOptions = recordOptions(
-    document.loans,
-    profileId,
-    document,
-    "credit-card",
-    "#f2c66d",
-    t("transactions.common.untitledOption"),
+  const loanOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.loans,
+            profileId,
+            document,
+            "credit-card",
+            "#f2c66d",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
   );
-  const placeOptions = recordOptions(
-    document.places,
-    profileId,
-    document,
-    "home",
-    "#78d6a3",
-    t("transactions.common.untitledOption"),
+  const placeOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.places,
+            profileId,
+            document,
+            "home",
+            "#78d6a3",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
   );
-  const personOptions = recordOptions(
-    document.peoples,
-    profileId,
-    document,
-    "account",
-    "#b89cf5",
-    t("transactions.common.untitledOption"),
+  const personOptions = useMemo(
+    () =>
+      postFrameReady
+        ? recordOptions(
+            document.peoples,
+            profileId,
+            document,
+            "account",
+            "#b89cf5",
+            untitledOption,
+          )
+        : emptyOptions,
+    [document, emptyOptions, postFrameReady, profileId, untitledOption],
   );
 
   const topControlsTranslateY = scrollY.interpolate({
@@ -481,7 +549,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
   async function pickReceipt() {
     Keyboard.dismiss();
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const result = await getImagePicker().launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: false,
         quality: 0.9,
@@ -802,6 +870,8 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   </>
                 )}
 
+                {postFrameReady ? (
+                  <>
                 <TransactionScheduleSection
                   activePickerMode={Platform.OS === "ios" ? datePickerMode : null}
                   date={safeOccurredAt}
@@ -816,7 +886,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 />
 
                 {Platform.OS === "android" && datePickerMode ? (
-                  <DateTimePicker
+                  <LazyDateTimePicker
                     accentColor={theme.accent}
                     display="default"
                     is24Hour={uses24Hour}
@@ -863,6 +933,8 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   onSelectPerson={(value) => change("personId", value)}
                   onSelectPlace={(value) => change("placeId", value)}
                 />
+                  </>
+                ) : null}
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
@@ -1030,6 +1102,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
         </View>
       </KeyboardAvoidingView>
 
+      {actionMenuMounted ? (
       <BottomSheet isOpen={actionMenuOpen} onOpenChange={setActionMenuOpen}>
         <AppBottomSheetPortal
           isOpen={actionMenuOpen}
@@ -1075,9 +1148,9 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
           </BottomSheet.Content>
         </AppBottomSheetPortal>
       </BottomSheet>
+      ) : null}
 
       <CurrencySelectorSheet
-        currencies={currencies}
         isOpen={currencySheetOpen}
         selectedCode={transactionCurrencyCode}
         onOpenChange={setCurrencySheetOpen}

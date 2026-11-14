@@ -1,5 +1,5 @@
 import { useThemeColor } from "heroui-native";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Appearance, processColor } from "react-native";
 import { Uniwind, useUniwind } from "uniwind";
 
@@ -73,11 +73,26 @@ export const ACCENT_OPTIONS: AccentOption[] = [
   },
 ];
 
+const MAX_ALPHA_CACHE_ENTRIES = 512;
+const alphaColorCache = new Map<string, string>();
+
 export function colorWithAlpha(color: string, alpha: number) {
   const normalized = color.trim();
+  const clamped = Math.min(Math.max(alpha, 0), 1);
+  const key = `${normalized}|${clamped}`;
+  const cached = alphaColorCache.get(key);
+  if (cached !== undefined) return cached;
+
   const processed = processColor(normalized);
-  if (typeof processed !== "number") return normalized;
-  return `rgba(${(processed >>> 16) & 255}, ${(processed >>> 8) & 255}, ${processed & 255}, ${Math.min(Math.max(alpha, 0), 1)})`;
+  const result =
+    typeof processed !== "number"
+      ? normalized
+      : `rgba(${(processed >>> 16) & 255}, ${(processed >>> 8) & 255}, ${processed & 255}, ${clamped})`;
+  if (alphaColorCache.size >= MAX_ALPHA_CACHE_ENTRIES) {
+    alphaColorCache.clear();
+  }
+  alphaColorCache.set(key, result);
+  return result;
 }
 
 export function useAppThemeColors() {
@@ -107,21 +122,38 @@ export function useAppThemeColors() {
     "success",
   ]);
   const { theme } = useUniwind();
+  const isDark = theme === "dark";
 
-  return {
-    accent,
-    accentForeground,
-    background,
-    border,
-    danger,
-    foreground,
-    isDark: theme === "dark",
-    muted,
-    success,
-    surface,
-    surfaceSecondary,
-    surfaceTertiary,
-  };
+  return useMemo(
+    () => ({
+      accent,
+      accentForeground,
+      background,
+      border,
+      danger,
+      foreground,
+      isDark,
+      muted,
+      success,
+      surface,
+      surfaceSecondary,
+      surfaceTertiary,
+    }),
+    [
+      accent,
+      accentForeground,
+      background,
+      border,
+      danger,
+      foreground,
+      isDark,
+      muted,
+      success,
+      surface,
+      surfaceSecondary,
+      surfaceTertiary,
+    ],
+  );
 }
 
 export function AppThemeController() {

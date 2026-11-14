@@ -8,7 +8,13 @@ import { BlurTargetView } from "expo-blur";
 import { uuid } from "expo";
 import { useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ComponentType,
+  type RefObject,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   Animated,
@@ -51,14 +57,32 @@ import {
   selectBankAccounts,
 } from "@/data/selectors/document-selectors";
 import { CurrencySelectorSheet } from "@/features/profile/components/currency-selector-sheet";
-import { currencies } from "@/features/profile/data/currencies-data";
+import { getCurrencySymbol } from "@/features/profile/data/currency-symbols";
 import { useProfiles } from "@/features/profile/profile-provider";
 import { useAppLocalization } from "@/localization/localization-provider";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
-import { IconPicker } from "@/shared/ui/icon-picker";
+import { usePostFrameReady } from "@/shared/lib/use-post-frame-ready";
+import type { IconSelection } from "@/shared/ui/record-icon";
+
+type IconPickerProps = {
+  selected: IconSelection;
+  onSelect: (icon: IconSelection) => void;
+  onClose: () => void;
+};
+
+let cachedIconPicker: ComponentType<IconPickerProps> | null = null;
+function LazyIconPicker(props: IconPickerProps) {
+  if (!cachedIconPicker) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedIconPicker = require("@/shared/ui/icon-picker")
+      .IconPicker as ComponentType<IconPickerProps>;
+  }
+  const Picker = cachedIconPicker;
+  return <Picker {...props} />;
+}
 import { ACCOUNT_COLORS, colorForeground } from "./account-options";
 import {
   AccountCurrencyChangeSheet,
@@ -78,7 +102,21 @@ import {
 } from "@/shared/ui/form-ui";
 import { AccountIcon } from "./components/account-icon";
 import { CardCompanyLogo } from "./components/card-company-logo";
-import { SavingsDetailsForm } from "./components/savings-details-form";
+type SavingsDetailsFormProps = import("react").ComponentProps<
+  typeof import("./components/savings-details-form").SavingsDetailsForm
+>;
+
+let cachedSavingsDetailsForm: ComponentType<SavingsDetailsFormProps> | null =
+  null;
+function LazySavingsDetailsForm(props: SavingsDetailsFormProps) {
+  if (!cachedSavingsDetailsForm) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedSavingsDetailsForm = require("./components/savings-details-form")
+      .SavingsDetailsForm as ComponentType<SavingsDetailsFormProps>;
+  }
+  const Form = cachedSavingsDetailsForm;
+  return <Form {...props} />;
+}
 import {
   createInitialAccountDraft,
   defaultIcons,
@@ -180,7 +218,6 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
   const color = /^#[a-f\d]{6}$/i.test(draft.color)
     ? draft.color
     : ACCOUNT_COLORS[0];
-  const currency = currencies.find((item) => item.code === draft.currencyCode);
   const bankAccounts = selectBankAccounts(document).filter(
     (account) => account.id !== editId,
   );
@@ -289,6 +326,8 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
     }
   }
 
+  const postFrameReady = usePostFrameReady();
+  const hasInteracted = useRef(false);
   const balanceLabel = isCard
     ? t("accounts.form.cardCurrentBalance", { currency: draft.currencyCode })
     : draft.accountType === "savings"
@@ -339,7 +378,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                 className="gap-3 px-4"
               >
                 {/* Identity: the tile is a live preview of the colour and icon. */}
-                <Reanimated.View layout={SECTION_LAYOUT}>
+                <View>
                   <FormCard>
                     <View className="flex-row items-center gap-3.5">
                       <Pressable
@@ -494,10 +533,10 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                       )}
                     </View>
                   </FormCard>
-                </Reanimated.View>
+                </View>
 
                 {/* Balance: the one number every account needs, set large. */}
-                <Reanimated.View layout={SECTION_LAYOUT}>
+                <View>
                   <FormCard>
                     <View className="gap-2.5">
                       <FormLabel>{balanceLabel}</FormLabel>
@@ -579,7 +618,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                           })}
                         >
                           <Text className="font-manrope-bold text-[15px] text-foreground">
-                            {currency?.symbol ?? draft.currencyCode}
+                            {getCurrencySymbol(draft.currencyCode)}
                           </Text>
                           <Text className="font-manrope-semibold text-[12px] text-muted">
                             {draft.currencyCode}
@@ -632,76 +671,80 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                       </>
                     )}
                   </FormCard>
-                </Reanimated.View>
+                </View>
 
-                {/* Details for the selected type only. */}
-                <Reanimated.View
-                  key={draft.accountType}
-                  entering={SECTION_ENTER}
-                  layout={SECTION_LAYOUT}
-                  className="gap-3"
-                >
-                  {draft.accountType === "bank" && (
-                    <FormCard title={t("accounts.form.bankDetails")} icon="bank">
-                      <FormField label={t("accounts.form.bankName")}>
-                        <FieldInput
-                          accessibilityLabel={t("accounts.form.bankName")}
-                          placeholder={t("accounts.form.bankNamePlaceholder")}
-                          maxLength={100}
-                          value={draft.bankName}
-                          onChangeText={(value) => change("bankName", value)}
+                {postFrameReady ? (
+                  <>
+                    {/* Details for the selected type only. */}
+                    <Reanimated.View
+                      key={draft.accountType}
+                      entering={hasInteracted.current ? SECTION_ENTER : undefined}
+                      layout={SECTION_LAYOUT}
+                      className="gap-3"
+                    >
+                      {draft.accountType === "bank" && (
+                        <FormCard title={t("accounts.form.bankDetails")} icon="bank">
+                          <FormField label={t("accounts.form.bankName")}>
+                            <FieldInput
+                              accessibilityLabel={t("accounts.form.bankName")}
+                              placeholder={t("accounts.form.bankNamePlaceholder")}
+                              maxLength={100}
+                              value={draft.bankName}
+                              onChangeText={(value) => change("bankName", value)}
+                            />
+                          </FormField>
+                          {accountNumberField}
+                        </FormCard>
+                      )}
+                      {isCard && (
+                        <CardDetails
+                          draft={draft}
+                          bankAccounts={bankAccounts}
+                          linkedBankAccount={linkedBankAccount}
+                          onChange={change}
+                          accountNumberField={accountNumberField}
                         />
-                      </FormField>
-                      {accountNumberField}
-                    </FormCard>
-                  )}
-                  {isCard && (
-                    <CardDetails
-                      draft={draft}
-                      bankAccounts={bankAccounts}
-                      linkedBankAccount={linkedBankAccount}
-                      onChange={change}
-                      accountNumberField={accountNumberField}
-                    />
-                  )}
-                  {draft.accountType === "savings" && (
-                    <SavingsDetailsForm
-                      balance={savingsBalance}
-                      currencyCode={draft.currencyCode}
-                      value={draft.savingsDetails}
-                      onChange={(savingsDetails) =>
-                        change("savingsDetails", savingsDetails)
-                      }
-                    />
-                  )}
-                  {(draft.accountType === "cash" ||
-                    draft.accountType === "savings") && (
-                    <FormCard>{accountNumberField}</FormCard>
-                  )}
-                </Reanimated.View>
+                      )}
+                      {draft.accountType === "savings" && (
+                        <LazySavingsDetailsForm
+                          balance={savingsBalance}
+                          currencyCode={draft.currencyCode}
+                          value={draft.savingsDetails}
+                          onChange={(savingsDetails) =>
+                            change("savingsDetails", savingsDetails)
+                          }
+                        />
+                      )}
+                      {(draft.accountType === "cash" ||
+                        draft.accountType === "savings") && (
+                        <FormCard>{accountNumberField}</FormCard>
+                      )}
+                    </Reanimated.View>
 
-                <Reanimated.View layout={SECTION_LAYOUT}>
-                  <FormCard>
-                    <SwitchRow
-                      icon="check"
-                      title={t("accounts.form.defaultAccount")}
-                      description={t("accounts.form.defaultAccountHelp")}
-                      value={draft.isDefault}
-                      disabled={isSaving}
-                      onChange={(value) => change("isDefault", value)}
-                    />
-                    <FormDivider />
-                    <SwitchRow
-                      icon="eye-off"
-                      tone="danger"
-                      title={t("accounts.form.excludeAccount")}
-                      description={t("accounts.form.excludeAccountHelp")}
-                      value={draft.isExcluded}
-                      disabled={isSaving}
-                      onChange={(value) => change("isExcluded", value)}
-                    />
-                  </FormCard>
-                </Reanimated.View>
+                    <View>
+                      <FormCard>
+                        <SwitchRow
+                          icon="check"
+                          title={t("accounts.form.defaultAccount")}
+                          description={t("accounts.form.defaultAccountHelp")}
+                          value={draft.isDefault}
+                          disabled={isSaving}
+                          onChange={(value) => change("isDefault", value)}
+                        />
+                        <FormDivider />
+                        <SwitchRow
+                          icon="eye-off"
+                          tone="danger"
+                          title={t("accounts.form.excludeAccount")}
+                          description={t("accounts.form.excludeAccountHelp")}
+                          value={draft.isExcluded}
+                          disabled={isSaving}
+                          onChange={(value) => change("isExcluded", value)}
+                        />
+                      </FormCard>
+                    </View>
+                  </>
+                ) : null}
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
@@ -755,6 +798,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               blurTarget={blurTargetRef}
               selected={draft.accountType}
               onChange={(type) => {
+                hasInteracted.current = true;
                 change("accountType", type);
                 if (!iconChosen.current) {
                   setDraft((current) => ({
@@ -805,7 +849,6 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
         </View>
       </KeyboardAvoidingView>
       <CurrencySelectorSheet
-        currencies={currencies}
         isOpen={picker === "currency"}
         selectedCode={draft.currencyCode}
         onOpenChange={(open) => {
@@ -847,7 +890,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
         }}
       />
       {picker === "icon" && (
-        <IconPicker
+        <LazyIconPicker
           selected={{ name: draft.icon, pathData: draft.iconPath }}
           onClose={() => setPicker(null)}
           onSelect={(icon) => {
