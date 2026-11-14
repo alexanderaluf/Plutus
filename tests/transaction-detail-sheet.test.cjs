@@ -94,6 +94,12 @@ function mountSheet(language, nativeRTL) {
       useAmountVisibility: () => ({ hidden: false, toggle: async () => {} }),
       useAmountsHidden: () => false,
     },
+    "uniwind": { useResolveClassNames: () => ({}) },
+    "@/shared/lib/number-scramble": {},
+    "./amount-privacy": {
+      useAmountPrivacy: () => null,
+      useAmountPrivacyPage: () => null,
+    },
     "@/shared/theme/app-theme": {
       useAppThemeColors: () => ({ danger: "#ff0000", success: "#00ff00", accent: "#00ffff" }),
       colorWithAlpha: (color) => color,

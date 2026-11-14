@@ -40,10 +40,14 @@ export function TabHeader() {
   return (
     <View className="flex-row items-center justify-between pt-3">
       <View className="flex-1 pe-3">
-        <Text className="font-manrope-medium text-xs uppercase tracking-widest text-muted">
+        <Text
+          privacyAnimation={false}
+          className="font-manrope-medium text-xs uppercase tracking-widest text-muted"
+        >
           {date}
         </Text>
         <Text
+          privacyAnimation={false}
           accessibilityRole="header"
           className="mt-1 font-manrope-bold text-xl text-foreground"
           numberOfLines={1}

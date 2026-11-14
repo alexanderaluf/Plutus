@@ -20,6 +20,10 @@ import { ProjectionPrewarm } from "./projection-prewarm";
 import { TabActionProvider, useTabActionRegistry } from "./tab-actions";
 import type { TabId } from "./types";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
+import {
+  AmountPrivacyPage,
+  AmountPrivacyProvider,
+} from "@/shared/ui/amount-privacy";
 
 /**
  * Visited tabs stay mounted, so switching back is instant: no remount, no
@@ -42,7 +46,9 @@ const renderTab: NonNullable<TabSlotProps["renderFn"]> = (
       freezeOnBlur
       style={[styles.screen, isFocused ? styles.focused : styles.unfocused]}
     >
-      {descriptor.render()}
+      <AmountPrivacyPage id={descriptor.route.key ?? descriptor.route.name}>
+        {descriptor.render()}
+      </AmountPrivacyPage>
     </Screen>
   );
 };
@@ -101,7 +107,9 @@ function TabShellContent() {
       <View style={{ flex: 1 }}>
         <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
           <TabActionProvider registry={tabActions}>
-            <TabSlot renderFn={renderTab} />
+            <AmountPrivacyProvider>
+              <TabSlot renderFn={renderTab} />
+            </AmountPrivacyProvider>
           </TabActionProvider>
         </BlurTargetView>
 
