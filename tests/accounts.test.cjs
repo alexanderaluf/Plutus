@@ -58,6 +58,8 @@ const {
   selectAccountDraft,
   selectAccountTransactions,
   selectAccountTransactionCount,
+  selectAccountActivity,
+  selectAccountTimeline,
   filterAccountTransactions,
   accountPeriodRange,
   shiftAccountPeriodAnchor,
@@ -976,6 +978,72 @@ test("monthly account transactions use calendar months for other accounts and ca
     );
     assert.equal(transactions.length, 4, "all history remains available");
   }
+});
+
+test("account activity lists the period newest first and totals the money that moved the account", () => {
+  const current = createDefaultBackup();
+  const account = current.accounts[0];
+  account.currencyCode = "ILS";
+  const at = (day, hour = 12) => new Date(2026, 8, day, hour).toISOString();
+  current.transactions = [
+    { uuid: "salary", account: account.uuid, type: 1, amount: 1000, date: at(1) },
+    // Paid in USD; accountAmount is what left the ILS balance.
+    {
+      uuid: "usd-purchase",
+      account: account.uuid,
+      type: 0,
+      amount: 10,
+      currencyCode: "USD",
+      accountAmount: 37,
+      accountCurrencyCode: "ILS",
+      date: at(3),
+    },
+    // Legacy record in a foreign currency without an account amount.
+    {
+      uuid: "eur-legacy",
+      account: account.uuid,
+      type: 0,
+      amount: 5,
+      currencyCode: "EUR",
+      date: at(3, 9),
+    },
+    { uuid: "transfer", account: account.uuid, type: 2, amount: 300, date: at(4) },
+    { uuid: "same-time-a", account: account.uuid, type: 0, amount: 1, date: at(5) },
+    { uuid: "same-time-b", account: account.uuid, type: 0, amount: 2, date: at(5) },
+    { uuid: "previous", account: account.uuid, type: 0, amount: 50, date: new Date(2026, 7, 20).toISOString() },
+    { uuid: "undated", account: account.uuid, type: 0, amount: 4 },
+    { uuid: "other-account", account: "someone-else", type: 0, amount: 999, date: at(2) },
+  ];
+  const september = {
+    start: new Date(2026, 8, 1),
+    end: new Date(2026, 9, 1),
+  };
+  const activity = selectAccountActivity(current, account.uuid, september);
+  assert.deepEqual(
+    activity.entries.map((entry) => entry.id),
+    ["same-time-a", "same-time-b", "transfer", "usd-purchase", "eur-legacy", "salary"],
+    "newest first; equal timestamps keep document order",
+  );
+  assert.deepEqual(activity.totals, [
+    { currencyCode: "ILS", income: 1000, expense: 40 },
+    { currencyCode: "EUR", income: 0, expense: 5 },
+  ]);
+  const all = selectAccountActivity(current, account.uuid, null);
+  assert.equal(all.entries.length, 8, "all history includes undated records");
+  assert.equal(all.entries.at(-1).id, "undated", "undated records trail");
+  assert.equal(
+    selectAccountActivity(current, account.uuid, september),
+    activity,
+    "memoized per committed document and range",
+  );
+  assert.equal(
+    selectAccountTimeline(current, account.uuid),
+    selectAccountTimeline(current, account.uuid),
+  );
+  assert.deepEqual(selectAccountActivity(current, "missing", null), {
+    entries: [],
+    totals: [],
+  });
 });
 
 test("Monthly card records include the payout day through the day before the next payout", () => {

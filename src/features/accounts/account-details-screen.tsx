@@ -6,13 +6,22 @@ import type { BackupDocument } from "@/data/model/backup-document";
 import type { JsonObject } from "@/data/model/json";
 import {
   accountPeriodRange,
+  selectAccountActivity,
   selectAccounts,
+  selectAccountTimeline,
   selectAccountTransactionCount,
-  selectAccountTransactions,
   shiftAccountPeriodAnchor,
 } from "@/data/selectors/document-selectors";
-import { useAppLocalization } from "@/localization/localization-provider";
-import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
+import {
+  createHomeTransactionRows,
+  type HomeDateRow,
+  type HomeTransactionRow,
+} from "@/data/selectors/home-section-selectors";
+import { selectTransactionProjector } from "@/data/selectors/transaction-selectors";
+import { TransactionDateHeader } from "@/features/home/components/transaction-date-header";
+import { IndexedTransactionRow } from "@/features/home/components/transaction-list";
+import type { Transaction } from "@/features/home/types";
+import { TransactionDetailSheet } from "@/features/transactions/transaction-detail-sheet";
 import { useAppDate } from "@/shared/lib/use-app-date";
 import { useLocalDayClock } from "@/shared/lib/use-local-day-clock";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
@@ -34,20 +43,48 @@ import { useBottomSheetInitialPositionFix } from "@/shared/ui/use-bottom-sheet-i
 import { BlurTargetView } from "expo-blur";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button } from "heroui-native";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { Animated, Platform, Pressable, StyleSheet, View, type ViewInstance } from "react-native";
+import {
+  Animated,
+  Platform,
+  Pressable,
+  StyleSheet,
+  View,
+  type ViewInstance,
+} from "react-native";
 import { Easing } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AccountCard } from "./components/account-card";
-import { AccountPeriodSelector } from "./components/account-period-selector";
+import { AccountActivityCard } from "./components/details/account-activity-card";
+import { AccountDetailsHero } from "./components/details/account-details-hero";
+import { AccountPeriodNavigator } from "./components/details/account-period-navigator";
+import {
+  AccountRangeDock,
+  type AccountRangeChoice,
+} from "./components/details/account-range-dock";
+import { AccountStatusCard } from "./components/details/account-status-card";
 import type { AccountPeriod } from "./types";
 
+/** Timeline rows rendered before the next page is requested. */
+const TIMELINE_PAGE = 40;
+
+type TimelineRow = HomeDateRow | HomeTransactionRow;
+
+/**
+ * Account details read top to bottom as now → next → this period → each
+ * transaction, newest first. One navigator sets the period for both the
+ * summary and the list; the bottom dock sets how long a period is.
+ */
 export function AccountDetailsScreen() {
-  const { formatCurrency } = useCurrencyFormat();
-  const { formatDate, formatDateRange } = useAppDate();
-  const { t } = useTranslation();
-  const { isRTL } = useAppLocalization();
+  const { formatDate, formatDayMonth, formatDateRange } = useAppDate();
+  const { t, i18n } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { document, ensurePeriodLoaded, updateDocument } = useLocalData();
   const windowState = getDocumentWindowState(document);
@@ -103,6 +140,10 @@ export function AccountDetailsScreen() {
   const [selectedAnchor, setAnchor] = useState<Date | null>(null);
   const anchor = selectedAnchor ?? now;
   const [allTime, setAllTime] = useState(false);
+  const [page, setPage] = useState({ key: "", limit: TIMELINE_PAGE });
+  const [selectedTransactionId, setSelectedTransactionId] = useState<
+    string | null
+  >(null);
   const [menu, setMenu] = useState<"actions" | "confirm" | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuReady = useRef(Platform.OS === "ios");
@@ -123,56 +164,213 @@ export function AccountDetailsScreen() {
     () => selectAccountTransactionCount(scopedDocument, id),
     [scopedDocument, id],
   );
-  const visible = useMemo(
-    () =>
-      selectAccountTransactions(
-        scopedDocument,
-        id,
-        allTime ? undefined : { period, anchor },
-      ),
-    [scopedDocument, id, allTime, period, anchor],
-  );
-  const totals = useMemo(
-    () =>
-      [...new Set(visible.map((item) => item.currencyCode))].map(
-        (currency) => ({
-          currency,
-          income: visible
-            .filter(
-              (item) =>
-                item.currencyCode === currency && item.type === "income",
-            )
-            .reduce((sum, item) => sum + item.amount, 0),
-          expense: visible
-            .filter(
-              (item) =>
-                item.currencyCode === currency && item.type === "expense",
-            )
-            .reduce((sum, item) => sum + item.amount, 0),
-        }),
-      ),
-    [visible],
-  );
+
+  // A card with a payday steps by billing cycle rather than calendar month.
   const paymentDay = account?.kind === "credit" ? account.paymentDay : null;
-  const { start, end } = accountPeriodRange(period, anchor, paymentDay);
-  const startTime = start.getTime();
-  const endTime = end.getTime();
+  const bounds = useMemo(() => {
+    const current = accountPeriodRange(period, anchor, paymentDay);
+    const previous = accountPeriodRange(
+      period,
+      shiftAccountPeriodAnchor(period, anchor, -1, paymentDay),
+      paymentDay,
+    );
+    const nowTime = now.getTime();
+    const startTime = current.start.getTime();
+    const endTime = current.end.getTime();
+    const isCurrent = nowTime >= startTime && nowTime < endTime;
+    const previousStartTime = previous.start.getTime();
+    return {
+      startTime,
+      endTime,
+      isCurrent,
+      previousStartTime,
+      // A running period is compared with the same stretch of the previous
+      // one, so the first days of a month are not judged against a whole month.
+      previousEndTime: isCurrent
+        ? Math.min(
+            previous.end.getTime(),
+            previousStartTime + (nowTime - startTime),
+          )
+        : previous.end.getTime(),
+    };
+  }, [period, anchor, paymentDay, now]);
+  const { startTime, endTime, isCurrent, previousStartTime, previousEndTime } =
+    bounds;
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+
   useLayoutEffect(() => {
     if (!allTime && isPartial) {
       void ensurePeriodLoaded?.(new Date(startTime), new Date(endTime));
     }
   }, [ensurePeriodLoaded, allTime, isPartial, startTime, endTime]);
-  const periodLabel = {
-    Daily: t("accounts.details.periods.daily"),
-    Weekly: t("accounts.details.periods.weekly"),
-    Monthly: t("accounts.details.periods.monthly"),
-    Yearly: t("accounts.details.periods.yearly"),
-  }[period];
-  const dateLabel = allTime
-    ? t("accounts.details.allTransactionHistory")
-    : period === "Daily"
-      ? formatDate(start)
-      : formatDateRange(start, new Date(end.getTime() - 1));
+  useEffect(() => {
+    if (!allTime && isPartial) {
+      void ensurePeriodLoaded?.(
+        new Date(previousStartTime),
+        new Date(previousEndTime),
+      );
+    }
+  }, [ensurePeriodLoaded, allTime, isPartial, previousStartTime, previousEndTime]);
+
+  const activity = useMemo(
+    () =>
+      selectAccountActivity(
+        scopedDocument,
+        id,
+        allTime
+          ? null
+          : { start: new Date(startTime), end: new Date(endTime) },
+      ),
+    [scopedDocument, id, allTime, startTime, endTime],
+  );
+  const previousActivity = useMemo(
+    () =>
+      allTime || previousEndTime <= previousStartTime
+        ? null
+        : selectAccountActivity(scopedDocument, id, {
+            start: new Date(previousStartTime),
+            end: new Date(previousEndTime),
+          }),
+    [scopedDocument, id, allTime, previousStartTime, previousEndTime],
+  );
+
+  const accountCurrency = account?.currencyCode ?? "USD";
+  const primaryTotal = activity.totals.find(
+    (total) => total.currencyCode === accountCurrency,
+  ) ?? { currencyCode: accountCurrency, income: 0, expense: 0 };
+  const otherTotals = activity.totals.filter(
+    (total) => total.currencyCode !== accountCurrency,
+  );
+  const previousExpense =
+    previousActivity?.totals.find(
+      (total) => total.currencyCode === accountCurrency,
+    )?.expense ?? 0;
+  const comparison =
+    previousExpense > 0
+      ? {
+          percent:
+            ((primaryTotal.expense - previousExpense) / previousExpense) * 100,
+          soFar: isCurrent,
+        }
+      : null;
+
+  const pageKey = allTime ? "all" : `${period}:${startTime}:${endTime}`;
+  const limit = page.key === pageKey ? page.limit : TIMELINE_PAGE;
+  const rows = useMemo<TimelineRow[]>(
+    () => createHomeTransactionRows(activity.entries.slice(0, limit)),
+    [activity, limit],
+  );
+  const loadMore = useCallback(() => {
+    if (limit >= activity.entries.length) return;
+    setPage({ key: pageKey, limit: limit + TIMELINE_PAGE });
+  }, [limit, activity, pageKey]);
+
+  const project = selectTransactionProjector(
+    scopedDocument,
+    i18n.resolvedLanguage,
+  );
+  const onTransactionPress = useCallback(
+    (transaction: Transaction) => setSelectedTransactionId(transaction.id),
+    [],
+  );
+  const selectedTransaction = useMemo(() => {
+    if (!selectedTransactionId) return null;
+    const entry = selectAccountTimeline(scopedDocument, id).find(
+      (item) => item.id === selectedTransactionId,
+    );
+    return entry ? project(entry) : null;
+  }, [selectedTransactionId, scopedDocument, id, project]);
+
+  const renderRow = useCallback(
+    ({ item, index }: { item: TimelineRow; index: number }) =>
+      item.kind === "date" ? (
+        <TransactionDateHeader
+          timestamp={item.timestamp}
+          now={now}
+          isFirst={index === 0}
+        />
+      ) : (
+        <View
+          className={`border-x border-border bg-surface px-4 ${
+            item.first ? "rounded-t-[24px] border-t pt-1" : ""
+          } ${item.last ? "rounded-b-[24px] border-b pb-1" : ""}`}
+          style={{ borderCurve: "continuous" }}
+        >
+          <IndexedTransactionRow
+            entry={item.entry}
+            project={project}
+            showBorder={!item.last}
+            showAccountName={false}
+            onPress={onTransactionPress}
+          />
+        </View>
+      ),
+    [now, project, onTransactionPress],
+  );
+
+  const language = i18n.resolvedLanguage;
+  const lastDay = new Date(endTime - 1);
+  const withYear = (date: Date) =>
+    date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" as const };
+  let periodTitle: string;
+  let periodSubtitle: string;
+  if (allTime) {
+    let oldest: number | null = null;
+    for (let i = activity.entries.length - 1; i >= 0; i--) {
+      if (Number.isFinite(activity.entries[i].timestamp)) {
+        oldest = activity.entries[i].timestamp;
+        break;
+      }
+    }
+    periodTitle = t("accounts.details.navigator.allHistory");
+    periodSubtitle =
+      oldest === null
+        ? t("accounts.details.navigator.noDates")
+        : t("accounts.details.navigator.since", {
+            date: formatDate(new Date(oldest)),
+          });
+  } else if (period === "Daily") {
+    const yesterday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - 1,
+    ).getTime();
+    periodTitle = isCurrent
+      ? t("accounts.details.navigator.today")
+      : startTime === yesterday
+        ? t("accounts.details.navigator.yesterday")
+        : start.toLocaleDateString(language, { weekday: "long" });
+    periodSubtitle = formatDate(start);
+  } else {
+    periodSubtitle = formatDateRange(start, lastDay);
+    if (period === "Weekly") {
+      periodTitle = isCurrent
+        ? t("accounts.details.navigator.thisWeek")
+        : `${formatDayMonth(start)} – ${formatDayMonth(lastDay)}`;
+    } else if (period === "Monthly" && paymentDay != null) {
+      periodTitle = isCurrent
+        ? t("accounts.details.navigator.thisCycle")
+        : t("accounts.details.navigator.cycle", {
+            month: end.toLocaleDateString(language, {
+              month: "long",
+              ...withYear(end),
+            }),
+          });
+    } else if (period === "Monthly") {
+      periodTitle = isCurrent
+        ? t("accounts.details.navigator.thisMonth")
+        : start.toLocaleDateString(language, {
+            month: "long",
+            ...withYear(start),
+          });
+    } else {
+      periodTitle = isCurrent
+        ? t("accounts.details.navigator.thisYear")
+        : String(start.getFullYear());
+    }
+  }
+
   function openMenu() {
     if (menuRequested.current || deletingRef.current || menuClosing.current)
       return;
@@ -196,6 +394,21 @@ export function AccountDetailsScreen() {
   function movePeriod(direction: number) {
     setAnchor(shiftAccountPeriodAnchor(period, anchor, direction, paymentDay));
     setAllTime(false);
+  }
+
+  function chooseRange(choice: AccountRangeChoice) {
+    if (choice === "All") {
+      setAllTime(true);
+      return;
+    }
+    setPeriod(choice);
+    setAnchor(null);
+    setAllTime(false);
+  }
+
+  function goBack() {
+    if (router.canGoBack?.()) router.back();
+    else router.dismissTo("/accounts");
   }
 
   function editAccount() {
@@ -251,212 +464,152 @@ export function AccountDetailsScreen() {
       </EdgeToEdgeLayout>
     );
 
+  const periodCount = activity.entries.length;
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
         <Animated.FlatList
-          data={visible}
-          keyExtractor={(item) => item.id}
-          initialNumToRender={16}
-          maxToRenderPerBatch={14}
-          updateCellsBatchingPeriod={16}
+          data={rows}
+          keyExtractor={(row) => `${row.kind}:${row.id}`}
+          renderItem={renderRow}
+          initialNumToRender={14}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={32}
           windowSize={7}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.6}
           contentContainerStyle={{
             paddingHorizontal: 16,
-            paddingBottom: 110 + insets.bottom,
+            paddingBottom: 124 + insets.bottom,
           }}
           onScroll={onScroll}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <View style={{ gap: 20 }}>
+            <View>
               <CollapsingHeaderSpacer />
-              <AccountCard account={account} showDetails />
-              <View
-                style={[styles.summary, { backgroundColor: theme.surface }]}
-              >
-                <Text className="font-manrope-bold text-base text-accent">
-                  {allTime
-                    ? t("accounts.details.allTime")
-                    : t("accounts.details.activity", { period: periodLabel })}
-                </Text>
-                {(totals.length
-                  ? totals
-                  : [{ currency: account.currencyCode, income: 0, expense: 0 }]
-                ).map((total) => (
-                  <View key={total.currency} style={styles.row}>
-                    <View style={{ flex: 1, gap: 6 }}>
-                      <Text className="text-sm text-muted">
-                        {t("accounts.details.incomeCurrency", {
-                          currency: total.currency,
-                        })}
-                      </Text>
-                      <Text className="font-manrope-bold text-lg text-[#82d6a1]">
-                        {formatCurrency(total.income, total.currency)}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, gap: 6 }}>
-                      <Text className="text-sm text-muted">
-                        {t("accounts.details.expenseCurrency", {
-                          currency: total.currency,
-                        })}
-                      </Text>
-                      <Text className="font-manrope-bold text-lg text-[#ef8175]">
-                        {formatCurrency(total.expense, total.currency)}
+              <View style={styles.sections}>
+                <AccountDetailsHero account={account} />
+                <AccountStatusCard account={account} />
+                <View style={styles.periodGroup}>
+                  <AccountPeriodNavigator
+                    title={periodTitle}
+                    subtitle={periodSubtitle}
+                    showArrows={!allTime}
+                    canGoNext={!isCurrent && startTime <= now.getTime()}
+                    onPrevious={() => movePeriod(-1)}
+                    onNext={() => movePeriod(1)}
+                  />
+                  <AccountActivityCard
+                    primary={primaryTotal}
+                    others={otherTotals}
+                    comparison={comparison}
+                  />
+                </View>
+                {periodCount > 0 ? (
+                  <View className="flex-row items-center gap-2 px-1 pb-1 pt-2">
+                    <Text
+                      accessibilityRole="header"
+                      numberOfLines={1}
+                      className="min-w-0 shrink font-manrope-bold text-[19px] leading-[24px] tracking-[-0.2px] text-foreground"
+                    >
+                      {t("accounts.details.timeline")}
+                    </Text>
+                    <View className="shrink-0 rounded-full border border-border/70 bg-surface px-2.5 py-0.5">
+                      <Text
+                        className="font-manrope-semibold text-[11px] leading-[15px] text-muted"
+                        style={{ fontVariant: ["tabular-nums"] }}
+                      >
+                        {periodCount.toLocaleString(language)}
                       </Text>
                     </View>
                   </View>
-                ))}
-              </View>
-              <View style={styles.row}>
-                <Text
-                  accessibilityRole="header"
-                  className="flex-1 font-manrope-bold text-lg text-foreground"
-                >
-                  {t("accounts.details.transactions", {
-                    count: visible.length,
-                  })}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: allTime }}
-                  onPress={() => setAllTime(true)}
-                  style={styles.iconButton}
-                >
-                  <Text className="font-manrope-semibold text-sm text-accent">
-                    {t("accounts.details.allHistory")}
-                  </Text>
-                </Pressable>
-              </View>
-              <View style={[styles.row, { marginBottom: 12 }]}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("accounts.details.previousPeriod")}
-                  onPress={() => movePeriod(-1)}
-                  style={styles.iconButton}
-                >
-                  <Text className="text-xl text-foreground">
-                    {isRTL ? "›" : "‹"}
-                  </Text>
-                </Pressable>
-                <Text className="flex-1 text-center font-sans text-sm text-muted">
-                  {dateLabel}
-                </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t("accounts.details.nextPeriod")}
-                  onPress={() => movePeriod(1)}
-                  style={styles.iconButton}
-                >
-                  <Text className="text-xl text-foreground">
-                    {isRTL ? "‹" : "›"}
-                  </Text>
-                </Pressable>
+                ) : null}
               </View>
             </View>
           }
-          renderItem={({ item }) => (
-            <View
-              style={[styles.transaction, { borderBottomColor: theme.border }]}
-            >
-              <FilledIcon
-                name={
-                  item.type === "income"
-                    ? "arrow-bottom-left"
-                    : item.type === "expense"
-                      ? "arrow-top-right"
-                      : "swap-horizontal"
-                }
-                color={
-                  item.type === "income"
-                    ? "#82d6a1"
-                    : item.type === "expense"
-                      ? theme.danger
-                      : theme.accent
-                }
-                size={24}
-              />
-              <View style={{ flex: 1, gap: 5 }}>
-                <Text className="font-manrope-semibold text-base text-foreground">
-                  {item.name}
-                </Text>
-                <Text className="font-sans text-xs text-muted">
-                  {item.type === "transfer"
-                    ? t("accounts.details.transfer")
-                    : item.category}{" "}
-                  ·{" "}
-                  {item.timestamp == null
-                    ? t("accounts.details.unknownDate")
-                    : formatDate(new Date(item.timestamp))}
-                </Text>
-              </View>
-              <Text
-                className="font-manrope-bold text-sm"
-                style={{
-                  color: item.type === "income" ? "#82d6a1" : theme.foreground,
-                }}
-              >
-                {item.type === "income"
-                  ? "+"
-                  : item.type === "expense"
-                    ? "−"
-                    : ""}
-                {formatCurrency(item.amount, item.currencyCode)}
-              </Text>
-            </View>
-          )}
           ListEmptyComponent={
-            <Text className="py-10 text-center font-sans text-base text-muted">
-              {transactionCount
-                ? t("accounts.details.emptyPeriod")
-                : t("accounts.details.emptyAccount")}
-            </Text>
+            <View
+              className="mt-2 items-center gap-3 rounded-[24px] border border-border bg-surface px-6 py-8"
+              style={{ borderCurve: "continuous" }}
+            >
+              <View
+                className="size-11 items-center justify-center rounded-2xl bg-surface-secondary"
+                style={{ borderCurve: "continuous" }}
+              >
+                <FilledIcon name="receipt" size={20} tone="muted" />
+              </View>
+              <Text className="text-center font-sans text-[14px] leading-[20px] text-muted">
+                {transactionCount
+                  ? t("accounts.details.noPeriodTransactions")
+                  : t("accounts.details.emptyAccount")}
+              </Text>
+              {transactionCount > 0 && !allTime ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setAllTime(true)}
+                  className="min-h-10 flex-row items-center gap-1.5 rounded-full border border-border bg-surface-secondary px-4"
+                  style={({ pressed }) => ({ opacity: pressed ? 0.68 : 1 })}
+                >
+                  <FilledIcon name="history" size={16} tone="accent" />
+                  <Text className="font-manrope-semibold text-[13px] leading-[18px] text-accent">
+                    {t("accounts.details.showAllHistory")}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
           }
         />
       </BlurTargetView>
       <BottomSafeAreaGradient fadeHeight={134} />
       <CollapsingHeader
+        horizontalInset={14}
         headerHidden={headerHidden}
         scrollY={scrollY}
         topInset={insets.top}
       >
         <View style={styles.header}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t("accounts.common.backToAccounts")}
-            onPress={() => router.dismissTo("/accounts")}
-            style={styles.iconButton}
+          <Button
+            isIconOnly
+            variant="ghost"
+            accessibilityLabel={t("accounts.details.back")}
+            onPress={goBack}
           >
             <FilledIcon name="arrow-left" size={26} />
-          </Pressable>
+          </Button>
           <Text
             accessibilityRole="header"
-            className="flex-1 font-manrope-bold text-xl text-foreground"
+            numberOfLines={1}
+            className="flex-1 font-manrope-bold text-2xl text-foreground"
           >
             {t("accounts.details.title")}
           </Text>
-          <Pressable
-            accessibilityRole="button"
+          <Button
+            isIconOnly
+            variant="ghost"
             accessibilityLabel={t("accounts.details.options")}
             accessibilityState={{ expanded: isMenuOpen }}
             onPress={openMenu}
-            style={styles.iconButton}
           >
-            <Text style={{ color: theme.foreground, fontSize: 30 }}>⋮</Text>
-          </Pressable>
+            <FilledIcon name="more-vert" size={26} />
+          </Button>
         </View>
       </CollapsingHeader>
       <View style={[styles.dock, { bottom: Math.max(insets.bottom, 10) }]}>
-        <AccountPeriodSelector
+        <AccountRangeDock
           blurTarget={blurTargetRef}
-          value={period}
-          onChange={(value) => {
-            setPeriod(value);
-            setAnchor(null);
-            setAllTime(false);
-          }}
+          value={allTime ? "All" : period}
+          monthIsCycle={paymentDay != null}
+          onChange={chooseRange}
         />
       </View>
+      {selectedTransaction ? (
+        <TransactionDetailSheet
+          transaction={selectedTransaction}
+          onDismiss={() => setSelectedTransactionId(null)}
+        />
+      ) : null}
       {/* Keep the closed sheet mounted to avoid portal/layout work on each tap. */}
       <BottomSheet
         isOpen={isMenuOpen}
@@ -610,28 +763,11 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    paddingVertical: 12,
+    gap: 8,
+    paddingVertical: 8,
   },
-  row: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconButton: {
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  summary: {
-    padding: 20,
-    borderRadius: 24,
-    gap: 18,
-  },
-  transaction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-  },
+  sections: { gap: 24, paddingTop: 12 },
+  periodGroup: { gap: 12 },
   dock: { position: "absolute", left: 12, right: 12, zIndex: 20 },
   action: {
     minHeight: 52,

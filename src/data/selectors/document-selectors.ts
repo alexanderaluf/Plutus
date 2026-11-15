@@ -7,7 +7,9 @@ import { financialMonth } from "../model/financial-month";
 import {
   createRecordLookup,
   selectPeriodTransactionCandidates,
+  transactionPeriodBounds,
   transactionTimestamps,
+  type TransactionIndexEntry,
 } from "./transaction-selectors";
 import { memoizeForDocument } from "./document-memo";
 import { filterProjection, finishProjection } from "./cooperative";
@@ -615,6 +617,121 @@ export function selectAccountTransactions(
       return results.sort(
         (a, b) => (b.timestamp ?? -Infinity) - (a.timestamp ?? -Infinity),
       );
+    },
+  );
+}
+
+/**
+ * Every transaction posted to one account as shared-index entries, newest
+ * first (equal timestamps keep document order; undated records trail). Built
+ * once per committed document and account; period views slice it by binary
+ * search instead of rescanning history.
+ */
+export function selectAccountTimeline(
+  document: BackupDocument,
+  accountId: string,
+): TransactionIndexEntry[] {
+  return memoizeForDocument(document, `account-timeline:${accountId}`, () => {
+    const record = findOwnedAccount(document, accountId);
+    if (!record) return [];
+    const timestamps = transactionTimestamps(document);
+    const entries: TransactionIndexEntry[] = selectAccountPositions(
+      document,
+      record,
+    ).map((position) => {
+      const item = document.transactions[position];
+      const timestamp = timestamps[position];
+      return {
+        id: recordId(item, position),
+        record: item,
+        index: position,
+        timestamp: Number.isFinite(timestamp) ? timestamp : -Infinity,
+      };
+    });
+    return entries.sort((a, b) =>
+      a.timestamp === b.timestamp
+        ? a.index - b.index
+        : a.timestamp > b.timestamp
+          ? -1
+          : 1,
+    );
+  });
+}
+
+export type AccountActivityTotal = {
+  currencyCode: string;
+  income: number;
+  expense: number;
+};
+
+export type AccountActivity = {
+  /** Newest first. */
+  entries: TransactionIndexEntry[];
+  /** Income and expense in the money that moved this account's balance. */
+  totals: AccountActivityTotal[];
+};
+
+/**
+ * One account's transactions and money flow for `[start, end)`, or its whole
+ * history when `range` is null. Amounts use `accountAmount` (the account's own
+ * currency) when the record has it, so totals match the balance they moved;
+ * transfers are listed but are neither income nor expense.
+ */
+export function selectAccountActivity(
+  document: BackupDocument,
+  accountId: string,
+  range: { start: Date; end: Date } | null,
+): AccountActivity {
+  const key = range ? `${range.start.getTime()}:${range.end.getTime()}` : "all";
+  return memoizeForDocument(
+    document,
+    `account-activity:${accountId}:${key}`,
+    () => {
+      const timeline = selectAccountTimeline(document, accountId);
+      const record = findOwnedAccount(document, accountId);
+      const fallbackCurrency = record
+        ? accountBalance(record, 0).currencyCode
+        : "USD";
+      let entries = timeline;
+      if (range) {
+        const { first, last } = transactionPeriodBounds(
+          timeline,
+          range.start,
+          range.end,
+        );
+        entries = timeline.slice(first, last);
+      }
+      const byCurrency = new Map<string, AccountActivityTotal>();
+      for (const { record: item } of entries) {
+        if (item.type !== 0 && item.type !== 1) continue;
+        const hasAccountAmount =
+          typeof item.accountAmount === "number" &&
+          Number.isFinite(item.accountAmount);
+        const rawCode = text(
+          hasAccountAmount ? item.accountCurrencyCode : item.currencyCode,
+        ).toUpperCase();
+        const currencyCode = /^[A-Z]{3}$/.test(rawCode)
+          ? rawCode
+          : fallbackCurrency;
+        const amount = Math.abs(
+          hasAccountAmount ? number(item.accountAmount) : number(item.amount),
+        );
+        let total = byCurrency.get(currencyCode);
+        if (!total) {
+          total = { currencyCode, income: 0, expense: 0 };
+          byCurrency.set(currencyCode, total);
+        }
+        if (item.type === 1) total.income += amount;
+        else total.expense += amount;
+      }
+      // The account's own currency leads; others follow by volume.
+      const totals = [...byCurrency.values()].sort(
+        (a, b) =>
+          Number(b.currencyCode === fallbackCurrency) -
+            Number(a.currencyCode === fallbackCurrency) ||
+          b.income + b.expense - (a.income + a.expense),
+      );
+      return { entries, totals };
     },
   );
 }

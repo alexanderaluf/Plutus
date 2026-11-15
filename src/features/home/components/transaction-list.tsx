@@ -22,12 +22,15 @@ type TransactionRowProps = {
   transaction: Transaction;
   showBorder: boolean;
   onPress: (transaction: Transaction) => void;
+  /** Off on an account's own page, where every row shares that account. */
+  showAccountName?: boolean;
 };
 
 export const TransactionRow = memo(function TransactionRow({
   transaction,
   showBorder,
   onPress,
+  showAccountName = true,
 }: TransactionRowProps) {
   const { formatCurrency, formatSignedCurrency } = useCurrencyFormat();
   const { t } = useTranslation();
@@ -147,7 +150,7 @@ export const TransactionRow = memo(function TransactionRow({
                 transaction.accountCurrencyCode,
               )}
             </Text>
-          ) : !isTransfer && transaction.accountName ? (
+          ) : showAccountName && !isTransfer && transaction.accountName ? (
             <Text
               numberOfLines={1}
               className="text-right font-sans text-[11px] leading-[14px] text-muted"
@@ -167,6 +170,7 @@ type IndexedTransactionRowProps = {
   project: ReturnType<typeof createTransactionProjector>;
   showBorder: boolean;
   onPress: (transaction: Transaction) => void;
+  showAccountName?: boolean;
 };
 
 // The view model lives only for the lifetime of a virtualized row.

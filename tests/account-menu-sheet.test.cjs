@@ -66,6 +66,7 @@ function mountScreen(
         }
       },
       useMemo: (compute) => compute(),
+      useCallback: (callback) => callback,
     },
     "react-native": {
       View: "View",
@@ -86,6 +87,8 @@ function mountScreen(
       useRouter: () => ({
         push: (route) => navigation.push(route),
         dismissTo: (route) => navigation.push(route),
+        canGoBack: () => false,
+        back: () => navigation.push("back"),
       }),
     },
     "expo-blur": { BlurTargetView: "BlurTargetView" },
@@ -141,6 +144,19 @@ function mountScreen(
     "@/data/database/month-index": {
       getDocumentWindowState: () => undefined,
     },
+    "@/data/selectors/home-section-selectors": {
+      createHomeTransactionRows: (entries) =>
+        entries.map((entry) => ({
+          kind: "transaction",
+          id: entry.id,
+          entry,
+          first: true,
+          last: true,
+        })),
+    },
+    "@/data/selectors/transaction-selectors": {
+      selectTransactionProjector: () => (entry) => entry,
+    },
     "@/data/database/fast-store-client": {
       queryScopedTransactionsAsync: async () => [],
     },
@@ -161,16 +177,22 @@ function mountScreen(
           paymentDay: configuration.paymentDay ?? null,
         },
       ],
-      selectAccountTransactions: (_document, _id, range) =>
-        range
-          ? records.filter((record) => record.month === range.anchor.getMonth())
-          : records,
+      selectAccountActivity: (_document, _id, range) => ({
+        entries: (range
+          ? records.filter((record) => record.month === range.start.getMonth())
+          : records
+        ).map((record) => ({ ...record, timestamp: 0 })),
+        totals: [],
+      }),
+      selectAccountTimeline: () =>
+        records.map((record) => ({ ...record, timestamp: 0 })),
       selectAccountTransactionCount: () => records.length,
       accountPeriodRange: (...args) => {
         rangeCalls.push(args);
+        const anchor = args[1];
         return {
-          start: new Date("2026-09-01"),
-          end: new Date("2026-10-01"),
+          start: new Date(anchor.getFullYear(), anchor.getMonth(), 1),
+          end: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1),
         };
       },
       shiftAccountPeriodAnchor: (...args) => {
@@ -453,82 +475,103 @@ test("pre-measured Android sheet opens on the tap without a frame delay", () => 
   screen.unmount();
 });
 
+const MONTH_RECORDS = [
+  { id: "previous-month", month: 7, type: 0 },
+  { id: "current-month", month: 8, type: 0 },
+  { id: "next-month", month: 9, type: 0 },
+];
+
+function rowIds(screen) {
+  return screen.list().props.data.map((row) => row.id);
+}
+
+function dock(screen) {
+  return screen.nodes().find((node) => node.type === "AccountRangeDock");
+}
+
+function navigator(screen) {
+  return screen
+    .nodes(screen.list().props.ListHeaderComponent)
+    .find((node) => node.type === "AccountPeriodNavigator");
+}
+
 for (const kind of ["credit", "bank", "checking", "savings", "cash"]) {
-  test(`${kind} details opens with this month's records and keeps explicit all-history access`, () => {
-    const records = [
-      {
-        id: "previous-month",
-        month: 7,
-        type: "expense",
-        amount: 1,
-        currencyCode: "USD",
-      },
-      {
-        id: "current-month",
-        month: 8,
-        type: "expense",
-        amount: 2,
-        currencyCode: "USD",
-      },
-      {
-        id: "next-month",
-        month: 9,
-        type: "expense",
-        amount: 3,
-        currencyCode: "USD",
-      },
-    ];
+  test(`${kind} details opens on this month's records and keeps explicit all-history access`, () => {
     const screen = mountScreen("android", async () => {}, true, false, {
       kind,
-      records,
+      records: MONTH_RECORDS,
     });
-    assert.deepEqual(
-      screen.list().props.data.map((record) => record.id),
-      ["current-month"],
+    assert.deepEqual(rowIds(screen), ["current-month"]);
+    assert.equal(dock(screen).props.value, "Monthly");
+    assert.equal(navigator(screen).props.showArrows, true);
+    assert.equal(
+      navigator(screen).props.canGoNext,
+      false,
+      "the running period has no next period",
     );
-    const history = screen
-      .nodes(screen.list().props.ListHeaderComponent)
-      .find(
-        (node) => node.type === "Pressable" && node.props.accessibilityState,
-      );
-    assert.equal(history.props.accessibilityState.selected, false);
-    history.props.onPress();
+    dock(screen).props.onChange("All");
     screen.render();
-    assert.equal(screen.list().props.data.length, 3);
-    screen
-      .nodes()
-      .find((node) => node.type === "AccountPeriodSelector")
-      .props.onChange("Monthly");
+    assert.equal(dock(screen).props.value, "All");
+    assert.deepEqual(rowIds(screen), [
+      "previous-month",
+      "current-month",
+      "next-month",
+    ]);
+    assert.equal(navigator(screen).props.showArrows, false);
+    dock(screen).props.onChange("Monthly");
     screen.render();
-    assert.deepEqual(
-      screen.list().props.data.map((record) => record.id),
-      ["current-month"],
-    );
+    assert.deepEqual(rowIds(screen), ["current-month"]);
     screen.unmount();
   });
 }
 
-test("credit Monthly date labels and navigation receive the configured payout day", () => {
+test("an empty period offers the account's full history", () => {
+  const screen = mountScreen("android", async () => {}, true, false, {
+    records: [MONTH_RECORDS[0]],
+  });
+  assert.deepEqual(rowIds(screen), []);
+  const showAll = screen
+    .nodes(screen.list().props.ListEmptyComponent)
+    .find((node) => node.type === "Pressable");
+  showAll.props.onPress();
+  screen.render();
+  assert.deepEqual(rowIds(screen), ["previous-month"]);
+  screen.unmount();
+});
+
+test("the navigator steps back a period and the transaction list follows it", () => {
+  const screen = mountScreen("android", async () => {}, true, false, {
+    records: MONTH_RECORDS,
+  });
+  navigator(screen).props.onPrevious();
+  screen.render();
+  assert.deepEqual(rowIds(screen), ["previous-month"]);
+  assert.equal(navigator(screen).props.canGoNext, true);
+  screen.unmount();
+});
+
+test("credit cycle labels and navigation receive the configured payout day", () => {
   const screen = mountScreen("android", async () => {}, true, false, {
     kind: "credit",
     paymentDay: 5,
   });
-  assert.equal(screen.rangeCalls.at(-1)[0], "Monthly");
-  assert.equal(screen.rangeCalls.at(-1)[2], 5);
-  const next = screen
-    .nodes(screen.list().props.ListHeaderComponent)
-    .find(
-      (node) =>
-        node.props?.accessibilityLabel === "accounts.details.nextPeriod",
-    );
-  next.props.onPress();
+  assert.equal(dock(screen).props.monthIsCycle, true);
+  assert.ok(screen.rangeCalls.length > 0);
+  for (const call of screen.rangeCalls) {
+    assert.equal(call[0], "Monthly");
+    assert.equal(call[2], 5);
+  }
+  navigator(screen).props.onNext();
   screen.render();
-  assert.equal(screen.shiftCalls.at(-1)[0], "Monthly");
-  assert.equal(screen.shiftCalls.at(-1)[2], 1);
-  assert.equal(screen.shiftCalls.at(-1)[3], 5);
-  assert.equal(
-    screen.rangeCalls.at(-1)[1].getTime(),
-    new Date(2026, 9, 5).getTime(),
+  assert.ok(
+    screen.shiftCalls.some(
+      (call) => call[0] === "Monthly" && call[2] === 1 && call[3] === 5,
+    ),
+  );
+  assert.ok(
+    screen.rangeCalls.some(
+      (call) => call[1].getTime() === new Date(2026, 9, 5).getTime(),
+    ),
   );
   screen.unmount();
 });
