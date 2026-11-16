@@ -33,7 +33,6 @@ import {
 } from "react-native";
 import Reanimated, {
   Easing,
-  FadeIn,
   LinearTransition,
   ReduceMotion,
   useAnimatedStyle,
@@ -64,6 +63,10 @@ import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
+import {
+  EntranceView,
+  slotEntrance,
+} from "@/shared/ui/page-entrance";
 import { usePostFrameReady } from "@/shared/lib/use-post-frame-ready";
 import type { IconSelection } from "@/shared/ui/record-icon";
 
@@ -145,9 +148,8 @@ const DAY_GAP = 8;
 const SECTION_LAYOUT = LinearTransition.duration(240)
   .easing(Easing.bezier(0.77, 0, 0.175, 1))
   .reduceMotion(ReduceMotion.System);
-const SECTION_ENTER = FadeIn.duration(200)
-  .easing(Easing.bezier(0.23, 1, 0.32, 1))
-  .reduceMotion(ReduceMotion.System);
+// Panels revealed by an in-form choice use the page entrance.
+const SECTION_ENTER = slotEntrance(0);
 
 function AccountTypeSelector({
   blurTarget,
@@ -377,8 +379,10 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                 pointerEvents={isSaving ? "none" : "auto"}
                 className="gap-3 px-4"
               >
-                {/* Identity: the tile is a live preview of the colour and icon. */}
-                <View>
+                {/* Identity: the tile is a live preview of the colour and icon.
+                    Every section enters in turn; a new account type replays
+                    them all. */}
+                <EntranceView key={`identity:${draft.accountType}`} slot={1}>
                   <FormCard>
                     <View className="flex-row items-center gap-3.5">
                       <Pressable
@@ -533,10 +537,10 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                       )}
                     </View>
                   </FormCard>
-                </View>
+                </EntranceView>
 
                 {/* Balance: the one number every account needs, set large. */}
-                <View>
+                <EntranceView key={`balance:${draft.accountType}`} slot={2}>
                   <FormCard>
                     <View className="gap-2.5">
                       <FormLabel>{balanceLabel}</FormLabel>
@@ -671,14 +675,14 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                       </>
                     )}
                   </FormCard>
-                </View>
+                </EntranceView>
 
                 {postFrameReady ? (
                   <>
                     {/* Details for the selected type only. */}
                     <Reanimated.View
                       key={draft.accountType}
-                      entering={hasInteracted.current ? SECTION_ENTER : undefined}
+                      entering={slotEntrance(3)}
                       layout={SECTION_LAYOUT}
                       className="gap-3"
                     >
@@ -721,7 +725,10 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                       )}
                     </Reanimated.View>
 
-                    <View>
+                    <EntranceView
+                      key={`settings:${draft.accountType}`}
+                      slot={4}
+                    >
                       <FormCard>
                         <SwitchRow
                           icon="check"
@@ -742,7 +749,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                           onChange={(value) => change("isExcluded", value)}
                         />
                       </FormCard>
-                    </View>
+                    </EntranceView>
                   </>
                 ) : null}
               </View>
@@ -794,6 +801,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               },
             ]}
           >
+            <Reanimated.View entering={slotEntrance(0)}>
             <AccountTypeSelector
               blurTarget={blurTargetRef}
               selected={draft.accountType}
@@ -810,9 +818,11 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
                 }
               }}
             />
+            </Reanimated.View>
           </Animated.View>
           <BottomSafeAreaGradient />
-          <View
+          <EntranceView
+            slot={2}
             pointerEvents="box-none"
             style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
           >
@@ -845,7 +855,7 @@ export function AccountCreateScreen({ editId }: { editId?: string }) {
               }
               onPress={save}
             />
-          </View>
+          </EntranceView>
         </View>
       </KeyboardAvoidingView>
       <CurrencySelectorSheet

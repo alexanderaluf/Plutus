@@ -37,6 +37,7 @@ import {
   TYPE_COLORS,
 } from "./components/category-ui";
 import { useCategoryClock } from "./use-category-clock";
+import { useListEntrance } from "@/shared/ui/page-entrance";
 
 export function CategoryDetailsScreen() {
   const { formatCurrency } = useCurrencyFormat();
@@ -118,6 +119,11 @@ export function CategoryDetailsScreen() {
           transaction.timestamp >= start.getTime() &&
           transaction.timestamp < end.getTime())),
   );
+  // Header, chips, period row, then the transactions. Choosing another
+  // sub-category, period length or period replays the transactions.
+  const { rowKey, rowEntering } = useListEntrance(3, {
+    replayKey: `${selectedId}:${period}:${allTime ? "all" : startTime}`,
+  });
   function movePeriod(direction: number) {
     const next = new Date(start);
     if (period === "Yearly") next.setFullYear(next.getFullYear() + direction);
@@ -170,7 +176,7 @@ export function CategoryDetailsScreen() {
       headerDock={
         category && (
           <View className="bg-background">
-            <Animated.View entering={categoryEntrance(40)}>
+            <Animated.View entering={categoryEntrance(1)}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -196,7 +202,7 @@ export function CategoryDetailsScreen() {
               </ScrollView>
             </Animated.View>
             <Animated.View
-              entering={categoryEntrance(70)}
+              entering={categoryEntrance(2)}
               className="flex-row items-center px-3"
             >
               <Button
@@ -239,7 +245,7 @@ export function CategoryDetailsScreen() {
         category && (
           <>
             <Animated.View
-              entering={categoryEntrance(150)}
+              entering={categoryEntrance(2)}
               className="flex-row items-center justify-end gap-3 px-5 py-3"
             >
               <Button
@@ -261,7 +267,7 @@ export function CategoryDetailsScreen() {
               </Button>
             </Animated.View>
             <Animated.View
-              entering={categoryEntrance(180)}
+              entering={categoryEntrance(2)}
               className="px-4 pb-2"
             >
               <AccountPeriodSelector
@@ -286,7 +292,7 @@ export function CategoryDetailsScreen() {
             <>
               <EdgeToEdgeFlatList
                 data={visible}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => `${item.id}:${rowKey}`}
                 initialNumToRender={16}
                 maxToRenderPerBatch={14}
                 updateCellsBatchingPeriod={16}
@@ -299,7 +305,7 @@ export function CategoryDetailsScreen() {
                 }}
                 renderItem={({ item, index }) => (
                   <Animated.View
-                    entering={categoryEntrance(90 + Math.min(index, 6) * 30)}
+                    entering={rowEntering(index)}
                     layout={categoryLayout}
                     className="flex-row items-center gap-3 border-b border-border py-4"
                   >
@@ -335,7 +341,8 @@ export function CategoryDetailsScreen() {
                 )}
                 ListEmptyComponent={
                   <Animated.View
-                    entering={categoryEntrance(120)}
+                    key={rowKey}
+                    entering={rowEntering(0)}
                     className="flex-1 items-center justify-center gap-3 py-16"
                   >
                     <ReceiptLongFill color="#555555" size={70} />

@@ -42,6 +42,11 @@ import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
+import { useTabEntrance } from "@/shared/navigation/tab-entry";
+import {
+  entranceAnimation,
+  listEntranceDelay,
+} from "@/shared/ui/entrance-motion";
 import {
   CollapsingHeader,
   CollapsingHeaderSpacer,
@@ -139,6 +144,13 @@ export function HomeScreen() {
   const transactionIndex = homeData.index ?? EMPTY_INDEX;
   const isSectionPending = homeData.pending;
   const sectionData = homeData.sectionData;
+  // Opening the tab: overview, then the selector, then the section header
+  // and the rows on screen. Choosing another section replays only its header
+  // and rows, once its data is ready.
+  const { entryKey, rowKey, rowEntering } = useTabEntrance("home", 2, {
+    replayKey: isSectionPending ? `${section}:pending` : section,
+    replayFirstRowSlot: 1,
+  });
   useEffect(() => {
     if (!isSectionPending) sectionOpacity.set(withTiming(1, SECTION_FADE));
   }, [section, isSectionPending, sectionOpacity]);
@@ -269,6 +281,8 @@ export function HomeScreen() {
             styles.rowGap,
         ]}
       >
+        {/* Remounted on each navbar entry so its entrance replays. */}
+        <Reanimated.View key={rowKey} entering={rowEntering(index)}>
         {item.kind === "date" ? (
           <TransactionDateHeader
             timestamp={item.timestamp}
@@ -313,6 +327,7 @@ export function HomeScreen() {
         ) : (
           <RecurringHomeRow event={item.event} />
         )}
+        </Reanimated.View>
       </VisibleFadeRow>
     ),
     [
@@ -324,6 +339,8 @@ export function HomeScreen() {
       activeProfile.currencyCode,
       onCategoryPress,
       expandedBudgetId,
+      rowEntering,
+      rowKey,
     ],
   );
   const onPreviousMonth = useCallback(() => {
@@ -588,13 +605,18 @@ export function HomeScreen() {
                   }}
                 >
                   {overview ? (
-                    <OverviewCarousel
-                      key={activeProfile.id}
-                      overview={overview}
-                      now={now}
-                      isBalanceVisible={isBalanceVisible}
-                      onToggleBalance={onToggleBalance}
-                    />
+                    <Reanimated.View
+                      key={`overview:${entryKey}`}
+                      entering={entranceAnimation()}
+                    >
+                      <OverviewCarousel
+                        key={activeProfile.id}
+                        overview={overview}
+                        now={now}
+                        isBalanceVisible={isBalanceVisible}
+                        onToggleBalance={onToggleBalance}
+                      />
+                    </Reanimated.View>
                   ) : (
                     <View
                       style={{ height: overviewHeight }}
@@ -622,21 +644,30 @@ export function HomeScreen() {
                     isSelectorSticky && styles.hiddenSelectorSpacer,
                   ]}
                 >
-                  <GlassSegmentedControl
-                    accessibilityLabel={t(
-                      "home.sectionSelector.accessibilityLabel",
-                    )}
-                    fitLabels
-                    minHeight={44}
-                    options={selectorOptions}
-                    tabPaddingHorizontal={4}
-                    textSize={12}
-                    value={section}
-                    onChange={onSectionChange}
-                  />
-                  {monthSelector()}
+                  <Reanimated.View
+                    key={`selector:${entryKey}`}
+                    entering={entranceAnimation(listEntranceDelay(0))}
+                  >
+                    <GlassSegmentedControl
+                      accessibilityLabel={t(
+                        "home.sectionSelector.accessibilityLabel",
+                      )}
+                      fitLabels
+                      minHeight={44}
+                      options={selectorOptions}
+                      tabPaddingHorizontal={4}
+                      textSize={12}
+                      value={section}
+                      onChange={onSectionChange}
+                    />
+                    {monthSelector()}
+                  </Reanimated.View>
                 </View>
                 <Reanimated.View style={sectionStyle}>
+                  <Reanimated.View
+                    key={rowKey}
+                    entering={rowEntering(-1)}
+                  >
                   {isSectionPending ||
                   section === "transactions" ? null : sectionData?.section ===
                     "categories" ? (
@@ -650,6 +681,7 @@ export function HomeScreen() {
                       fallbackCurrency={activeProfile.currencyCode}
                     />
                   ) : null}
+                  </Reanimated.View>
                 </Reanimated.View>
               </View>
             }

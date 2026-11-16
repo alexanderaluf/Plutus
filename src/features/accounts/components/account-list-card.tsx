@@ -1,12 +1,17 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
+import Animated from "react-native-reanimated";
 
 import { useAppDate } from "@/shared/lib/use-app-date";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { FilledIcon } from "@/shared/ui/filled-icon";
+import {
+  entranceAnimation,
+  listEntranceDelay,
+} from "@/shared/ui/entrance-motion";
 
 import { colorForeground } from "../account-options";
 import {
@@ -28,55 +33,80 @@ const GROWTH_LIGHT_INK = "#15803d";
  * Renders an account group using type-distinct surfaces so Bank, Checking,
  * Cash, Credit Cards, and Savings are recognizable at a single glance.
  */
+function splitAccounts(accounts: Account[]) {
+  return {
+    ledger: accounts.filter(
+      (account) => account.kind === "bank" || account.kind === "checking",
+    ),
+    cash: accounts.filter((account) => account.kind === "cash"),
+    credit: accounts.filter((account) => account.kind === "credit"),
+    savings: accounts.filter((account) => account.kind === "savings"),
+  };
+}
+
+/**
+ * How many cards a group renders: the bank ledger box is one card, every
+ * other account is its own card. Each card takes one entrance step.
+ */
+export function accountGroupCardCount(accounts: Account[]) {
+  const { ledger, cash, credit, savings } = splitAccounts(accounts);
+  return (
+    (ledger.length > 0 ? 1 : 0) + cash.length + credit.length + savings.length
+  );
+}
+
 export function AccountGroupCard({
   accounts,
   onAccountPress,
+  entryKey = 0,
+  firstEntranceIndex = 0,
 }: {
   accounts: Account[];
   onAccountPress: (account: Account) => void;
+  /** A new value replays every card's entrance. */
+  entryKey?: number;
+  /** Entrance position of the group's first card on the page. */
+  firstEntranceIndex?: number;
 }) {
-  const ledgerAccounts = accounts.filter(
-    (account) => account.kind === "bank" || account.kind === "checking",
-  );
-  const cashAccounts = accounts.filter((account) => account.kind === "cash");
-  const creditAccounts = accounts.filter(
-    (account) => account.kind === "credit",
-  );
-  const savingsAccounts = accounts.filter(
-    (account) => account.kind === "savings",
-  );
+  const { ledger, cash, credit, savings } = splitAccounts(accounts);
+  let index = firstEntranceIndex;
+  // Each card fades in on its own, starting while the previous one is still
+  // appearing.
+  const entering = () => entranceAnimation(listEntranceDelay(index++));
 
   return (
     <View className="gap-3">
-      {ledgerAccounts.length > 0 && (
-        <LedgerGroupCard
-          accounts={ledgerAccounts}
-          onAccountPress={onAccountPress}
-        />
+      {ledger.length > 0 && (
+        <Animated.View key={`ledger:${entryKey}`} entering={entering()}>
+          <LedgerGroupCard accounts={ledger} onAccountPress={onAccountPress} />
+        </Animated.View>
       )}
 
-      {cashAccounts.map((account) => (
-        <CashWalletCard
-          key={account.id}
-          account={account}
-          onPress={() => onAccountPress(account)}
-        />
+      {cash.map((account) => (
+        <Animated.View key={`${account.id}:${entryKey}`} entering={entering()}>
+          <CashWalletCard
+            account={account}
+            onPress={() => onAccountPress(account)}
+          />
+        </Animated.View>
       ))}
 
-      {creditAccounts.map((account) => (
-        <CreditListCard
-          key={account.id}
-          account={account}
-          onPress={() => onAccountPress(account)}
-        />
+      {credit.map((account) => (
+        <Animated.View key={`${account.id}:${entryKey}`} entering={entering()}>
+          <CreditListCard
+            account={account}
+            onPress={() => onAccountPress(account)}
+          />
+        </Animated.View>
       ))}
 
-      {savingsAccounts.map((account) => (
-        <SavingsListCard
-          key={account.id}
-          account={account}
-          onPress={() => onAccountPress(account)}
-        />
+      {savings.map((account) => (
+        <Animated.View key={`${account.id}:${entryKey}`} entering={entering()}>
+          <SavingsListCard
+            account={account}
+            onPress={() => onAccountPress(account)}
+          />
+        </Animated.View>
       ))}
     </View>
   );

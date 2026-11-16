@@ -48,7 +48,8 @@ export function AISettingsScreen() {
   ]);
   return (
     <EdgeToEdgeLayout header={<ProfileScreenHeader title={t("localAI.settings.title")} />}>
-      <EdgeToEdgeScrollView className="flex-1" contentContainerClassName="gap-5 px-4 pt-4" contentContainerStyle={{ paddingBottom: 32 }}>
+      <EdgeToEdgeScrollView
+      entrance className="flex-1" contentContainerClassName="gap-5 px-4 pt-4" contentContainerStyle={{ paddingBottom: 32 }}>
         <Text className="px-1 leading-6 text-muted">{t("localAI.settings.description")}</Text>
         <ChatGPTConnectionCard settings busy={pending} />
         <View className="gap-3">

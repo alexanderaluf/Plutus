@@ -1,3 +1,4 @@
+import { EntranceView } from "@/shared/ui/page-entrance";
 import { BottomSafeAreaGradient } from "@/shared/ui/safe-area-gradients";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -47,10 +48,11 @@ export function InsightsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <CollapsingHeaderSpacer />
-        {cards.map((card) => (
-          <View key={card.id}>
+        {cards.map((card, index) => (
+          // Insight cards enter one by one.
+          <EntranceView key={card.id} slot={index}>
             <OverviewCard card={card} visible={visible} />
-          </View>
+          </EntranceView>
         ))}
       </Animated.ScrollView>
       <CollapsingHeader

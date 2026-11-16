@@ -39,6 +39,11 @@ import {
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
+import { useTabEntrance } from "@/shared/navigation/tab-entry";
+import {
+  entranceAnimation,
+  listEntranceDelay,
+} from "@/shared/ui/entrance-motion";
 
 import { ActiveFilters, CategoryShortcuts } from "./components/active-filters";
 import { QuickFilters } from "./components/quick-filters";
@@ -66,8 +71,11 @@ const ROW_RISE = 14;
 const ROW_VIEWABILITY = { itemVisiblePercentThreshold: 1 };
 const rowKey = (row: SearchRow) => row.key;
 
-function sectionEntry(_index: number) {
-  return undefined;
+/** Header sections enter first: the search bar, then shortcuts, then summary. */
+function sectionEntry(index: number) {
+  return index === 0
+    ? entranceAnimation()
+    : entranceAnimation(listEntranceDelay(index - 1));
 }
 
 export function SearchScreen() {
@@ -83,6 +91,8 @@ function ProfileSearch() {
   const { activeProfile } = useProfiles();
   const now = useCategoryClock(document);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
+  // Rows visible on entry follow the three header sections.
+  const { entryKey, rowEntering } = useTabEntrance("search", 2);
   const listRef = useRef<FlatList<SearchRow> | null>(null);
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_SEARCH_FILTERS);
   const [loaded, setLoaded] = useState(SEARCH_PAGE_SIZE);
@@ -169,8 +179,10 @@ function ProfileSearch() {
     new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1),
   );
   const renderRow = useCallback(
-    ({ item }: { item: SearchRow }) => (
+    ({ item, index }: { item: SearchRow; index: number }) => (
       <VisibleFadeRow rowKey={item.key} controller={rowFade} rise={ROW_RISE}>
+        {/* Remounted on each navbar entry so its entrance replays. */}
+        <Reanimated.View key={entryKey} entering={rowEntering(index)}>
         {item.kind === "day" ? (
           <SearchDayHeader
             row={item}
@@ -184,9 +196,18 @@ function ProfileSearch() {
             onPress={onTransactionPress}
           />
         )}
+        </Reanimated.View>
       </VisibleFadeRow>
     ),
-    [rowFade, todayKey, yesterdayKey, project, onTransactionPress],
+    [
+      rowFade,
+      todayKey,
+      yesterdayKey,
+      project,
+      onTransactionPress,
+      rowEntering,
+      entryKey,
+    ],
   );
 
   // Memoized without `loaded`, so growing the window re-renders only new
@@ -195,7 +216,11 @@ function ProfileSearch() {
     () => (
       <View style={styles.header}>
         <CollapsingHeaderSpacer height={HEADER_HEIGHT} />
-        <Reanimated.View entering={sectionEntry(0)} className="gap-4">
+        <Reanimated.View
+          key={`search:${entryKey}`}
+          entering={sectionEntry(0)}
+          className="gap-4"
+        >
           <SearchToolbar
             value={filters.query}
             activeFilters={refinements}
@@ -219,7 +244,10 @@ function ProfileSearch() {
         (context.facts.length > 0 ||
           (getDocumentWindowState(document)?.totalTransactionCount ?? 0) >
             0) ? (
-          <Reanimated.View entering={sectionEntry(1)}>
+          <Reanimated.View
+            key={`shortcuts:${entryKey}`}
+            entering={sectionEntry(1)}
+          >
             <CategoryShortcuts
               categories={context.facets.categories}
               onSelect={(id) => update({ ...filters, categories: [id] })}
@@ -227,7 +255,10 @@ function ProfileSearch() {
           </Reanimated.View>
         ) : null}
 
-        <Reanimated.View entering={sectionEntry(2)}>
+        <Reanimated.View
+          key={`summary:${entryKey}`}
+          entering={sectionEntry(2)}
+        >
           {context.facts.length === 0 &&
           (getDocumentWindowState(document)?.totalTransactionCount ?? 0) ===
             0 ? (
@@ -254,7 +285,17 @@ function ProfileSearch() {
         </Reanimated.View>
       </View>
     ),
-    [filters, refinements, update, context, idle, outcome, groupByDay, t],
+    [
+      filters,
+      refinements,
+      update,
+      context,
+      idle,
+      outcome,
+      groupByDay,
+      t,
+      entryKey,
+    ],
   );
   const footer = useMemo(
     () => (hasMore ? <View style={styles.footer} /> : undefined),

@@ -31,6 +31,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Animated, I18nManager, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Reanimated from "react-native-reanimated";
+import {
+  EntranceSections,
+  EntranceView,
+  useListEntrance,
+} from "@/shared/ui/page-entrance";
 import {
   BudgetBadge,
   BudgetChart,
@@ -128,6 +134,8 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
   );
   const saving = useRef(false);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
+  // Summary cards enter one by one, then the transactions below them.
+  const { rowEntering } = useListEntrance(7);
   async function mutate(action: "delete" | "home", value?: boolean) {
     if (saving.current) return;
     saving.current = true;
@@ -199,7 +207,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
         onScroll={onScroll}
         scrollEventThrottle={16}
         ListHeaderComponent={
-          <View className="gap-3 pb-3 pt-3">
+          <EntranceSections startSlot={-1} className="gap-3 pb-3 pt-3">
             <CollapsingHeaderSpacer />
             <BudgetSummary budget={b} />
             <BudgetPanel>
@@ -284,10 +292,13 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
             <Text className="px-2 pt-4 font-manrope-bold text-xl text-foreground">
               {t("budgets.details.transactions")}
             </Text>
-          </View>
+          </EntranceSections>
         }
-        renderItem={({ item: t }) => (
-          <View className="flex-row items-center gap-3 rounded-2xl bg-surface p-4">
+        renderItem={({ item: t, index }) => (
+          <Reanimated.View
+            entering={rowEntering(index)}
+            className="flex-row items-center gap-3 rounded-2xl bg-surface p-4"
+          >
             <View className="flex-1">
               <Text className="font-manrope-semibold text-base text-foreground">
                 {t.name}
@@ -302,7 +313,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
             <Text className="font-manrope-semibold text-foreground">
               {formatCurrency(t.amount, b.currencyCode)}
             </Text>
-          </View>
+          </Reanimated.View>
         )}
         ListEmptyComponent={
           <Text className="px-3 py-6 text-muted">
@@ -345,7 +356,8 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
         </BudgetHeader>
       </CollapsingHeader>
       <BottomSafeAreaGradient fadeHeight={124} />
-      <View
+      <EntranceView
+        slot={1}
         style={{
           position: "absolute",
           ...(I18nManager.isRTL ? { left: 20 } : { right: 20 }),
@@ -362,7 +374,7 @@ export function BudgetDetailsScreen({ id }: { id: string }) {
           <FilledIcon name="pencil" size={22} tone="accent-foreground" />
           <Button.Label>{t("budgets.details.edit")}</Button.Label>
         </Button>
-      </View>
+      </EntranceView>
       <BottomSheet
         isOpen={sheet === "delete"}
         onOpenChange={(open) => {

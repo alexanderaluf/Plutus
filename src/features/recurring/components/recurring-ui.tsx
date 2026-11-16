@@ -36,6 +36,11 @@ import { RecordIcon } from "@/shared/ui/record-icon";
 import { Text } from "@/shared/ui/app-text";
 import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorForeground } from "@/shared/icons/colors";
+import {
+  EntranceSections,
+  EntranceView,
+  slotEntrance,
+} from "@/shared/ui/page-entrance";
 
 export function RecurringScrim() {
   return <BottomSafeAreaGradient />;
@@ -106,7 +111,8 @@ export function RecurringAction({
   return (
     <>
       <RecurringScrim />
-      <View
+      <EntranceView
+        slot={2}
         pointerEvents="box-none"
         style={{
           position: "absolute",
@@ -150,7 +156,7 @@ export function RecurringAction({
           </Text>
         </Pressable>
         </Reanimated.View>
-      </View>
+      </EntranceView>
     </>
   );
 }
@@ -225,9 +231,12 @@ export function RecurringEditorShell({
                 // ... the specified child already has a parent".
                 collapsable={false}
                 pointerEvents={busy ? "none" : "auto"}
-                className="gap-5 px-4"
+                className="px-4"
               >
-                {children}
+                {/* Sections enter one by one; a new type replays them. */}
+                <EntranceSections key={value} startSlot={1} className="gap-5">
+                  {children}
+                </EntranceSections>
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
@@ -286,6 +295,7 @@ export function RecurringEditorShell({
               transform: [{ translateY }],
             }}
           >
+            <Reanimated.View entering={slotEntrance(0)}>
             <GlassSegmentedControl
               accessibilityLabel={title}
               blurTarget={target}
@@ -294,6 +304,7 @@ export function RecurringEditorShell({
               value={value}
               onChange={onChange}
             />
+            </Reanimated.View>
           </Animated.View>
           {bottomOverlay}
         </View>

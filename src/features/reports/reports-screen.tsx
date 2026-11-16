@@ -16,6 +16,7 @@ import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
 import { TabPage } from "@/shared/ui/tab-page";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
 import { useTabAction } from "@/shared/navigation/tab-actions";
+import { useTabEntryKey } from "@/shared/navigation/tab-entry";
 
 import { AccountBalancesSection } from "./components/account-balances-section";
 import { CashFlowCard } from "./components/cash-flow-card";
@@ -85,6 +86,8 @@ function ProfileReports() {
     setIsReviewOpen(true);
   };
   useTabAction("reports", openReview);
+  // Cards enter one after another each time the tab is opened.
+  const entryKey = useTabEntryKey("reports");
   const review = useMemo(
     () =>
       isReviewRequested
@@ -113,6 +116,7 @@ function ProfileReports() {
     <>
       <TabPage
         animateLayout
+        entryKey={entryKey}
         headerHeight={TAB_HEADER_HEIGHT}
         header={<TabHeader />}
       >

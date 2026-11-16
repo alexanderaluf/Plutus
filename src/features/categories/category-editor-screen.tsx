@@ -266,6 +266,8 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
                 </Text>
               ) : (
                 <CategoryFormSections
+                  // A new type replays the form's entrance.
+                  key={draft.type}
                   collapsable={false}
                   pointerEvents={isSaving ? "none" : "auto"}
                   className="gap-3 px-4"
@@ -524,18 +526,20 @@ export function CategoryEditorScreen({ editId }: { editId?: string }) {
               { transform: [{ translateY: topControlsTranslateY }] },
             ]}
           >
-            <CategoryTypeSelector
-              blurTarget={blurTargetRef}
-              minHeight={Platform.OS === "android" ? 52 : 48}
-              value={draft.type}
-              onChange={changeType}
-            />
+            <Reanimated.View entering={categoryEntrance(0)}>
+              <CategoryTypeSelector
+                blurTarget={blurTargetRef}
+                minHeight={Platform.OS === "android" ? 52 : 48}
+                value={draft.type}
+                onChange={changeType}
+              />
+            </Reanimated.View>
           </Animated.View>
 
           <BottomSafeAreaGradient />
 
           <Reanimated.View
-            entering={categoryEntrance(220)}
+            entering={categoryEntrance(3)}
             pointerEvents="box-none"
             style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
           >

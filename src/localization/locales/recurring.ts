@@ -132,6 +132,15 @@ export const recurringEn = {
   approxMonthly: "≈ {{amount}} per month",
   showAll: "Show all ({{count}})",
   showLess: "Show less",
+  snapshot: {
+    heading: "Recurring payment",
+    due: "Due",
+    recorded: "Recorded",
+    onTime: "On time",
+    late_one: "{{count}} day late",
+    late_other: "{{count}} days late",
+    rateOf: "Rate of {{date}}",
+  },
   periods: {
     Daily: "Daily",
     Weekly: "Weekly",
@@ -272,6 +281,15 @@ export const recurringHe = {
   approxMonthly: "≈ {{amount}} לחודש",
   showAll: "הצגת הכול ({{count}})",
   showLess: "הצגת פחות",
+  snapshot: {
+    heading: "תשלום חוזר",
+    due: "מועד החיוב",
+    recorded: "נרשם",
+    onTime: "בזמן",
+    late_one: "באיחור של {{count}} יום",
+    late_other: "באיחור של {{count}} ימים",
+    rateOf: "שער מ־{{date}}",
+  },
   periods: {
     Daily: "יומי",
     Weekly: "שבועי",

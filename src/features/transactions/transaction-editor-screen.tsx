@@ -1,3 +1,8 @@
+import {
+  EntranceSections,
+  EntranceView,
+  slotEntrance,
+} from "@/shared/ui/page-entrance";
 import type { DateTimePickerProps } from "@expo/ui/community/datetime-picker";
 
 type ImagePickerModule = typeof import("expo-image-picker");
@@ -781,6 +786,9 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   </View>
                 ) : null}
 
+                {/* The amount card enters once; it is not replayed on a type
+                    change, so the amount keeps focus. */}
+                <EntranceView slot={1}>
                 <TransactionHeroCard
                   accountCurrencyCode={accountCurrencyCode}
                   amount={draft.amount}
@@ -806,7 +814,14 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                   onChangeName={(value) => change("name", value)}
                   onOpenCurrencyPicker={() => setCurrencySheetOpen(true)}
                 />
+                </EntranceView>
 
+                {/* The cards below enter one by one; a new type replays them. */}
+                <EntranceSections
+                  key={draft.type}
+                  startSlot={2}
+                  style={styles.cardStack}
+                >
                 {/* What for, then from where; a transfer is a route first. */}
                 {draft.type === 2 ? (
                   <>
@@ -935,6 +950,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
                 />
                   </>
                 ) : null}
+                </EntranceSections>
               </View>
             </Animated.ScrollView>
           </BlurTargetView>
@@ -989,19 +1005,22 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
               { transform: [{ translateY: topControlsTranslateY }] },
             ]}
           >
-            <GlassSegmentedControl
-              accessibilityLabel={t("transactions.form.transactionType")}
-              blurTarget={blurTargetRef}
-              minHeight={Platform.OS === "android" ? 52 : 48}
-              options={typeOptions}
-              value={draft.type}
-              onChange={changeType}
-            />
+            <Reanimated.View entering={slotEntrance(0)}>
+              <GlassSegmentedControl
+                accessibilityLabel={t("transactions.form.transactionType")}
+                blurTarget={blurTargetRef}
+                minHeight={Platform.OS === "android" ? 52 : 48}
+                options={typeOptions}
+                value={draft.type}
+                onChange={changeType}
+              />
+            </Reanimated.View>
           </Animated.View>
 
           <BottomSafeAreaGradient />
 
-          <View
+          <EntranceView
+            slot={2}
             pointerEvents="box-none"
             style={[styles.actionDock, { bottom: Math.max(insets.bottom, 10) }]}
           >
@@ -1098,7 +1117,7 @@ export function TransactionEditorScreen({ editId }: { editId?: string }) {
               </Pressable>
             </View>
             </SaveEmphasis>
-          </View>
+          </EntranceView>
         </View>
       </KeyboardAvoidingView>
 
@@ -1194,6 +1213,7 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingHorizontal: 16,
   },
+  cardStack: { gap: 14 },
   headerSpace: { height: 56 },
   selectorSpace: { height: 84 },
   headerClip: {

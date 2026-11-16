@@ -236,6 +236,7 @@ export function ProfileSettingsPage({
 
   return (
     <EdgeToEdgeScrollView
+      entrance
       className="flex-1"
       contentContainerClassName="gap-4 px-4 pt-3"
       contentContainerStyle={{ paddingBottom: 28 }}

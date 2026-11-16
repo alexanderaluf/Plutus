@@ -39,6 +39,7 @@ import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { CONTINUOUS, FormCard, FormDivider, SwitchRow, TABULAR } from "@/shared/ui/form-ui";
 import { i18n } from "@/localization/i18n";
 import { RecurringAmount } from "./components/recurring-card";
+import { EntranceSections } from "@/shared/ui/page-entrance";
 import {
   BusyButtonLabel,
   RecurringBadge,
@@ -664,7 +665,8 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
             </Text>
           </View>
         ) : (
-          <>
+          // Hero, status, schedule, history and actions enter in turn.
+          <EntranceSections style={{ gap: 16 }}>
             <Hero item={item} now={now} />
             {!!error && (
               <View
@@ -774,7 +776,7 @@ export function RecurringDetailsScreen({ id }: { id: string }) {
                 <Button.Label>{t("recurring.delete")}</Button.Label>
               </Button>
             </View>
-          </>
+          </EntranceSections>
         )}
       </Animated.ScrollView>
       <CollapsingHeader

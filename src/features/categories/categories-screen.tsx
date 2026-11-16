@@ -53,6 +53,7 @@ import {
   type CategorySort,
 } from "./lib/category-list-helpers";
 import { useCategoryClock } from "./use-category-clock";
+import { useListEntrance } from "@/shared/ui/page-entrance";
 
 /** Expense reads red and income green, as everywhere else in the app. */
 function useTypeColor(type: CategoryType) {
@@ -243,6 +244,12 @@ export function CategoriesScreen() {
   );
   const summary = summarizeMonth(roots, totals);
   const sortedRoots = sortCategories(roots, sort, totals);
+  // Header, then the summary card, then each category card. Switching the
+  // expense/income/transfer selector replays the summary and the cards.
+  const { rowKey, rowEntering } = useListEntrance(2, {
+    replayKey: String(type),
+    replayFirstRowSlot: 1,
+  });
   const monthLabel = now.toLocaleDateString(i18n.resolvedLanguage, {
     month: "long",
     year: "numeric",
@@ -300,7 +307,8 @@ export function CategoriesScreen() {
               ListHeaderComponent={
                 roots.length ? (
                   <Animated.View
-                    entering={categoryEntrance(40)}
+                    key={rowKey}
+                    entering={rowEntering(-1)}
                     className="mb-2 gap-1 rounded-[28px] border border-border bg-surface p-4"
                     style={CONTINUOUS}
                   >
@@ -334,7 +342,7 @@ export function CategoriesScreen() {
                 );
                 return (
                   <Animated.View
-                    entering={categoryEntrance(70 + Math.min(index, 7) * 35)}
+                    entering={rowEntering(index)}
                     exiting={categoryExit}
                     layout={categoryLayout}
                     className="overflow-hidden rounded-[24px] border border-border bg-surface"
@@ -369,7 +377,8 @@ export function CategoriesScreen() {
               }}
               ListEmptyComponent={
                 <Animated.View
-                  entering={categoryEntrance(90)}
+                  key={rowKey}
+                  entering={rowEntering(0)}
                   className="flex-1 items-center justify-center gap-3 px-8"
                 >
                   <View
@@ -397,7 +406,7 @@ export function CategoriesScreen() {
           </BlurTargetView>
           <BottomSafeAreaGradient />
           <Animated.View
-            entering={categoryEntrance(180)}
+            entering={categoryEntrance(1)}
             style={{
               position: "absolute",
               left: 12,
@@ -413,7 +422,7 @@ export function CategoriesScreen() {
             />
           </Animated.View>
           <Animated.View
-            entering={categoryEntrance(180)}
+            entering={categoryEntrance(1)}
             style={{
               position: "absolute",
               left: I18nManager.isRTL ? 20 : undefined,

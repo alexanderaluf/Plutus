@@ -32,6 +32,7 @@ import {
 import { FilledIcon, type FilledIconName } from "@/shared/ui/filled-icon";
 import { CONTINUOUS } from "@/shared/ui/form-ui";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
+import { EntranceSections, EntranceView } from "@/shared/ui/page-entrance";
 import { RecurringCalendar } from "./components/recurring-calendar";
 import {
   RecurringDueCard,
@@ -214,6 +215,8 @@ export function RecurringScreen() {
           scrollEventThrottle={16}
         >
           <CollapsingHeaderSpacer />
+          {/* Sections and cards enter in turn; a new tab replays them. */}
+          <EntranceSections key={tab} style={{ gap: 20 }}>
           {!!error && (
             <View
               className="flex-row items-center gap-3 rounded-[20px] p-3 ps-4"
@@ -357,6 +360,7 @@ export function RecurringScreen() {
                 hint={t("recurring.emptyArchivedHint")}
               />
             ))}
+          </EntranceSections>
         </Animated.ScrollView>
       </BlurTargetView>
 
@@ -389,7 +393,8 @@ export function RecurringScreen() {
       </CollapsingHeader>
 
       <RecurringScrim />
-      <View
+      <EntranceView
+        slot={1}
         style={{
           position: "absolute",
           left: 12,
@@ -412,8 +417,9 @@ export function RecurringScreen() {
           value={tab}
           onChange={setTab}
         />
-      </View>
-      <View
+      </EntranceView>
+      <EntranceView
+        slot={1}
         style={{
           position: "absolute",
           ...(isRTL ? { left: 20 } : { right: 20 }),
@@ -429,7 +435,7 @@ export function RecurringScreen() {
         >
           <FilledIcon name="plus" size={32} tone="accent-foreground" />
         </Button>
-      </View>
+      </EntranceView>
 
       {sheet === "sort" && (
         <BudgetSheet title={t("recurring.sort")} onClose={() => setSheet(null)}>

@@ -111,6 +111,7 @@ export function ProfileScreen() {
         <CurrencyConverterPage />
       ) : (
         <EdgeToEdgeScrollView
+      entrance
           className="flex-1"
           contentContainerClassName="px-5"
           contentContainerStyle={{ paddingTop: 40 }}

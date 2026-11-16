@@ -1,3 +1,4 @@
+import { entranceChildren } from "./page-entrance";
 import {
   createContext,
   use,
@@ -222,8 +223,14 @@ export function EdgeToEdgeScrollView({
   contentContainerStyle,
   onScroll,
   ref,
+  entrance = false,
+  children,
   ...props
-}: ScrollViewProps & { ref?: Ref<ScrollViewInstance> }) {
+}: ScrollViewProps & {
+  ref?: Ref<ScrollViewInstance>;
+  /** Each direct child enters in turn when the page mounts. */
+  entrance?: boolean;
+}) {
   const insets = useEdgeToEdgeContentInsets();
   const onHeaderScroll = useEdgeToEdgeScroll(onScroll ?? undefined);
   const contentStyle = StyleSheet.flatten(contentContainerStyle) ?? {};
@@ -250,7 +257,9 @@ export function EdgeToEdgeScrollView({
               : 32),
         },
       ]}
-    />
+    >
+      {entrance ? entranceChildren(children) : children}
+    </Animated.ScrollView>
   );
 }
 

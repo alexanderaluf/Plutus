@@ -34,6 +34,8 @@ import {
   useBudgetLabels,
 } from "./components/budget-ui";
 import { BudgetOverviewCard } from "@/features/home/components/budget-card";
+import Reanimated from "react-native-reanimated";
+import { EntranceView, useListEntrance } from "@/shared/ui/page-entrance";
 
 type BudgetSort = "newest" | "name" | "mostUsed";
 
@@ -161,12 +163,17 @@ export function BudgetsScreen() {
     },
   );
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
+  // Totals, the count row, then each budget. The type selector replays all.
+  const { rowKey, rowEntering } = useListEntrance(2, {
+    replayKey: String(type),
+    replayFirstRowSlot: 2,
+  });
   return (
     <View style={{ flex: 1, backgroundColor: c.background }}>
       <BlurTargetView ref={target} style={{ flex: 1 }}>
         <Animated.FlatList
           data={budgets}
-          keyExtractor={(b) => b.id}
+          keyExtractor={(b) => `${b.id}:${rowKey}`}
           extraData={expandedId}
           contentContainerStyle={{
             paddingHorizontal: 16,
@@ -175,21 +182,24 @@ export function BudgetsScreen() {
           }}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          renderItem={({ item }) => (
-            <BudgetOverviewCard
-              budget={item}
-              expanded={expandedId === item.id}
-              onToggle={() =>
-                setExpandedId(expandedId === item.id ? null : item.id)
-              }
-            />
+          renderItem={({ item, index }) => (
+            <Reanimated.View entering={rowEntering(index)}>
+              <BudgetOverviewCard
+                budget={item}
+                expanded={expandedId === item.id}
+                onToggle={() =>
+                  setExpandedId(expandedId === item.id ? null : item.id)
+                }
+              />
+            </Reanimated.View>
           )}
           ListHeaderComponent={
             <View className="gap-5 pb-2 pt-4">
               <CollapsingHeaderSpacer />
               {totals.map((total) => (
-                <View
-                  key={total.currency}
+                <Reanimated.View
+                  key={`${total.currency}:${rowKey}`}
+                  entering={rowEntering(-2)}
                   className="flex-row items-center gap-4"
                 >
                   <BudgetRing
@@ -219,9 +229,13 @@ export function BudgetsScreen() {
                       </View>
                     ))}
                   </View>
-                </View>
+                </Reanimated.View>
               ))}
-              <View className="flex-row items-center justify-between">
+              <Reanimated.View
+                key={`count:${rowKey}`}
+                entering={rowEntering(-1)}
+                className="flex-row items-center justify-between"
+              >
                 <Text className="font-manrope-semibold text-lg text-accent">
                   {t("budgets.list.count", { count: budgets.length })}
                 </Text>
@@ -235,10 +249,11 @@ export function BudgetsScreen() {
                     <FilledIcon name="filter" size={22} />
                   </Button>
                 </View>
-              </View>
+              </Reanimated.View>
             </View>
           }
           ListEmptyComponent={
+            <Reanimated.View key={rowKey} entering={rowEntering(0)}>
             <BudgetPanel>
               <Text className="font-manrope-bold text-xl text-foreground">
                 {t("budgets.list.emptyTitle")}
@@ -254,6 +269,7 @@ export function BudgetsScreen() {
                 {t("budgets.list.create")}
               </Button>
             </BudgetPanel>
+            </Reanimated.View>
           }
         />
       </BlurTargetView>
@@ -274,7 +290,8 @@ export function BudgetsScreen() {
         </BudgetHeader>
       </CollapsingHeader>
       <BottomSafeAreaGradient fadeHeight={162} zIndex={0} />
-      <View
+      <EntranceView
+        slot={1}
         style={{
           position: "absolute",
           left: 12,
@@ -289,8 +306,9 @@ export function BudgetsScreen() {
           onChange={setType}
           options={labels.types.map((label, value) => ({ label, value }))}
         />
-      </View>
-      <View
+      </EntranceView>
+      <EntranceView
+        slot={1}
         style={{
           position: "absolute",
           ...(I18nManager.isRTL ? { left: 20 } : { right: 20 }),
@@ -305,7 +323,7 @@ export function BudgetsScreen() {
         >
           <FilledIcon name="plus" size={30} tone="accent-foreground" />
         </Button>
-      </View>
+      </EntranceView>
       {sheet === "info" && (
         <BudgetSheet
           title={t("budgets.list.howItWorks")}

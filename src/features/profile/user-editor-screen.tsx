@@ -210,6 +210,7 @@ export function UserEditorScreen() {
           }
         >
           <EdgeToEdgeScrollView
+      entrance
             className="flex-1"
             contentContainerClassName="gap-8 px-5 pb-8 pt-6"
             keyboardShouldPersistTaps="handled"

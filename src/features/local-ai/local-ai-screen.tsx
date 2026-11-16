@@ -70,6 +70,7 @@ import {
 import { LeaveChatDialog } from "./components/leave-chat-dialog";
 import { ChatHistorySheet } from "./components/chat-history-sheet";
 import { ModelSelector } from "./components/model-selector";
+import { EntranceView } from "@/shared/ui/page-entrance";
 import { ChatGPTConnectionCard } from "./components/chatgpt-connection-card";
 import { createChatGPTModel, chatGPTErrorCode } from "./chatgpt-service";
 import { useChatGPT, chatGPTErrorMessage } from "./use-chatgpt";
@@ -878,17 +879,17 @@ function LocalAIChatScreen() {
             >
               {/* Introduces the private model only until the first chat message. */}
               {!cloudSelected && !document._local.aiFirstChatAt && (
-                <View className="rounded-3xl bg-surface p-4">
+                <EntranceView slot={0} className="rounded-3xl bg-surface p-4">
                   <Text className="font-manrope-semibold text-base text-foreground">
                     {t("localAI.privacyTitle")}
                   </Text>
                   <Text className="mt-1 font-sans text-sm leading-5 text-muted">
                     {t("localAI.privacyDescription")}
                   </Text>
-                </View>
+                </EntranceView>
               )}
               {chatgpt.hydrated && !cloudSelected && (!chatgpt.connected || !installed) && (
-                <View className="gap-3">
+                <EntranceView slot={1} className="gap-3">
                   {!Object.values(download.states).some((state) => state?.status === "installed") && (
                     <View className="gap-1 px-1">
                       <Text className="font-manrope-bold text-lg text-foreground">{t("localAI.settings.choose")}</Text>
@@ -896,12 +897,12 @@ function LocalAIChatScreen() {
                     </View>
                   )}
                   <ChatGPTConnectionCard busy={busy} onSelect={selectChatGPT} />
-                </View>
+                </EntranceView>
               )}
               {!chatgpt.hydrated || (!cloudSelected && compatibility === null) ? (
                 <ActivityIndicator />
               ) : !cloudSelected && incompatibilityReasons.length > 0 ? (
-                <View className="rounded-3xl bg-surface p-5">
+                <EntranceView slot={2} className="rounded-3xl bg-surface p-5">
                   <Text className="font-manrope-semibold text-foreground">
                     {t("localAI.deviceUnsupported")}
                   </Text>
@@ -910,18 +911,18 @@ function LocalAIChatScreen() {
                       {t(`localAI.reasons.${reason}`)}
                     </Text>
                   ))}
-                </View>
+                </EntranceView>
               ) : !cloudSelected && (!nativeAI || compatibility?.isExpoGo) ? (
-                <View className="rounded-3xl bg-surface p-5">
+                <EntranceView slot={2} className="rounded-3xl bg-surface p-5">
                   <Text className="font-manrope-semibold text-foreground">
                     {t("localAI.deviceSupported")}
                   </Text>
                   <Text className="mt-2 text-muted">
                     {t("localAI.expoGoUnavailable")}
                   </Text>
-                </View>
+                </EntranceView>
               ) : !cloudSelected && !installed ? (
-                <View className="gap-3 rounded-3xl bg-surface p-5">
+                <EntranceView slot={2} className="gap-3 rounded-3xl bg-surface p-5">
                   <Text className="font-manrope-semibold text-foreground">
                     {t("localAI.deviceSupported")}
                   </Text>
@@ -962,7 +963,7 @@ function LocalAIChatScreen() {
                       {download.error}
                     </Text>
                   )}
-                </View>
+                </EntranceView>
               ) : (
                 <>
                   {!cloudSelected && engine.status === "loading" && (
@@ -982,7 +983,7 @@ function LocalAIChatScreen() {
                     </Pressable>
                   )}
                   {messages.length === 0 && (
-                    <View className="gap-3 py-4">
+                    <EntranceView slot={2} className="gap-3 py-4">
                       <Text className="px-3 text-center text-muted">
                         {t("localAI.chatWelcome")}
                       </Text>
@@ -1004,7 +1005,7 @@ function LocalAIChatScreen() {
                           </Pressable>
                         ))}
                       </View>
-                    </View>
+                    </EntranceView>
                   )}
                   {messages.map((message) => (
                     <View

@@ -21,7 +21,6 @@ import {
 } from "react-native";
 import Reanimated, {
   Easing,
-  FadeIn,
   LinearTransition,
   ReduceMotion,
   useAnimatedStyle,
@@ -71,6 +70,11 @@ import {
   TABULAR,
 } from "@/shared/ui/form-ui";
 import { GlassSegmentedControl } from "@/shared/ui/glass-segmented-control";
+import {
+  EntranceSections,
+  EntranceView,
+  slotEntrance,
+} from "@/shared/ui/page-entrance";
 import { IconPicker } from "@/shared/ui/icon-picker";
 import { RecordIcon } from "@/shared/ui/record-icon";
 import { BudgetColorPicker } from "./components/budget-color-picker";
@@ -95,9 +99,8 @@ function categoryToOption(category: Category): TransactionOption {
 const SECTION_LAYOUT = LinearTransition.duration(240)
   .easing(Easing.bezier(0.77, 0, 0.175, 1))
   .reduceMotion(ReduceMotion.System);
-const SECTION_ENTER = FadeIn.duration(200)
-  .easing(Easing.bezier(0.23, 1, 0.32, 1))
-  .reduceMotion(ReduceMotion.System);
+// Panels revealed by an in-form choice use the page entrance.
+const SECTION_ENTER = slotEntrance(0);
 
 export function BudgetEditorScreen({ editId }: { editId?: string }) {
   const { t, i18n } = useTranslation();
@@ -287,7 +290,11 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
       }
       // What the budget tracks stays in reach while the title scrolls away.
       headerDock={
-        <View pointerEvents={busy ? "none" : "auto"} style={styles.typeDock}>
+        <EntranceView
+          slot={0}
+          pointerEvents={busy ? "none" : "auto"}
+          style={styles.typeDock}
+        >
           <GlassSegmentedControl
             accessibilityLabel={t("budgets.form.budgetFor")}
             minHeight={Platform.OS === "android" ? 52 : 48}
@@ -305,7 +312,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
               }))
             }
           />
-        </View>
+        </EntranceView>
       }
       bottomFade={false}
     >
@@ -326,6 +333,13 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
                   gap: 12,
                 }}
               >
+                {/* Sections enter one by one; a new "budget for" type
+                    replays them. */}
+                <EntranceSections
+                  key={draft.transactionType}
+                  startSlot={1}
+                  style={{ gap: 12 }}
+                >
                 {/* Hero: what it is called, and the one number that matters. */}
                 <View
                   pointerEvents={busy ? "none" : "auto"}
@@ -821,11 +835,13 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
                     </FormField>
                   </FormCard>
                 </Reanimated.View>
+                </EntranceSections>
               </EdgeToEdgeHeaderScrollView>
 
               <BottomSafeAreaGradient />
 
-              <View
+              <EntranceView
+                slot={2}
                 pointerEvents="box-none"
                 style={[
                   styles.actionDock,
@@ -882,7 +898,7 @@ export function BudgetEditorScreen({ editId }: { editId?: string }) {
                     </Text>
                   </Pressable>
                 </SaveEmphasis>
-              </View>
+              </EntranceView>
             </View>
           </KeyboardAvoidingView>
           {sheetRoot ? (

@@ -16,6 +16,10 @@ import {
   CollapsingHeaderSpacer,
   useCollapsingHeader,
 } from "@/shared/ui/collapsing-header";
+import {
+  entranceAnimation,
+  listEntranceDelay,
+} from "@/shared/ui/entrance-motion";
 
 export function TabPage({
   children,
@@ -23,11 +27,17 @@ export function TabPage({
   header,
   headerHeight = 56,
   animateLayout = false,
+  entryKey,
 }: PropsWithChildren<{
   contentBottomInset?: number;
   header?: ReactNode;
   headerHeight?: number;
   animateLayout?: boolean;
+  /**
+   * When set, sections enter one after another, top to bottom; a new value
+   * replays the entrance (see `useTabEntryKey`).
+   */
+  entryKey?: number;
 }>) {
   const sections = Children.toArray(children);
   const insets = useSafeAreaInsets();
@@ -54,12 +64,23 @@ export function TabPage({
             isValidElement(section) && section.key != null
               ? section.key
               : `section-${index}`;
-          return animateLayout ? (
+          const entering =
+            entryKey === undefined
+              ? undefined
+              : index === 0
+                ? entranceAnimation()
+                : entranceAnimation(listEntranceDelay(index - 1));
+          return animateLayout || entering ? (
             <Animated.View
-              layout={LinearTransition.duration(180)
-                .easing(Easing.bezier(0.77, 0, 0.175, 1))
-                .reduceMotion(ReduceMotion.System)}
-              key={key}
+              layout={
+                animateLayout
+                  ? LinearTransition.duration(180)
+                      .easing(Easing.bezier(0.77, 0, 0.175, 1))
+                      .reduceMotion(ReduceMotion.System)
+                  : undefined
+              }
+              entering={entering}
+              key={entryKey === undefined ? key : `${key}:${entryKey}`}
             >
               {section}
             </Animated.View>

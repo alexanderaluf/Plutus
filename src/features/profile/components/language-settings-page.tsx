@@ -31,6 +31,7 @@ export function LanguageSettingsPage() {
 
   return (
     <EdgeToEdgeScrollView
+      entrance
       className="flex-1"
       contentContainerClassName="gap-5 px-4 pt-3"
       contentContainerStyle={{ paddingBottom: 32 }}

@@ -60,8 +60,13 @@ import {
   View,
   type ViewInstance,
 } from "react-native";
-import { Easing } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Reanimated, { Easing } from "react-native-reanimated";
+import {
+  EntranceSections,
+  EntranceView,
+  useListEntrance,
+} from "@/shared/ui/page-entrance";
 import { AccountActivityCard } from "./components/details/account-activity-card";
 import { AccountDetailsHero } from "./components/details/account-details-hero";
 import { AccountPeriodNavigator } from "./components/details/account-period-navigator";
@@ -256,6 +261,9 @@ export function AccountDetailsScreen() {
       : null;
 
   const pageKey = allTime ? "all" : `${period}:${startTime}:${endTime}`;
+  // Hero, status, period and the timeline title enter in turn, then the rows
+  // on screen. Choosing another period replays the rows.
+  const { rowKey, rowEntering } = useListEntrance(4, { replayKey: pageKey });
   const limit = page.key === pageKey ? page.limit : TIMELINE_PAGE;
   const rows = useMemo<TimelineRow[]>(
     () => createHomeTransactionRows(activity.entries.slice(0, limit)),
@@ -283,8 +291,9 @@ export function AccountDetailsScreen() {
   }, [selectedTransactionId, scopedDocument, id, project]);
 
   const renderRow = useCallback(
-    ({ item, index }: { item: TimelineRow; index: number }) =>
-      item.kind === "date" ? (
+    ({ item, index }: { item: TimelineRow; index: number }) => (
+      <Reanimated.View key={rowKey} entering={rowEntering(index)}>
+      {item.kind === "date" ? (
         <TransactionDateHeader
           timestamp={item.timestamp}
           now={now}
@@ -305,8 +314,10 @@ export function AccountDetailsScreen() {
             onPress={onTransactionPress}
           />
         </View>
-      ),
-    [now, project, onTransactionPress],
+      )}
+      </Reanimated.View>
+    ),
+    [now, project, onTransactionPress, rowKey, rowEntering],
   );
 
   const language = i18n.resolvedLanguage;
@@ -489,7 +500,7 @@ export function AccountDetailsScreen() {
           ListHeaderComponent={
             <View>
               <CollapsingHeaderSpacer />
-              <View style={styles.sections}>
+              <EntranceSections style={styles.sections}>
                 <AccountDetailsHero account={account} />
                 <AccountStatusCard account={account} />
                 <View style={styles.periodGroup}>
@@ -526,11 +537,13 @@ export function AccountDetailsScreen() {
                     </View>
                   </View>
                 ) : null}
-              </View>
+              </EntranceSections>
             </View>
           }
           ListEmptyComponent={
-            <View
+            <EntranceView
+              key={rowKey}
+              slot={4}
               className="mt-2 items-center gap-3 rounded-[24px] border border-border bg-surface px-6 py-8"
               style={{ borderCurve: "continuous" }}
             >
@@ -558,7 +571,7 @@ export function AccountDetailsScreen() {
                   </Text>
                 </Pressable>
               ) : null}
-            </View>
+            </EntranceView>
           }
         />
       </BlurTargetView>

@@ -71,6 +71,7 @@ function loadLayout(safeInsets) {
     "@/shared/theme/app-theme": {
       useAppThemeColors: () => ({ background: "#000000" }),
     },
+    "./page-entrance": { entranceChildren: (children) => children },
     "./safe-area-gradients": {
       TopSafeAreaGradient: "TopFade",
       BottomSafeAreaGradient: "BottomFade",

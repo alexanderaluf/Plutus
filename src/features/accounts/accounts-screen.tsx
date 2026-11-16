@@ -18,12 +18,25 @@ import {
 } from "@/shared/ui/collapsing-header";
 import { FilledIcon } from "@/shared/ui/filled-icon";
 import { TAB_HEADER_HEIGHT, TabHeader } from "@/shared/navigation/tab-header";
-import { AccountGroupCard } from "./components/account-list-card";
+import { useTabEntryKey } from "@/shared/navigation/tab-entry";
+import {
+  entranceAnimation,
+  listEntranceDelay,
+} from "@/shared/ui/entrance-motion";
+import {
+  AccountGroupCard,
+  accountGroupCardCount,
+} from "./components/account-list-card";
 import { AccountsOverview } from "./components/accounts-overview";
 import type { Account } from "./types";
 
 type AccountGroup = "everyday" | "cards" | "savings";
-type Section = { key: AccountGroup; accounts: Account[] };
+type Section = {
+  key: AccountGroup;
+  accounts: Account[];
+  /** Entrance position of the section's first card (and its title). */
+  firstEntranceIndex: number;
+};
 
 const GROUP_ORDER: AccountGroup[] = ["everyday", "cards", "savings"];
 
@@ -31,10 +44,6 @@ function groupOf(account: Account): AccountGroup {
   if (account.kind === "credit") return "cards";
   if (account.kind === "savings") return "savings";
   return "everyday";
-}
-
-function reveal(_index: number) {
-  return undefined;
 }
 
 export function AccountsScreen() {
@@ -52,17 +61,30 @@ export function AccountsScreen() {
       Number(b.currencyCode === activeProfile.currencyCode) -
       Number(a.currencyCode === activeProfile.currencyCode),
   );
-  const sections: Section[] = GROUP_ORDER.map((group) => ({
-    key: group,
-    accounts: accounts.filter((account) => groupOf(account) === group),
-  })).filter((section) => section.accounts.length > 0);
+  // Cards enter top to bottom across all sections, one after another.
+  const sections: Section[] = [];
+  let entranceIndex = 0;
+  for (const group of GROUP_ORDER) {
+    const members = accounts.filter((account) => groupOf(account) === group);
+    if (!members.length) continue;
+    sections.push({
+      key: group,
+      accounts: members,
+      firstEntranceIndex: entranceIndex,
+    });
+    entranceIndex += accountGroupCardCount(members);
+  }
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
+  // Tabs stay mounted; keying the animated views on each navbar entry
+  // remounts them, so the entrance plays every time the page is opened.
+  const entryKey = useTabEntryKey("accounts");
 
   return (
     <View style={{ flex: 1 }}>
       <NativeAnimated.FlatList
         data={sections}
         keyExtractor={(item) => item.key}
+        extraData={entryKey}
         contentContainerStyle={{
           paddingHorizontal: 20,
           paddingBottom: 112 + insets.bottom,
@@ -77,7 +99,8 @@ export function AccountsScreen() {
             <View className="h-1" />
             {!!paymentError && (
               <Animated.View
-                entering={reveal(1)}
+                key={`error:${entryKey}`}
+                entering={entranceAnimation()}
                 className="mb-3 flex-row items-center gap-3 rounded-[24px] border border-border bg-surface p-4"
                 style={{ borderCurve: "continuous" }}
               >
@@ -110,7 +133,10 @@ export function AccountsScreen() {
               </Animated.View>
             )}
             {accounts.length > 0 && (
-              <Animated.View entering={reveal(0)}>
+              <Animated.View
+                key={`overview:${entryKey}`}
+                entering={entranceAnimation()}
+              >
                 <AccountsOverview
                   totals={totals}
                   excludedCount={accounts.length - included.length}
@@ -119,12 +145,15 @@ export function AccountsScreen() {
             )}
           </View>
         }
-        renderItem={({ item, index }) => (
-          <Animated.View
-            entering={reveal(index + (paymentError ? 2 : 1))}
-            className="gap-2.5"
-          >
-            <View className="flex-row items-center justify-between gap-3 px-0.5">
+        renderItem={({ item }) => (
+          <View className="gap-2.5">
+            <Animated.View
+              key={`title:${entryKey}`}
+              entering={entranceAnimation(
+                listEntranceDelay(item.firstEntranceIndex),
+              )}
+              className="flex-row items-center justify-between gap-3 px-0.5"
+            >
               <Text
                 accessibilityRole="header"
                 numberOfLines={1}
@@ -140,9 +169,11 @@ export function AccountsScreen() {
                   {t("accounts.list.count", { count: item.accounts.length })}
                 </Text>
               </View>
-            </View>
+            </Animated.View>
             <AccountGroupCard
               accounts={item.accounts}
+              entryKey={entryKey}
+              firstEntranceIndex={item.firstEntranceIndex}
               onAccountPress={(account) =>
                 router.push({
                   pathname: "/accounts/[id]",
@@ -150,10 +181,13 @@ export function AccountsScreen() {
                 })
               }
             />
-          </Animated.View>
+          </View>
         )}
         ListEmptyComponent={
-          <Animated.View entering={reveal(1)}>
+          <Animated.View
+            key={`empty:${entryKey}`}
+            entering={entranceAnimation(listEntranceDelay(0))}
+          >
             <View
               className="items-center gap-3 rounded-[24px] border border-border bg-surface px-6 py-8"
               style={{ borderCurve: "continuous" }}

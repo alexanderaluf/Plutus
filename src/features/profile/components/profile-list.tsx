@@ -1,3 +1,4 @@
+import { EntranceSections } from "@/shared/ui/page-entrance";
 import { Button } from "heroui-native";
 import { Pressable, View } from "react-native";
 
@@ -129,8 +130,9 @@ export function ProfileList({
 }: ProfileListProps) {
   const { t } = useTranslation();
 
+  // The heading, then each profile card, enter in turn.
   return (
-    <View className="gap-4">
+    <EntranceSections className="gap-4">
       <View className="flex-row items-center justify-between gap-3">
         <View className="flex-1">
           <Text className="font-manrope-bold text-lg text-foreground">
@@ -161,6 +163,6 @@ export function ProfileList({
           onSelect={onSelect}
         />
       ))}
-    </View>
+    </EntranceSections>
   );
 }

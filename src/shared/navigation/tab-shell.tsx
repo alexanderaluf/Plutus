@@ -18,6 +18,7 @@ import { BottomNavigation } from "./bottom-navigation";
 import { getTabFromPathname, navigationItems } from "./navigation-config";
 import { ProjectionPrewarm } from "./projection-prewarm";
 import { TabActionProvider, useTabActionRegistry } from "./tab-actions";
+import { TabEntryProvider, useTabEntryRegistry } from "./tab-entry";
 import type { TabId } from "./types";
 import { useAppThemeColors } from "@/shared/theme/app-theme";
 import {
@@ -75,10 +76,15 @@ function TabShellContent() {
   const router = useRouter();
   const activeItem = getTabFromPathname(pathname);
   const tabActions = useTabActionRegistry();
+  const tabEntries = useTabEntryRegistry();
   const { switchTab } = useTabTrigger({ name: activeItem });
 
   function handleTabChange(tabId: TabId) {
-    if (tabId !== activeItem) switchTab(tabId, {});
+    if (tabId === activeItem) return;
+    // Before the switch, so the hidden tab renders its entrance from the
+    // first visible frame.
+    tabEntries.announce(tabId);
+    switchTab(tabId, {});
   }
 
   function handleActionPress(tabId: TabId) {
@@ -107,9 +113,11 @@ function TabShellContent() {
       <View style={{ flex: 1 }}>
         <BlurTargetView ref={blurTargetRef} style={{ flex: 1 }}>
           <TabActionProvider registry={tabActions}>
-            <AmountPrivacyProvider>
-              <TabSlot renderFn={renderTab} />
-            </AmountPrivacyProvider>
+            <TabEntryProvider registry={tabEntries}>
+              <AmountPrivacyProvider>
+                <TabSlot renderFn={renderTab} />
+              </AmountPrivacyProvider>
+            </TabEntryProvider>
           </TabActionProvider>
         </BlurTargetView>
 

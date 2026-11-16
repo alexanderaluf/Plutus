@@ -250,6 +250,17 @@ function screenHarness(document, insets, sizes = {}) {
       GlassSegmentedControl: "Selector",
     },
     "@/shared/ui/filled-icon": { FilledIcon: "Icon" },
+    "@/shared/navigation/tab-entry": {
+      useTabEntrance: () => ({
+        entryKey: 0,
+        rowKey: "0:0",
+        rowEntering: () => undefined,
+      }),
+    },
+    "@/shared/ui/entrance-motion": {
+      entranceAnimation: () => undefined,
+      listEntranceDelay: () => 0,
+    },
     "@/shared/navigation/tab-header": {
       TAB_HEADER_HEIGHT: 64,
       TabHeader: "TabHeader",

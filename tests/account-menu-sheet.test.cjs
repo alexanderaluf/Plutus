@@ -75,7 +75,10 @@ function mountScreen(
       Animated: { FlatList: "FlatList" },
       StyleSheet: { create: (styles) => styles },
     },
-    "react-native-reanimated": { Easing: { bezier: (...points) => points } },
+    "react-native-reanimated": {
+      default: { View: "AnimatedRow" },
+      Easing: { bezier: (...points) => points },
+    },
     "react-i18next": {
       useTranslation: () => ({
         t: (key) => key,
@@ -143,6 +146,11 @@ function mountScreen(
     },
     "@/data/database/month-index": {
       getDocumentWindowState: () => undefined,
+    },
+    "@/shared/ui/page-entrance": {
+      EntranceSections: "EntranceSections",
+      EntranceView: "EntranceView",
+      useListEntrance: () => ({ rowKey: "0", rowEntering: () => undefined }),
     },
     "@/data/selectors/home-section-selectors": {
       createHomeTransactionRows: (entries) =>

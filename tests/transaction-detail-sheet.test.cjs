@@ -4,7 +4,14 @@ const { test } = require("node:test");
 const ts = require("typescript");
 const { jsx } = require("react/jsx-runtime");
 
-const flatten = (style) => Object.assign({}, ...[style].flat(Infinity).filter(Boolean));
+// Pressable rows pass a style function; resolve it in its resting state.
+const flatten = (style) =>
+  Object.assign(
+    {},
+    ...[typeof style === "function" ? style({ pressed: false }) : style]
+      .flat(Infinity)
+      .filter(Boolean),
+  );
 
 function mountSheet(language, nativeRTL) {
   const slots = [];
@@ -44,7 +51,7 @@ function mountSheet(language, nativeRTL) {
       useEffect: () => {},
     },
     "react-native": {
-      View: "View", Text: "NativeText", Image: "Image",
+      View: "View", Text: "NativeText", Image: "Image", Pressable: "Pressable",
       I18nManager: native, Platform: { OS: "android" },
       StyleSheet: { create: (styles) => styles, flatten },
     },
@@ -70,6 +77,21 @@ function mountSheet(language, nativeRTL) {
         transactionId,
       }),
     },
+    "@/data/selectors/document-selectors": {
+      selectAccounts: () => [
+        { id: "bank", icon: "bank", iconPath: null, color: "#3366ff" },
+      ],
+    },
+    "@/data/selectors/transaction-selectors": {
+      selectTransactionEntry: () => ({
+        record: {
+          createdAt: "2026-09-09T19:00:00.000Z",
+          updatedAt: "2026-09-12T10:00:00.000Z",
+          recurring: "schedule",
+        },
+      }),
+    },
+    "@/shared/icons/colors": { colorForeground: () => "#ffffff" },
     "@/features/profile/profile-provider": { useProfiles: () => ({ activeProfile: { id: "profile" } }) },
     "@/localization/localization-provider": {
       useAppLocalization: () => ({ isRTL: false, direction: "ltr", language: "en" }),
@@ -140,7 +162,8 @@ function mountSheet(language, nativeRTL) {
     accountAmount: 1360.10, accountCurrencyCode: "ILS",
     exchangeRate: 3.02244974, exchangeRateDate: "2026-09-11",
     exchangeRateFetchedAt: "2026-09-11T08:27:00.000Z",
-    color: "#00ff00", icon: "car", accountName: "Bank card",
+    color: "#00ff00", icon: "car", accountName: "Bank card", accountId: "bank",
+    destinationAccountId: "", description: "Fuel for the trip",
     categoryId: "category", category: "Car", budgetName: "Lifestyle",
   };
   function expand(node) {
@@ -179,22 +202,35 @@ for (const language of ["en", "he"]) {
         return nativeRTL ? { left: "right", right: "left" }[alignment] : alignment;
       };
       const rows = nodes.filter((node) => flatten(node.props.style).flexDirection);
-      assert.ok(rows.length >= 12);
+      assert.ok(rows.length >= 10);
       for (const node of rows) {
         const reverse = flatten(node.props.style).flexDirection === "row-reverse";
         assert.equal(nativeRTL !== reverse, desiredRTL, `${node.type} must mirror once`);
       }
       assert.equal(nodes.find((node) => node.type === "BottomSheet.Content")
         .props.contentContainerProps.style.direction, nativeRTL ? "rtl" : "ltr");
+      assert.equal(
+        nodes.find((node) => node.type === "RecurringPaymentSnapshot").props
+          .direction.writingDirection,
+        direction,
+      );
       for (const value of [
-        "Bobik", "Bank card", "Car", "Lifestyle",
-        "transactions.details.typeAndDate", "transactions.details.heading",
+        "Bank card", "Car", "Lifestyle", "Fuel for the trip",
+        "transactions.details.paidFrom", "transactions.details.detailsTitle",
+        "transactions.details.notes", "transactions.details.history",
+        "transactions.details.happened", "transactions.details.recorded",
+        "transactions.details.edited",
         "transactions.details.conversionTitle", "transactions.details.originalAmount",
         "transactions.details.accountAmount", "transactions.details.rateCaptured",
-        "transactions.details.created",
       ]) {
         const node = text(value);
         assert.equal(physicalAlignment(node), desiredRTL ? "right" : "left", value);
+        assert.equal(flatten(node.props.style).writingDirection, direction, value);
+      }
+      // The hero is centred and still follows the language's direction.
+      for (const value of ["Bobik", "transactions.common.types.expense"]) {
+        const node = text(value);
+        assert.equal(flatten(node.props.style).textAlign, "center", value);
         assert.equal(flatten(node.props.style).writingDirection, direction, value);
       }
       for (const value of ["450.00 USD", "1360.10 ILS", "1 USD = 3.02 ILS"]) {
@@ -227,7 +263,7 @@ test("direction follows language changes without relying on the portal's stale a
     sheet.i18n.language = language;
     sheet.i18n.resolvedLanguage = language;
     const heading = sheet.render().find((node) =>
-      node.props.children === "transactions.details.heading");
+      node.props.children === "transactions.details.paidFrom");
     assert.equal(flatten(heading.props.style).textAlign, language === "he" ? "right" : "left");
     assert.equal(flatten(heading.props.style).writingDirection, language === "he" ? "rtl" : "ltr");
   }
