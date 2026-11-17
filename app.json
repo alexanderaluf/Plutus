@@ -3,11 +3,8 @@
     "name": "Plutus",
     "slug": "plutus",
     "owner": "project-aurora-ltd",
-    "version": "1.0.1",
-    "platforms": [
-      "ios",
-      "android"
-    ],
+    "version": "1.0.2",
+    "platforms": ["ios", "android"],
     "orientation": "default",
     "backgroundColor": "#DCE7E0",
     "scheme": "plutus",
@@ -25,14 +22,7 @@
         "NSMicrophoneUsageDescription": "Allow Plutus to record voice messages for private on-device AI chat.",
         "NSSpeechRecognitionUsageDescription": "Allow Plutus to transcribe voice messages on this device for private AI chat.",
         "ExpoLocalization_supportsRTL": true,
-        "CFBundleLocalizations": [
-          "en",
-          "he",
-          "ru",
-          "en",
-          "he",
-          "ru"
-        ],
+        "CFBundleLocalizations": ["en", "he", "ru", "en", "he", "ru"],
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -102,16 +92,8 @@
         {
           "supportsRTL": true,
           "supportedLocales": {
-            "ios": [
-              "en",
-              "he",
-              "ru"
-            ],
-            "android": [
-              "en",
-              "he",
-              "ru"
-            ]
+            "ios": ["en", "he", "ru"],
+            "android": ["en", "he", "ru"]
           }
         }
       ],
