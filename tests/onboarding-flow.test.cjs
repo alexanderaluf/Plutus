@@ -65,6 +65,8 @@ function mount({
       document = next;
       events.push("replace");
     },
+    // The real provider reads the canonical (never windowed) SQLite document.
+    loadFullDocument: async () => document,
   };
   const mocks = {
     react: {

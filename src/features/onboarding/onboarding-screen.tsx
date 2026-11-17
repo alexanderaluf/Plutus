@@ -115,7 +115,8 @@ export function OnboardingScreen({
 }: {
   onBusyChange: (busy: boolean) => void;
 }) {
-  const { document, updateDocument, replaceDocument } = useLocalData();
+  const { document, loadFullDocument, updateDocument, replaceDocument } =
+    useLocalData();
   const {
     language: activeLanguage,
     isRTL,
@@ -227,7 +228,8 @@ export function OnboardingScreen({
         ),
       );
       if (!confirmed) return;
-      const previous = cloneBackupDocument(document);
+      // Roll back to the canonical document, never the windowed UI copy.
+      const previous = cloneBackupDocument(await loadFullDocument());
       let committed = false;
       try {
         stageAttachments(imported.attachments ?? []);

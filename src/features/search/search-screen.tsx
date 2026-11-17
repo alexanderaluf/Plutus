@@ -1,6 +1,7 @@
 import {
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -17,6 +18,7 @@ import Reanimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getDocumentWindowState } from "@/data/database/month-index";
+import type { BackupDocument } from "@/data/model/backup-document";
 import { localDateKey } from "@/data/model/recurring-record";
 import { useLocalData } from "@/data/local-data-provider";
 import {
@@ -84,10 +86,41 @@ export function SearchScreen() {
   return <ProfileSearch key={activeProfile.id} />;
 }
 
+/**
+ * Large histories are windowed in memory (only recent months are loaded), so
+ * searching the UI document alone would miss older transactions. Load the
+ * canonical document from SQLite in the background and search the loaded
+ * window until it arrives; no loading state is shown for local data.
+ */
+function useSearchableDocument(
+  document: BackupDocument,
+  loadFullDocument: () => Promise<BackupDocument>,
+) {
+  const isPartial = getDocumentWindowState(document)?.isPartial === true;
+  const [loaded, setLoaded] = useState<{
+    source: BackupDocument;
+    full: BackupDocument;
+  } | null>(null);
+  useEffect(() => {
+    if (!isPartial) return;
+    let cancelled = false;
+    void loadFullDocument()
+      .then((full) => {
+        if (!cancelled) setLoaded({ source: document, full });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [document, isPartial, loadFullDocument]);
+  return isPartial && loaded?.source === document ? loaded.full : document;
+}
+
 function ProfileSearch() {
   const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { document } = useLocalData();
+  const { document, loadFullDocument } = useLocalData();
+  const searchDocument = useSearchableDocument(document, loadFullDocument);
   const { activeProfile } = useProfiles();
   const now = useCategoryClock(document);
   const { headerHidden, onScroll, scrollY } = useCollapsingHeader();
@@ -105,15 +138,15 @@ function ProfileSearch() {
   const context = useMemo(
     () =>
       selectSearchContext(
-        document,
+        searchDocument,
         activeProfile.currencyCode,
         i18n.resolvedLanguage,
       ),
-    [document, activeProfile.currencyCode, i18n.resolvedLanguage],
+    [searchDocument, activeProfile.currencyCode, i18n.resolvedLanguage],
   );
   const project = useMemo(
-    () => selectTransactionProjector(document, i18n.resolvedLanguage),
-    [document, i18n.resolvedLanguage],
+    () => selectTransactionProjector(searchDocument, i18n.resolvedLanguage),
+    [searchDocument, i18n.resolvedLanguage],
   );
   const applied = useMemo(() => ({ ...filters, query }), [filters, query]);
   const outcome = useMemo(

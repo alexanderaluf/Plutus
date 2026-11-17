@@ -25,8 +25,8 @@ import {
 import {
   ensurePeriodMonthsLoadedAsync,
   ensurePeriodMonthsLoadedSync,
-  readNativeWindowBootstrapSync,
 } from "./database/fast-store-client";
+import { removeLegacyNativeIndexCache } from "./database/legacy-native-index";
 import { getDocumentWindowState } from "./database/month-index";
 import {
   processRecurring,
@@ -104,21 +104,16 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
     [database],
   );
   const [background] = useThemeColor(["background"]);
-  const [initialSnapshot] = useState(() =>
-    readNativeWindowBootstrapSync(database),
-  );
-  const [document, setDocument] = useState<BackupDocument>(
-    () => initialSnapshot ?? createDefaultBackup(),
-  );
-  const [isHydrated, setIsHydrated] = useState(
-    () => initialSnapshot !== null,
-  );
+  // Hydration always reads through the SQLiteProvider connection. Never add a
+  // synchronous native read of the database file here (docs/database-safety.md).
+  const [document, setDocument] = useState<BackupDocument>(createDefaultBackup);
+  const [isHydrated, setIsHydrated] = useState(false);
   const [hydrationError, setHydrationError] = useState<Error | null>(null);
   const documentRef = useRef(document);
   documentRef.current = document;
   const writeQueue = useRef(Promise.resolve());
   const [paymentError, setPaymentError] = useState("");
-  const hydrationRef = useRef(initialSnapshot !== null);
+  const hydrationRef = useRef(false);
   const settlementWork = useRef<Promise<void> | null>(null);
   const rateRequests = useRef(new Map<string, Promise<ExchangeRateSnapshot>>());
   const lastRateAttempt = useRef(new Map<string, number>());
@@ -237,9 +232,11 @@ export function LocalDataProvider({ children }: PropsWithChildren) {
   }
 
   useEffect(() => {
-    if (initialSnapshot !== null) return;
     void refreshNow().catch(error => setHydrationError(error instanceof Error ? error : new Error("Could not open local data.")));
-  }, [initialSnapshot]);
+    // One-time removal of the stale native index cache (see legacy-native-index.ts).
+    const cleanup = setTimeout(removeLegacyNativeIndexCache, 5_000);
+    return () => clearTimeout(cleanup);
+  }, []);
 
   useEffect(() => {
     if (!isHydrated) return;

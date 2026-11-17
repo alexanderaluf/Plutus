@@ -9,10 +9,10 @@ import { getSetupStatus } from "../model/onboarding";
 import {
   projectWindowedFromFullDocument,
   readIndexedWindowBootstrap,
-  triggerNativePartitionSync,
 } from "./fast-store-client";
 import { STORAGE_RECOVERY_MESSAGE } from "./migrations";
 import { syncSqliteMonthIndexes, type SyncIndexResult } from "./month-index";
+import { runWriteTransaction } from "./write-transaction";
 
 type DocumentRow = {
   document_json: string;
@@ -66,14 +66,19 @@ export function createWindowedDocumentReader(database: SQLiteDatabase) {
   };
 }
 
-/** Read and mutate under the same SQL lock, including headless task writes. */
+/**
+ * Read and mutate under the same SQL lock, including headless task writes.
+ * The process-wide write gate (write-transaction.ts) serializes this with
+ * every other writer, so concurrent callers queue instead of failing with
+ * `database is locked`.
+ */
 export async function mutateDocument(
   database: SQLiteDatabase,
   updater: (current: BackupDocument) => BackupDocument,
 ) {
   let result: { json: string; document: BackupDocument } | undefined;
   let syncResult: SyncIndexResult | null = null;
-  await database.withExclusiveTransactionAsync(async (transaction) => {
+  await runWriteTransaction(database, async (transaction) => {
     const known = committed.get(database);
     // Always a private deep copy parsed from SQLite: updaters may mutate it
     // freely, so callers need no additional clone. Unchanged JSON that this
@@ -110,7 +115,6 @@ export async function mutateDocument(
     ) {
       syncResult = await syncSqliteMonthIndexes(transaction, next, {
         previousDocument: current,
-        docBytes: json.length,
         hadProfile,
         updatedAt,
       });
@@ -121,7 +125,6 @@ export async function mutateDocument(
 
   committed.set(database, result!);
   if (syncResult) lastSyncResult.set(result!.document, syncResult);
-  triggerNativePartitionSync(database, syncResult);
   return result!.document;
 }
 
@@ -174,7 +177,7 @@ export async function writeDocument(
   const json = JSON.stringify(normalized);
   let syncResult: SyncIndexResult | null = null;
 
-  await database.withExclusiveTransactionAsync(async (transaction) => {
+  await runWriteTransaction(database, async (transaction) => {
     const previous = await readDocument(transaction);
     const updatedAt = new Date().toISOString();
     const hadProfile = normalized.users.length > 0 ? 1 : 0;
@@ -201,7 +204,6 @@ export async function writeDocument(
     ) {
       syncResult = await syncSqliteMonthIndexes(transaction, normalized, {
         previousDocument: previous,
-        docBytes: json.length,
         hadProfile,
         updatedAt,
       });
@@ -210,6 +212,5 @@ export async function writeDocument(
 
   committed.set(database, { json, document: normalized });
   if (syncResult) lastSyncResult.set(normalized, syncResult);
-  triggerNativePartitionSync(database, syncResult);
   return normalized;
 }

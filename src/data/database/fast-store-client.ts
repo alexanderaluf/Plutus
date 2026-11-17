@@ -1,14 +1,21 @@
+/**
+ * Windowed month loading over the SQLite month index (`app_meta_head`,
+ * `app_month_index`, `tx_month_rows`).
+ *
+ * Every read here goes through the expo-sqlite connection owned by
+ * SQLiteProvider. Never add a native (Kotlin/Swift/C++) module or a second
+ * SQLite library that opens `budget-manager.db`: two SQLite copies in one
+ * process cannot see each other's locks, which caused the production
+ * "database is locked" errors and crashes. Read docs/database-safety.md.
+ */
 import type { SQLiteDatabase } from "expo-sqlite";
 
-import PlutusFastStoreModule from "../../../modules/plutus-fast-store/src/PlutusFastStoreModule";
-import type { NativeSearchQueryOptions } from "../../../modules/plutus-fast-store/src/PlutusFastStore.types";
 import type { BackupDocument } from "../model/backup-document";
 import { financialMonth } from "../model/financial-month";
 import type { JsonObject } from "../model/json";
 import {
   activeUtcMonthKeysForWindow,
   getDocumentWindowState,
-  LOCAL_DATABASE_NAME,
   parseRecordTimestampMs,
   setDocumentWindowState,
   summarizeMonthBucket,
@@ -65,7 +72,6 @@ function evictOldestLoadedMonthsIfNeeded(
     state.monthRows.delete(key);
     state.loadedMonthKeys.delete(key);
   }
-  PlutusFastStoreModule?.evictColdMonthsSync([...state.loadedMonthKeys]);
 }
 
 function buildWindowedDocument(
@@ -117,79 +123,11 @@ function selectActiveCatalogKeys(
   return [...selected];
 }
 
-/**
- * Attempts synchronous zero-waterfall bootstrap on native Swift/Kotlin via JSI.
- * Returns null if native FastStore isn't available or indexes aren't built yet.
- */
-export function readNativeWindowBootstrapSync(
-  database: SQLiteDatabase,
-  now = new Date(),
-): BackupDocument | null {
-  if (!PlutusFastStoreModule) return null;
-  const dbPath = databasePathOf(database);
-  const current = financialMonth(now, 1, 0);
-  const prev = financialMonth(now, 1, -1);
-  // Request current + previous + padded calendar month keys cleanly on first frame.
-  const initialKeys = activeUtcMonthKeysForWindow(prev.start, current.end);
-  const bootstrap = PlutusFastStoreModule.readBootstrapSync(
-    dbPath,
-    LOCAL_DATABASE_NAME,
-    initialKeys,
-  );
-  if (!bootstrap) return null;
-
-  try {
-    const head = JSON.parse(bootstrap.coreJson) as BackupDocument;
-    const catalog = JSON.parse(bootstrap.catalogJson) as MonthCatalogEntry[];
-    const monthStartDay = head._local?.monthStartDay ?? 1;
-    const neededKeys = selectActiveCatalogKeys(catalog, monthStartDay, now);
-
-    const monthRows = new Map<string, JsonObject[]>();
-    const loadedMonthKeys = new Set<string>();
-    let totalTransactionCount = 0;
-    for (const entry of catalog) totalTransactionCount += entry.txCount;
-
-    for (const key of neededKeys) {
-      const rawMonth =
-        bootstrap.months[key] ??
-        PlutusFastStoreModule.readMonthSliceSync(dbPath, LOCAL_DATABASE_NAME, key)
-          ?.payloadJson ??
-        null;
-      if (!rawMonth) {
-        monthRows.set(key, []);
-        loadedMonthKeys.add(key);
-        continue;
-      }
-      const parsed = JSON.parse(rawMonth) as MonthPartitionPayload;
-      hydrateRowsFromPayload(parsed, monthRows, loadedMonthKeys);
-    }
-
-    const state: DocumentWindowState = {
-      dbPath,
-      revision: bootstrap.revision,
-      isPartial: false,
-      totalTransactionCount,
-      catalog,
-      loadedMonthKeys,
-      monthRows,
-      database,
-    };
-    return buildWindowedDocument(head, state);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Asynchronous SQLite windowed bootstrap (works on Node/Android/iOS/Web even if native cache wasn't warm yet).
- */
+/** Windowed bootstrap: core metadata, month catalog, and the active months. */
 export async function readIndexedWindowBootstrap(
   database: SQLiteDatabase,
   now = new Date(),
 ): Promise<BackupDocument | null> {
-  const nativeSync = readNativeWindowBootstrapSync(database, now);
-  if (nativeSync) return nativeSync;
-
   const headRow = await database.getFirstAsync<{
     revision: number;
     core_json: string;
@@ -280,8 +218,8 @@ export async function readIndexedWindowBootstrap(
 }
 
 /**
- * Ensures any months overlapping [start, end) are hydrated in memory.
- * On native Swift/Kotlin, loads synchronously via JSI in ~1ms with no loading spinner.
+ * Marks months overlapping [start, end) that have no transactions as loaded.
+ * Returns the same document when months still need ensurePeriodMonthsLoadedAsync.
  */
 export function ensurePeriodMonthsLoadedSync(
   document: BackupDocument,
@@ -300,50 +238,21 @@ export function ensurePeriodMonthsLoadedSync(
     }
   }
 
-  const missing: string[] = [];
   for (const key of needed) {
     if (!state.loadedMonthKeys.has(key)) {
       const existsInCatalog = state.catalog.some((entry) => entry.monthKey === key);
-      if (existsInCatalog) missing.push(key);
-      else {
+      if (!existsInCatalog) {
         state.monthRows.set(key, []);
         state.loadedMonthKeys.add(key);
       }
     }
   }
-  if (missing.length === 0) return document;
-  if (!PlutusFastStoreModule) return document;
-
-  let changed = false;
-  for (const key of missing) {
-    const slice = PlutusFastStoreModule.readMonthSliceSync(
-      state.dbPath,
-      LOCAL_DATABASE_NAME,
-      key,
-    );
-    if (slice?.payloadJson) {
-      try {
-        const parsed = JSON.parse(slice.payloadJson) as MonthPartitionPayload;
-        hydrateRowsFromPayload(parsed, state.monthRows, state.loadedMonthKeys);
-        changed = true;
-      } catch {
-        // Ignore corrupt single slice payload and fallback to SQLite path
-      }
-    } else {
-      state.monthRows.set(key, []);
-      state.loadedMonthKeys.add(key);
-      changed = true;
-    }
-  }
-
-  if (!changed) return document;
-  evictOldestLoadedMonthsIfNeeded(state, needed);
-  return buildWindowedDocument(document, state);
+  // Months that exist in the catalog are read from SQLite by
+  // ensurePeriodMonthsLoadedAsync; there is no synchronous disk path.
+  return document;
 }
 
-/**
- * Async fallback when native JSI isn't present and a user navigates to an older cold month.
- */
+/** Loads older (cold) months a screen navigates to from the SQLite month index. */
 export async function ensurePeriodMonthsLoadedAsync(
   document: BackupDocument,
   start: Date,
@@ -461,26 +370,6 @@ export function selectCatalogAccountTotals(
   return totals;
 }
 
-export function searchIndexedDatabaseSync(
-  document: BackupDocument,
-  options: NativeSearchQueryOptions,
-): { totalCount: number; rows: JsonObject[] } | null {
-  const state = getDocumentWindowState(document);
-  if (!state || !PlutusFastStoreModule) return null;
-  try {
-    const result = PlutusFastStoreModule.searchTransactionsSync(
-      state.dbPath,
-      LOCAL_DATABASE_NAME,
-      options,
-    );
-    const rows = JSON.parse(result.rowsJson) as JsonObject[];
-    for (const row of rows) parseRecordTimestampMs(row);
-    return { totalCount: result.totalCount, rows };
-  } catch {
-    return null;
-  }
-}
-
 export async function queryScopedTransactionsAsync(
   document: BackupDocument,
   scope:
@@ -490,19 +379,6 @@ export async function queryScopedTransactionsAsync(
   const state = getDocumentWindowState(document);
   if (!state) return null;
   if (!scope.ids.length) return [];
-
-  if (PlutusFastStoreModule) {
-    const res = PlutusFastStoreModule.searchTransactionsSync(
-      state.dbPath,
-      LOCAL_DATABASE_NAME,
-      scope.kind === "account"
-        ? { accountIds: scope.ids, limit: 50000, sort: "newest" }
-        : { categoryIds: scope.ids, limit: 50000, sort: "newest" },
-    );
-    const parsed = JSON.parse(res.rowsJson) as JsonObject[];
-    for (const row of parsed) parseRecordTimestampMs(row);
-    return parsed;
-  }
 
   const col = scope.kind === "account" ? "account_id" : "category_id";
   const placeholders = scope.ids.map(() => "?").join(", ");
@@ -566,21 +442,12 @@ export function projectWindowedFromFullDocument(
     }
   }
 
-  const prevCatalogMap = new Map<string, MonthCatalogEntry>();
-  if (prevState) {
-    for (const item of prevState.catalog) prevCatalogMap.set(item.monthKey, item);
-  }
-
+  // Summaries are always recomputed from the committed document. Reusing the
+  // previous UI catalog could keep stale totals when another writer (the
+  // headless recurring task) changed a month this save did not touch.
   const catalog: MonthCatalogEntry[] = [...buckets.entries()]
     .sort((a, b) => (a[0] < b[0] ? 1 : a[0] > b[0] ? -1 : 0))
     .map(([monthKey, b]) => {
-      const prevEntry = prevCatalogMap.get(monthKey);
-      const isDirty =
-        syncResult.rebuiltAll ||
-        (syncResult.dirtyMonthKeys?.includes(monthKey) ?? false);
-      if (prevEntry && !isDirty) {
-        return prevEntry;
-      }
       return {
         monthKey,
         minTs: b.minTs,
@@ -618,26 +485,4 @@ export function projectWindowedFromFullDocument(
     database,
   };
   return buildWindowedDocument(fullDocument, state);
-}
-
-export function triggerNativePartitionSync(
-  database: SQLiteDatabase,
-  syncResult: SyncIndexResult | null | undefined,
-): void {
-  if (!PlutusFastStoreModule || !syncResult) return;
-  const dbPath = databasePathOf(database);
-  void PlutusFastStoreModule.syncPartitionFilesAsync(
-    dbPath,
-    LOCAL_DATABASE_NAME,
-    syncResult.dirtyMonthKeys,
-    syncResult.rebuiltAll,
-  ).catch(() => undefined);
-}
-
-export function clearNativePartitionCache(): void {
-  try {
-    PlutusFastStoreModule?.clearCacheSync();
-  } catch {
-    // Ignore native cleanup errors
-  }
 }

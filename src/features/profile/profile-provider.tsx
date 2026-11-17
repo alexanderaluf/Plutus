@@ -33,7 +33,8 @@ type ProfileContextValue = {
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
 export function ProfileProvider({ children }: PropsWithChildren) {
-  const { document, replaceDocument, updateDocument } = useLocalData();
+  const { document, loadFullDocument, replaceDocument, updateDocument } =
+    useLocalData();
   const documentRef = useRef(document);
   documentRef.current = document;
 
@@ -169,7 +170,9 @@ export function ProfileProvider({ children }: PropsWithChildren) {
   const deleteProfile = useCallback(
     async (profileId: string) => {
       let attachmentPaths: string[] = [];
-      const currentDoc = documentRef.current;
+      // The UI document can be a windowed projection (recent months only).
+      // A full replacement must start from the canonical SQLite document.
+      const currentDoc = await loadFullDocument();
       if (currentDoc.users.length === 1) {
         const result = deleteProfileData(currentDoc, profileId);
         attachmentPaths = result.attachmentPaths;
@@ -189,7 +192,7 @@ export function ProfileProvider({ children }: PropsWithChildren) {
         }
       }
     },
-    [replaceDocument, updateDocument],
+    [loadFullDocument, replaceDocument, updateDocument],
   );
 
   const value = useMemo<ProfileContextValue>(

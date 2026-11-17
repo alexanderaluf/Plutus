@@ -2,6 +2,39 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
+# MANDATORY: Database Safety (read before touching data, native code or packages)
+
+Every AI model and contributor **must read `docs/database-safety.md` in full**
+before changing any of the following, however small the change looks:
+
+- anything under `src/data/` (database, repository, migrations, selectors that
+  read SQLite, backup, recurring/background tasks, widgets);
+- `src/app/_layout.tsx` providers, `LocalDataProvider`, or startup;
+- anything under `modules/` or `plugins/` (native Kotlin/Swift/C++ code);
+- read or write performance work ("make saves/loads faster", indexes, caches);
+- versions of `expo`, `expo-sqlite`, `expo-file-system` or any database library.
+
+That document explains the November 2026 production incident, in which users
+saw "database is locked" until they restarted the app and the app crashed on
+save after a store update, and the rules that prevent it. In short, never:
+
+1. open `budget-manager.db` from native code or any SQLite library other than
+   expo-sqlite's JS API, even "read-only";
+2. write to SQLite outside `runWriteTransaction` / `withWriteLock`
+   (`src/data/database/write-transaction.ts`), or nest them;
+3. "fix" lock errors with `busy_timeout`, retries or sleeps;
+4. enable `PRAGMA mmap_size`, change `journal_mode` from WAL, or use an
+   exclusive locking mode;
+5. rewrite all records or all index rows on a single-record save;
+6. build a full replacement document from the windowed UI `document`
+   (use `loadFullDocument()` or `updateDocument`);
+7. keep copies of records in files or stores outside SQLite;
+8. downgrade `expo-sqlite` below 58.0.17.
+
+`tests/fast-store-index.test.cjs` ("storage safety guards" and the
+`database is locked` regression tests) enforces these rules and must pass.
+If a task seems to require breaking one, stop and ask the maintainer.
+
 # Local-First Data Architecture
 
 Before changing startup, persisted schemas, database paths, or profile creation,
@@ -30,11 +63,16 @@ The canonical state is one versioned `BackupDocument` stored in SQLite:
 - Validation/normalization: `src/data/model/normalize-backup.ts`
 - SQLite migration: `src/data/database/migrations.ts`
 - Atomic repository: `src/data/database/document-repository.ts`
+- Process-wide write gate: `src/data/database/write-transaction.ts`
+- Month index (derived, same transaction): `src/data/database/month-index.ts`
 - React access: `src/data/local-data-provider.tsx`
 - Attachments: `src/data/attachments/attachment-store.ts`
 
 SQLite stores one JSON document in `app_document` with `id = 1`. SQLite uses WAL
-mode and commit-first serialized writes. Images and binary attachments are files
+mode and commit-first serialized writes: every write transaction in the
+process (foreground, startup migration, headless task) passes through the single
+gate in `write-transaction.ts`. Only expo-sqlite may open the database file; see
+`docs/database-safety.md`. Images and binary attachments are files
 under the app-private documents directory; the JSON document stores their
 relative paths and metadata in `_local.attachments`.
 
@@ -53,7 +91,14 @@ The root provider order in `src/app/_layout.tsx` is intentional:
 4. Routes render only after hydration finishes.
 
 Code that calls `useLocalData()` must render under `LocalDataProvider`. Do not
-open additional database connections from feature components.
+open additional database connections from feature components, and never add a
+native module that opens the database (see `docs/database-safety.md`).
+
+The UI `document` can be a windowed projection that holds only recent months
+when the history is large. Use it for display. Before building a full
+replacement (`replaceDocument`, export, rollback copy, profile deletion), read
+`await loadFullDocument()`, or use `updateDocument(current => next)`, whose
+`current` is always the full canonical document.
 
 ## Reading Records
 
@@ -124,6 +169,8 @@ await updateDocument((current) => ({
 Use `replaceDocument(document)` only for a validated full restore. Never mutate
 `document` directly and never write SQL from feature components. The provider
 normalizes, queues, and commits each mutation before updating React state.
+Repository code writes only through `runWriteTransaction(database, task)`, uses
+the `transaction` argument for every statement, and never nests the gate.
 
 ## Record Integrity
 
@@ -237,3 +284,8 @@ npx expo export --platform ios --output-dir /tmp/budget-manager-ios
 Also validate the supplied Paisa fixture, JSON media stripping, CSV quoted-field
 round trip, ZIP attachment round trip, unsafe ZIP path rejection, and missing
 attachment rejection whenever those codecs change.
+
+Every storage change must also pass `node --test tests/*.test.cjs` (including
+the database-safety tests in `tests/fast-store-index.test.cjs`). Before a store
+release, run the device upgrade checks in section 5 of
+`docs/database-safety.md`.

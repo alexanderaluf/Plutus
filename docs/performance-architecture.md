@@ -1,5 +1,10 @@
 # Read performance
 
+> Before any read/write speed work, read `docs/database-safety.md`. A faster
+> save never justifies a native or second SQLite engine, memory-mapped I/O,
+> busy timeouts, or a full index rewrite per save. Each of these shipped once
+> and caused "database is locked" errors and crashes in production.
+
 The canonical document is parsed once at startup and held in memory. SQLite is
 not on the read path of any screen, so screen speed depends entirely on how
 much JavaScript runs per render. On low-end Android devices Hermes runs this

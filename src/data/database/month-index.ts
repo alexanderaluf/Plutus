@@ -343,35 +343,74 @@ function partitionTransactionsByMonth(transactions: JsonObject[]) {
   return buckets;
 }
 
+/** Structural equality for JSON values (records parsed from or bound for SQLite). */
+export function jsonValuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a === null ||
+    b === null
+  ) {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (!jsonValuesEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  for (const key of aKeys) {
+    if (!Object.prototype.hasOwnProperty.call(b, key)) return false;
+    if (
+      !jsonValuesEqual(
+        (a as Record<string, unknown>)[key],
+        (b as Record<string, unknown>)[key],
+      )
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function lookupNamesChanged(previous: JsonObject[], next: JsonObject[]) {
+  const before = buildLookupNameMap(previous);
+  const after = buildLookupNameMap(next);
+  if (before.size !== after.size) return true;
+  for (const [id, name] of before) {
+    if (after.get(id) !== name) return true;
+  }
+  return false;
+}
+
+/**
+ * Months whose index rows must be rewritten, or null for a full rebuild.
+ *
+ * `previous` and `next` are always separate parses (SQLite read, then
+ * normalizeBackupDocument), so array and record identity NEVER match here.
+ * Compare content, not references; an identity check silently turns every
+ * single-record save into a full rewrite of every indexed transaction.
+ */
 function collectDirtyMonths(
   previous: BackupDocument | null,
   next: BackupDocument,
 ): string[] | null {
   if (!previous) return null;
-  // Lookup table changes (categories, accounts, labels, places, people) can affect search_text.
+  // search_text embeds these names, so a rename re-indexes every month.
   if (
-    previous.categories !== next.categories ||
-    previous.accounts !== next.accounts ||
-    previous.places !== next.places ||
-    previous.peoples !== next.peoples ||
-    previous.labels !== next.labels
+    lookupNamesChanged(previous.categories, next.categories) ||
+    lookupNamesChanged(previous.accounts, next.accounts) ||
+    lookupNamesChanged(previous.places, next.places) ||
+    lookupNamesChanged(previous.peoples, next.peoples) ||
+    lookupNamesChanged(previous.labels, next.labels)
   ) {
-    // Only mark full rebuild if lookup names/entries actually changed.
-    if (
-      previous.categories.length !== next.categories.length ||
-      previous.places !== next.places ||
-      previous.peoples !== next.peoples ||
-      previous.labels !== next.labels
-    ) {
-      return null;
-    }
-    const accChanged =
-      previous.accounts.length !== next.accounts.length ||
-      next.accounts.some((acc, i) => acc.name !== previous.accounts[i]?.name);
-    const catChanged = next.categories.some(
-      (cat, i) => cat.name !== previous.categories[i]?.name,
-    );
-    if (accChanged || catChanged) return null;
+    return null;
   }
 
   if (previous.transactions === next.transactions) return [];
@@ -390,7 +429,7 @@ function collectDirtyMonths(
       return;
     }
     prevByKey.delete(key);
-    if (old !== tx) {
+    if (old !== tx && !jsonValuesEqual(old, tx)) {
       dirty.add(utcMonthKeyFromMs(parseRecordTimestampMs(old)));
       dirty.add(utcMonthKeyFromMs(parseRecordTimestampMs(tx)));
     }
@@ -418,7 +457,6 @@ export async function syncSqliteMonthIndexes(
   document: BackupDocument,
   options: {
     previousDocument?: BackupDocument | null;
-    docBytes: number;
     hadProfile: number;
     updatedAt: string;
     forceRebuild?: boolean;
@@ -448,9 +486,12 @@ export async function syncSqliteMonthIndexes(
   }
 
   const headDoc = stripTransactionsForHead(document);
+  // doc_bytes is measured by SQLite itself. JS `string.length` counts UTF-16
+  // units while SQLite length() counts characters, so a JS value never matches
+  // the startup check in migrations.ts once a name contains an emoji.
   await database.runAsync(
     `INSERT INTO app_meta_head (id, schema_version, revision, tx_count, min_tx_ts, max_tx_ts, doc_bytes, had_profile, updated_at, core_json)
-     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (1, ?, ?, ?, ?, ?, COALESCE((SELECT length(document_json) FROM app_document WHERE id = 1), 0), ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        schema_version = excluded.schema_version,
        revision = excluded.revision,
@@ -466,7 +507,6 @@ export async function syncSqliteMonthIndexes(
     transactions.length,
     minTxTs,
     maxTxTs,
-    options.docBytes,
     options.hadProfile,
     options.updatedAt,
     JSON.stringify(headDoc),

@@ -7,22 +7,23 @@ import {
   parseStoredDocument,
 } from "../model/normalize-backup";
 import { getSetupStatus } from "../model/onboarding";
-import { triggerNativePartitionSync } from "./fast-store-client";
-import { syncSqliteMonthIndexes, type SyncIndexResult } from "./month-index";
+import { syncSqliteMonthIndexes } from "./month-index";
+import { withWriteLock } from "./write-transaction";
 
 export const DATABASE_VERSION = 25;
 export const STORAGE_RECOVERY_MESSAGE =
   "Your saved data could not be opened safely. Nothing has been reset. Keep this installation and export a recovery copy before seeking help.";
 
+/**
+ * Connection settings for the long-lived provider connection.
+ * Never enable `PRAGMA mmap_size`: with memory-mapped I/O an I/O error or a
+ * file truncated underneath the mapping raises SIGBUS and kills the app
+ * instead of returning a catchable SQLite error. See docs/database-safety.md.
+ */
 async function applyRuntimePragmas(database: SQLiteDatabase) {
   await database.execAsync(
-    "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -4000;",
+    "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA synchronous = NORMAL; PRAGMA temp_store = MEMORY; PRAGMA cache_size = -4000; PRAGMA mmap_size = 0;",
   );
-  try {
-    await database.execAsync("PRAGMA mmap_size = 16777216;");
-  } catch {
-    // Some SQLite builds reject or ignore mmap_size; safe to continue without mmap.
-  }
 }
 
 async function verifyFastCurrentDatabase(
@@ -86,11 +87,19 @@ async function verifyFastCurrentDatabase(
 
 /** Versions 1–16 share the same document envelope. The normalizers provide
  * additive forward migrations. Historical development reseeding is retired:
- * recognizing a sample UUID is never permission to replace user records. */
-export async function migrateLocalDatabase(
+ * recognizing a sample UUID is never permission to replace user records.
+ *
+ * Runs entirely behind the process-wide write gate so the foreground
+ * SQLiteProvider and the headless recurring task can never migrate or write
+ * at the same time. */
+export function migrateLocalDatabase(
   database: SQLiteDatabase,
   installationExists = false,
 ) {
+  return withWriteLock(() => migrate(database, installationExists));
+}
+
+async function migrate(database: SQLiteDatabase, installationExists: boolean) {
   const version =
     (
       await database.getFirstAsync<{ user_version: number }>(
@@ -136,10 +145,10 @@ export async function migrateLocalDatabase(
 
   await applyRuntimePragmas(database);
 
-  let syncResult: SyncIndexResult | null = null;
+  // Already inside withWriteLock: use the transaction directly. Calling
+  // runWriteTransaction here would wait for this very lock forever.
   await database.withExclusiveTransactionAsync(async (transaction) => {
     let document: BackupDocument;
-    let docBytes: number;
     let updatedAt = new Date().toISOString();
 
     if (!hasDocument) {
@@ -148,7 +157,6 @@ export async function migrateLocalDatabase(
       );
       document = createDefaultBackup();
       const json = JSON.stringify(document);
-      docBytes = json.length;
       await transaction.runAsync(
         "INSERT INTO app_document (id, schema_version, document_json, updated_at) VALUES (1, ?, ?, ?)",
         LOCAL_SCHEMA_VERSION,
@@ -167,7 +175,6 @@ export async function migrateLocalDatabase(
         throw new Error(STORAGE_RECOVERY_MESSAGE);
       // No writes before successful parse and validation.
       document = parseStoredDocument(stored.document_json);
-      docBytes = stored.document_json.length;
       updatedAt = stored.updated_at;
       // Before v17 every installation was initialized with a profile. An
       // established older database cannot legitimately be a new empty install.
@@ -231,7 +238,6 @@ export async function migrateLocalDatabase(
           new Date().toISOString(),
         );
         const migratedJson = JSON.stringify(document);
-        docBytes = migratedJson.length;
         updatedAt = new Date().toISOString();
         await transaction.runAsync(
           "UPDATE app_document SET schema_version = ?, document_json = ?, updated_at = ? WHERE id = 1",
@@ -258,9 +264,8 @@ export async function migrateLocalDatabase(
     }>("SELECT had_profile FROM app_storage_identity WHERE id = 1");
     const effectiveHadProfile = identityAfter?.had_profile ?? hasProfile;
 
-    syncResult = await syncSqliteMonthIndexes(transaction, document, {
+    await syncSqliteMonthIndexes(transaction, document, {
       previousDocument: null,
-      docBytes,
       hadProfile: effectiveHadProfile,
       updatedAt,
       forceRebuild: true,
@@ -269,6 +274,4 @@ export async function migrateLocalDatabase(
     // Advance only after every migration and validation succeeds; rollback includes DDL.
     await transaction.execAsync(`PRAGMA user_version = ${DATABASE_VERSION};`);
   });
-
-  triggerNativePartitionSync(database, syncResult);
 }

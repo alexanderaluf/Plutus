@@ -1,14 +1,5 @@
 import type { BackupDocument } from "../model/backup-document";
-import {
-  activeUtcMonthKeysForWindow,
-  getDocumentWindowState,
-  parseRecordTimestampMs,
-  UNDATED_MONTH_KEY,
-} from "../database/month-index";
-import {
-  searchIndexedDatabaseSync,
-  selectCatalogCategoryCounts,
-} from "../database/fast-store-client";
+import { selectCatalogCategoryCounts } from "../database/fast-store-client";
 import {
   categoryParent,
   createProfileMatcher,
@@ -525,77 +516,14 @@ export function searchTransactions(
   const min = filters.minAmount;
   const max = filters.maxAmount;
 
-  let sourceFacts = context.facts;
+  // Large histories are searched against the full canonical document (see
+  // useSearchableDocument in search-screen.tsx), never by opening SQLite
+  // from native code. A windowed document searches its loaded months only.
+  const sourceFacts = context.facts;
   let first = 0;
   let last = sourceFacts.length;
 
-  const windowState = context.document
-    ? getDocumentWindowState(context.document)
-    : undefined;
-  const rangeNeedsColdMonths = Boolean(
-    windowState?.isPartial &&
-    (!range ||
-      activeUtcMonthKeysForWindow(range.start, range.end).some(
-        (key) =>
-          windowState.catalog.some((entry) => entry.monthKey === key) &&
-          !windowState.loadedMonthKeys.has(key),
-      ) ||
-      windowState.catalog.some(
-        (entry) =>
-          entry.monthKey === UNDATED_MONTH_KEY &&
-          !windowState.loadedMonthKeys.has(UNDATED_MONTH_KEY),
-      )),
-  );
-
-  // When a large database is windowed in RAM and the query or date range extends
-  // beyond loaded months, query the SQLite/native month index directly across disk.
-  if (context.document && windowState && rangeNeedsColdMonths) {
-    const belongs = createProfileMatcher(context.document);
-    const catalogMatchesToken =
-      tokens.length > 0 &&
-      !!context.catalogNameHaystack &&
-      tokens.some((token) => context.catalogNameHaystack!.includes(token));
-    const sqlQueryTokens =
-      tokens.length > 0 && !catalogMatchesToken ? [tokens[0]] : undefined;
-    const dbResult = searchIndexedDatabaseSync(context.document, {
-      queryTokens: sqlQueryTokens,
-      type:
-        filters.types.length === 1
-          ? filters.types[0] === "income"
-            ? 1
-            : filters.types[0] === "transfer"
-              ? 2
-              : 0
-          : undefined,
-      startMs: range?.start.getTime(),
-      endMs: range?.end.getTime(),
-      accountIds:
-        filters.accounts.length === 1 ? filters.accounts : undefined,
-      sort: filters.sort === "oldest" ? "oldest" : "newest",
-      limit: 25_000,
-    });
-    if (dbResult) {
-      const buildFact = createSearchFactBuilder(
-        context.document,
-        context.profileCurrency,
-      );
-      sourceFacts = [];
-      for (let i = 0; i < dbResult.rows.length; i++) {
-        const record = dbResult.rows[i];
-        if (!belongs(record)) continue;
-        const ts = parseRecordTimestampMs(record);
-        const entry: TransactionIndexEntry = {
-          id: string(record.uuid, String(record.id ?? i)),
-          record,
-          index: i,
-          timestamp: Number.isFinite(ts) ? ts : -Infinity,
-        };
-        sourceFacts.push(buildFact(entry).fact);
-      }
-      first = 0;
-      last = sourceFacts.length;
-    }
-  } else if (range) {
+  if (range) {
     // Facts share the index order (newest first), so a period is one slice.
     const bounds = transactionPeriodBounds(context.index, range.start, range.end);
     first = bounds.first;

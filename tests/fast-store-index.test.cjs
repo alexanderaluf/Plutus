@@ -3,7 +3,6 @@ const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
 const { performance } = require("node:perf_hooks");
 const { test } = require("node:test");
 const { DatabaseSync } = require("node:sqlite");
@@ -566,163 +565,303 @@ test("20,000-tx 48-month partitioning: instant windowed bootstrap, LRU bounds, s
   }
 });
 
-test("native Swift FastStoreEngine compiles and runs single-digit ms bootstrap & SQLite queries on 20,000 rows", async (t) => {
-  let hasSwiftc = false;
-  try {
-    execFileSync("swiftc", ["--version"], { stdio: "ignore" });
-    hasSwiftc = true;
-  } catch {
-    t.skip("swiftc unavailable on host");
-    return;
-  }
-  assert.ok(hasSwiftc);
+// ---------------------------------------------------------------------------
+// Regression tests for the 2026-11 production "database is locked" / crash
+// incident. Read docs/database-safety.md before changing or removing these.
+// ---------------------------------------------------------------------------
 
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "plutus-fast-store-swift-"));
-  const dbPath = path.join(tmpDir, "budget-manager.db");
-  const cacheDir = path.join(tmpDir, "swift-cache");
-  const indexDir = path.join(tmpDir, "fast-index");
-  fs.mkdirSync(cacheDir, { recursive: true });
-  fs.mkdirSync(indexDir, { recursive: true });
+const nextTick = () => new Promise((resolve) => setImmediate(resolve));
 
-  const db = createSqliteAdapter(dbPath);
+/**
+ * Models expo-sqlite closely enough to reproduce lock contention: a
+ * long-lived provider connection plus a NEW connection per
+ * withExclusiveTransactionAsync (deferred BEGIN, no busy timeout), and every
+ * call yields like a native async hop so concurrent work interleaves.
+ */
+function createMultiConnectionAdapter() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "plutus-db-safety-"));
+  const filename = path.join(dir, "budget-manager.db");
+  const wrap = (sql) => ({
+    sql,
+    databasePath: filename,
+    execAsync: async (statement) => {
+      await nextTick();
+      sql.exec(statement);
+    },
+    getFirstAsync: async (statement, ...args) => {
+      await nextTick();
+      return sql.prepare(statement).get(...args) ?? null;
+    },
+    getAllAsync: async (statement, ...args) => {
+      await nextTick();
+      return sql.prepare(statement).all(...args);
+    },
+    runAsync: async (statement, ...args) => {
+      await nextTick();
+      return sql.prepare(statement).run(...args);
+    },
+  });
+  const main = wrap(new DatabaseSync(filename));
+  main.withExclusiveTransactionAsync = async (work) => {
+    const connection = wrap(new DatabaseSync(filename));
+    try {
+      await connection.execAsync("BEGIN");
+      try {
+        await work(connection);
+        await connection.execAsync("COMMIT");
+      } catch (error) {
+        try {
+          connection.sql.exec("ROLLBACK");
+        } catch {
+          /* already rolled back */
+        }
+        throw error;
+      }
+    } finally {
+      connection.sql.close();
+    }
+  };
+  main.dispose = () => {
+    main.sql.close();
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // A failed run can leave a transaction connection open (Windows EBUSY);
+      // never let cleanup hide the assertion that actually failed.
+    }
+  };
+  return main;
+}
+
+function newTransaction(uuid, iso, extra = {}) {
+  return {
+    uuid,
+    name: `Item ${uuid}`,
+    amount: 3.25,
+    type: 0,
+    currencyCode: "USD",
+    time: iso,
+    createdAt: iso,
+    updatedAt: iso,
+    account: "acc-cash",
+    category: "cat-coffee",
+    user: "profile-main",
+    tags: [],
+    ...extra,
+  };
+}
+
+test("ungated concurrent expo-style transactions reproduce 'database is locked'", async () => {
+  const db = createMultiConnectionAdapter();
   try {
     await migrateLocalDatabase(db);
-    const { document: large } = buildLargeMultiYearDocument(20000);
-    await writeDocument(db, large);
-    // Keep WAL active just as on iOS/Android
-    db.sql.exec("PRAGMA wal_checkpoint(PASSIVE);");
+    const results = await Promise.allSettled(
+      Array.from({ length: 4 }, () =>
+        db.withExclusiveTransactionAsync(async (txn) => {
+          await txn.getFirstAsync("SELECT document_json FROM app_document WHERE id = 1");
+          await txn.runAsync(
+            "UPDATE app_storage_identity SET had_profile = had_profile WHERE id = 1",
+          );
+        }),
+      ),
+    );
+    assert.ok(
+      results.some(
+        (result) =>
+          result.status === "rejected" &&
+          /locked|busy/i.test(String(result.reason?.message)),
+      ),
+      "the adapter must model real lock contention, or the next test proves nothing",
+    );
+  } finally {
+    db.dispose();
+  }
+});
+
+test("all writers share one gate: concurrent saves and startup migration never hit 'database is locked'", async () => {
+  const db = createMultiConnectionAdapter();
+  try {
+    await migrateLocalDatabase(db);
+    const { document } = buildLargeMultiYearDocument(1200);
+    await writeDocument(db, document);
+
+    const saves = Array.from({ length: 6 }, (_, i) =>
+      mutateDocument(db, (current) => ({
+        ...current,
+        transactions: [
+          ...current.transactions,
+          newTransaction(`tx-concurrent-${i}`, `2026-11-1${i}T09:00:00.000Z`),
+        ],
+      })),
+    );
+    // The foreground SQLiteProvider and the headless recurring task both migrate.
+    const startup = migrateLocalDatabase(db, true);
+    await Promise.all([...saves, startup]);
+
+    const canonical = await createDocumentReader(db)();
+    for (let i = 0; i < 6; i++) {
+      assert.ok(
+        canonical.transactions.some((tx) => tx.uuid === `tx-concurrent-${i}`),
+        `save ${i} must not be lost`,
+      );
+    }
+    const rows = await db.getFirstAsync("SELECT COUNT(*) AS count FROM tx_month_rows");
+    assert.equal(rows.count, 1206);
+    const mmap = await db.getFirstAsync("PRAGMA mmap_size");
+    assert.equal(Object.values(mmap)[0], 0, "mmap must stay disabled (SIGBUS crash risk)");
+  } finally {
+    db.dispose();
+  }
+});
+
+test("a single-record save rewrites only the month it touched, not the whole index", async () => {
+  const db = createSqliteAdapter();
+  try {
+    await migrateLocalDatabase(db);
+    const { document } = buildLargeMultiYearDocument(2400);
+    await writeDocument(db, document);
+    const baseRevision = (
+      await db.getFirstAsync("SELECT revision FROM app_meta_head WHERE id = 1")
+    ).revision;
+
+    const touchedMonths = async () => {
+      const head = await db.getFirstAsync("SELECT revision FROM app_meta_head WHERE id = 1");
+      const rows = await db.getAllAsync(
+        "SELECT month_key FROM app_month_index WHERE revision = ? ORDER BY month_key",
+        head.revision,
+      );
+      return rows.map((row) => row.month_key);
+    };
+
+    // Create
+    await mutateDocument(db, (current) => ({
+      ...current,
+      transactions: [
+        ...current.transactions,
+        newTransaction("tx-new", "2026-11-14T08:00:00.000Z"),
+      ],
+    }));
+    assert.deepEqual(await touchedMonths(), ["2026-11"]);
+
+    // Edit an existing record in an older month
+    await mutateDocument(db, (current) => ({
+      ...current,
+      transactions: current.transactions.map((tx) =>
+        tx.uuid === "tx-47" ? { ...tx, amount: 999 } : tx,
+      ),
+    }));
+    const editedMonths = await touchedMonths();
+    assert.equal(editedMonths.length, 1, `edit touched ${editedMonths.join(",")}`);
+
+    // A save that changes no transactions rewrites no month rows
+    await mutateDocument(db, (current) => ({
+      ...current,
+      _local: { ...current._local },
+    }));
+    assert.deepEqual(await touchedMonths(), []);
+
+    // Renaming a category changes search_text, so every month is re-indexed
+    await mutateDocument(db, (current) => ({
+      ...current,
+      categories: current.categories.map((category) =>
+        category.uuid === "cat-coffee" ? { ...category, name: "Cafés" } : category,
+      ),
+    }));
+    assert.equal((await touchedMonths()).length, 48);
+    const renamed = await db.getFirstAsync(
+      "SELECT COUNT(*) AS count FROM tx_month_rows WHERE category_id = 'cat-coffee' AND search_text LIKE '%cafes%'",
+    );
+    assert.ok(renamed.count > 0);
+
+    const head = await db.getFirstAsync("SELECT revision FROM app_meta_head WHERE id = 1");
+    assert.equal(head.revision, baseRevision + 4);
   } finally {
     db.sql.close();
   }
+});
 
+test("emoji names keep the startup fast path: head.doc_bytes uses SQLite length()", async () => {
+  const db = createSqliteAdapter();
   try {
-    const swiftEnginePath = path.resolve(
-      __dirname,
-      "../modules/plutus-fast-store/ios/FastStoreEngine.swift",
+    await migrateLocalDatabase(db);
+    const { document } = buildLargeMultiYearDocument(200);
+    document.categories[0].name = "Food 🍔 & 🍕";
+    await writeDocument(db, document);
+
+    const sizes = await db.getFirstAsync(
+      "SELECT h.doc_bytes AS head_bytes, length(d.document_json) AS doc_bytes FROM app_meta_head h, app_document d",
     );
-    const harnessPath = path.join(tmpDir, "bench.swift");
-    const binPath = path.join(tmpDir, "bench-bin");
+    assert.equal(sizes.head_bytes, sizes.doc_bytes);
 
-    fs.writeFileSync(
-      harnessPath,
-      `
-import Foundation
-
-func msSince(_ start: CFAbsoluteTime) -> Double {
-  return (CFAbsoluteTimeGetCurrent() - start) * 1000.0
-}
-
-@main
-struct BenchMain {
-  static func main() {
-    let dbPath = CommandLine.arguments[1]
-    let engine = FastStoreEngine.shared
-    engine.clearAllCaches()
-
-    // 1. Cold bootstrap from SQLite
-    let t0 = CFAbsoluteTimeGetCurrent()
-    guard let boot1 = engine.readBootstrapSync(dbPath: dbPath, dbName: "budget-manager.db", activeMonthKeys: ["2026-11", "2026-10"]) else {
-      fputs("readBootstrapSync returned nil\\n", stderr)
-      exit(1)
-    }
-    _ = boot1
-    let coldBootMs = msSince(t0)
-
-    // 2. Sync .pidx files
-    let tSync = CFAbsoluteTimeGetCurrent()
-    let syncedCount = engine.syncPartitionFilesSync(dbPath: dbPath, dbName: "budget-manager.db", dirtyMonthKeys: nil, forceAll: true)
-    let syncMs = msSince(tSync)
-    assert(syncedCount == 48, "Expected 48 synced month files, got \\(syncedCount)")
-
-    // 3. Hot RAM bootstrap
-    let t1 = CFAbsoluteTimeGetCurrent()
-    guard let boot2 = engine.readBootstrapSync(dbPath: dbPath, dbName: "budget-manager.db", activeMonthKeys: ["2026-11", "2026-10"]) else {
-      exit(2)
-    }
-    let hotBootMs = msSince(t1)
-    assert((boot2["source"] as? String) == "memory")
-
-    // 4. Read cold historical month slice (2023-06)
-    let tSlice = CFAbsoluteTimeGetCurrent()
-    guard let slice = engine.readMonthSliceSync(dbPath: dbPath, dbName: "budget-manager.db", monthKey: "2023-06"),
-          let payload = slice["payloadJson"] as? String,
-          payload.contains("tx-") else {
-      fputs("readMonthSliceSync failed\\n", stderr)
-      exit(3)
-    }
-    let sliceMs = msSince(tSlice)
-
-    // 5. Cross-year indexed SQLite search across 20,000 rows
-    let tSearch = CFAbsoluteTimeGetCurrent()
-    let searchRes = engine.querySearchSync(dbPath: dbPath, dbName: "budget-manager.db", options: [
-      "profileId": "profile-main",
-      "queryTokens": ["espresso", "vintage"],
-      "limit": 20,
-      "offset": 0,
-      "sort": "newest"
-    ])
-    let searchMs = msSince(tSearch)
-    let count = (searchRes["totalCount"] as? Int64) ?? -1
-    let rowsJson = (searchRes["rowsJson"] as? String) ?? ""
-    assert(count == 1, "Expected 1 matching search row, got \\(count)")
-    assert(rowsJson.contains("tx-12345"), "Expected tx-12345 in search rows")
-
-    // 6. Receipt & account filter across 48 months
-    let tReceipt = CFAbsoluteTimeGetCurrent()
-    let receiptRes = engine.querySearchSync(dbPath: dbPath, dbName: "budget-manager.db", options: [
-      "profileId": "profile-main",
-      "accountIds": ["acc-card"],
-      "hasReceipt": true,
-      "limit": 50,
-      "offset": 0
-    ])
-    let receiptMs = msSince(tReceipt)
-    let receiptCount = (receiptRes["totalCount"] as? Int64) ?? -1
-    assert(receiptCount > 200, "Expected >200 card receipts, got \\(receiptCount)")
-
-    print(String(format: "SWIFT_BENCH coldBootMs=%.2f hotBootMs=%.2f sync48Ms=%.2f coldSliceMs=%.2f searchMs=%.2f receiptMs=%.2f", coldBootMs, hotBootMs, syncMs, sliceMs, searchMs, receiptMs))
-  }
-}
-`,
-    );
-
-    execFileSync(
-      "swiftc",
-      [
-        "-O",
-        "-module-cache-path",
-        cacheDir,
-        swiftEnginePath,
-        harnessPath,
-        "-lsqlite3",
-        "-o",
-        binPath,
-      ],
-      { stdio: "pipe" },
-    );
-
-    const benchOut = execFileSync(binPath, [dbPath], {
-      encoding: "utf8",
-      env: { ...process.env, PLUTUS_FAST_INDEX_DIR: indexDir },
-    }).trim();
-    console.log("   ", benchOut);
-    assert.ok(benchOut.startsWith("SWIFT_BENCH"));
-
-    // Parse numbers and assert single-digit millisecond reads!
-    const metrics = Object.fromEntries(
-      benchOut
-        .replace(/^SWIFT_BENCH\s+/, "")
-        .split(/\s+/)
-        .map((pair) => {
-          const [k, v] = pair.split("=");
-          return [k, Number(v)];
-        }),
-    );
-    assert.ok(metrics.coldBootMs < 50, `coldBootMs too high: ${metrics.coldBootMs}`);
-    assert.ok(metrics.hotBootMs < 10, `hotBootMs too high: ${metrics.hotBootMs}`);
-    assert.ok(metrics.coldSliceMs < 15, `coldSliceMs too high: ${metrics.coldSliceMs}`);
-    assert.ok(metrics.searchMs < 25, `searchMs too high: ${metrics.searchMs}`);
+    const before = (await db.getFirstAsync("SELECT revision FROM app_meta_head")).revision;
+    await migrateLocalDatabase(db, true);
+    const after = (await db.getFirstAsync("SELECT revision FROM app_meta_head")).revision;
+    assert.equal(after, before, "startup must not rebuild the index on every launch");
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    db.sql.close();
+  }
+});
+
+test("storage safety guards: no second SQLite engine, no mmap, one write gate", () => {
+  const root = path.resolve(__dirname, "..");
+  const skip = new Set(["node_modules", "build", ".gradle", ".cxx", "Pods"]);
+  const walk = (dir, files = []) => {
+    if (!fs.existsSync(dir)) return files;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (skip.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, files);
+      else files.push(full);
+    }
+    return files;
+  };
+
+  // 1. Native modules must never open the app database with another SQLite copy.
+  const nativeFiles = walk(path.join(root, "modules")).filter((file) =>
+    /\.(kt|java|swift|m|mm|c|cc|cpp|h|hpp|podspec|gradle|txt)$/.test(file),
+  );
+  for (const file of nativeFiles) {
+    const text = fs.readFileSync(file, "utf8");
+    assert.ok(
+      !/sqlite|budget-manager\.db/i.test(text),
+      `${path.relative(root, file)} touches SQLite; only expo-sqlite may open budget-manager.db`,
+    );
+  }
+
+  const sourceFiles = walk(path.join(root, "src")).filter((file) =>
+    /\.(ts|tsx)$/.test(file),
+  );
+  for (const file of sourceFiles) {
+    const relative = path.relative(root, file).split(path.sep).join("/");
+    const text = fs.readFileSync(file, "utf8");
+    // 2. Memory-mapped I/O turns I/O errors into SIGBUS crashes.
+    for (const match of text.matchAll(/mmap_size\s*=\s*(\d+)/g)) {
+      assert.equal(match[1], "0", `${relative} enables PRAGMA mmap_size`);
+    }
+    // 3. Only the write gate and the gated migration may open write transactions.
+    if (
+      relative !== "src/data/database/write-transaction.ts" &&
+      relative !== "src/data/database/migrations.ts"
+    ) {
+      assert.ok(
+        !/withExclusiveTransactionAsync\s*\(|withTransactionAsync\s*\(/.test(text),
+        `${relative} opens a write transaction outside runWriteTransaction`,
+      );
+    }
+    // 4. Nothing may switch journal mode away from WAL.
+    for (const match of text.matchAll(/journal_mode\s*=\s*([A-Za-z]+)/g)) {
+      assert.equal(
+        match[1].toUpperCase(),
+        "WAL",
+        `${relative} changes journal_mode away from WAL`,
+      );
+    }
+    // 5. Only the headless task opens its own connection (behind the gate).
+    if (relative !== "src/data/recurring/recurring-background.ts") {
+      assert.ok(
+        !/openDatabase(Async|Sync)\s*\(/.test(text),
+        `${relative} opens its own database connection`,
+      );
+    }
   }
 });
