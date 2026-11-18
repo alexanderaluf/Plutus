@@ -335,7 +335,7 @@ test("v25 migration builds month index tables for established pre-v25 DBs", asyn
 
     const versionRow = await db.getFirstAsync("PRAGMA user_version");
     assert.equal(versionRow.user_version, DATABASE_VERSION);
-    assert.equal(DATABASE_VERSION, 25);
+    assert.ok(DATABASE_VERSION >= 25);
 
     const monthCount = await db.getFirstAsync(
       "SELECT COUNT(*) AS count FROM app_month_index",
@@ -350,7 +350,7 @@ test("v25 migration builds month index tables for established pre-v25 DBs", asyn
     const headRow = await db.getFirstAsync(
       "SELECT schema_version, had_profile, tx_count, revision FROM app_meta_head WHERE id = 1",
     );
-    assert.equal(headRow.schema_version, 25);
+    assert.equal(headRow.schema_version, DATABASE_VERSION);
     assert.equal(headRow.had_profile, 1);
     assert.equal(headRow.tx_count, 2);
     assert.ok(headRow.revision >= 1);

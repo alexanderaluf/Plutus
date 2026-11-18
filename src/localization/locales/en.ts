@@ -531,6 +531,15 @@ export const en = {
         monthlyFunding: "Monthly funding",
         access: "Access",
       },
+      creditHolds: {
+        title: "Holding your credit limit",
+        description:
+          "Installment plans reserve their unpaid balance until each payment is charged.",
+        progress: "Paid {{paid}} of {{count}} · {{amount}} per month",
+        until: "Until {{date}}",
+        noRate: "No exchange rate to {{currency}}",
+        open: "Open {{name}}",
+      },
       periods: {
         accessibilityLabel: "Transaction period",
         daily: "Daily",

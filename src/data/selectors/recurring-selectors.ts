@@ -13,8 +13,14 @@ import {
   nextOccurrence,
   occurrenceDate,
   recurringDefaults,
+  recurringOccurrenceAmount,
   type RecurringDraft,
 } from "../model/recurring-record";
+import {
+  installmentAmounts,
+  installmentRemaining,
+  readInstallmentPlan,
+} from "../model/installment-plan";
 import { createRecordLookup } from "./transaction-selectors";
 import { memoizeForDocument } from "./document-memo";
 import {
@@ -86,6 +92,22 @@ export function* iterateRecurrings(document: BackupDocument, now: Date) {
       [0, 1, 2, 7].includes(r.reminderDays)
         ? r.reminderDays
         : null;
+    const plan = readInstallmentPlan(r);
+    draft.installmentCount = plan?.count ?? null;
+    draft.installmentTotal = plan ? String(plan.total) : "";
+    draft.holdsCredit = plan?.holdsCredit ?? false;
+    const resolved = Math.max(0, Number(r.nextIndex ?? 0) || 0);
+    const installment = plan
+      ? {
+          count: plan.count,
+          total: plan.total,
+          holdsCredit: plan.holdsCredit,
+          ...installmentAmounts(plan.total, plan.count),
+          resolved: Math.min(resolved, plan.count),
+          remaining: installmentRemaining(plan, resolved),
+          endsAt: occurrenceDate({ ...r, endAt: null }, plan.count - 1),
+        }
+      : null;
     const occurrences = Array.isArray(r.occurrences) ? r.occurrences : [];
     const history: JsonObject[] = [];
     for (let index = 0; index < occurrences.length; index++) {
@@ -98,6 +120,7 @@ export function* iterateRecurrings(document: BackupDocument, now: Date) {
       id: identity(r),
       amount: Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0,
       draft,
+      installment,
       next,
       archived: r.archived === true || (!!isRecurringPeriod(r.period) && !next),
       due: r.archived !== true && !!next && next <= now,
@@ -180,16 +203,18 @@ export function* iterateRecurringEvents(
       Number(recurring.record.nextIndex ?? 0),
       firstIndexInRange(recurring.record, start),
     );
-    for (;;) {
+    for (;; index++) {
       if (operations++ % 64 === 0) yield;
-      const date = occurrenceDate(recurring.record, index++);
+      const date = occurrenceDate(recurring.record, index);
       if (!date || date >= end) break;
       if (date >= start)
         result.push({
           recurring,
           date,
           status: "pending",
-          amount: recurring.amount,
+          amount: recurring.installment
+            ? recurringOccurrenceAmount(recurring.record, index)
+            : recurring.amount,
           currencyCode: recurring.currencyCode,
           type: recurring.type,
           transactionId: null,
@@ -247,8 +272,11 @@ export function selectRecurringSummary(items: Recurring[], now = new Date()) {
   const active = items.filter((r) => !r.archived && r.valid);
   const annual = active.map((r) => ({
     ...r,
-    amount:
-      r.amount *
+    // A plan contributes only the installments it still has within a year.
+    amount: r.installment
+      ? r.installment.regular *
+        Math.min(12, r.installment.count - r.installment.resolved)
+      : r.amount *
       ({
         Daily: 365,
         Weekly: 52,

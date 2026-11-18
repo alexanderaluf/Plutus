@@ -171,6 +171,13 @@ not part of the document. They live only in the device keychain/keystore
 (`expo-secure-store`, this-device-only), so backups never contain them and a
 restore on another device can never lock its owner out.
 
+Schema 26 adds optional installment-plan fields to `recurrings`:
+`installmentCount` (1–72 monthly installments), `installmentTotal` (the
+purchase price in the record currency) and `holdsCredit`. Older documents and
+backups default to `null`, `null` and `false`, so existing schedules are
+unchanged. The credit a plan holds is derived from the plan and its occurrence
+cursor on every read; it is never stored on the account.
+
 Expo SDK references used for this implementation:
 [SQLite v57](https://docs.expo.dev/versions/v57.0.0/sdk/sqlite/) and
 [SDK v57](https://docs.expo.dev/versions/v57.0.0/).

@@ -33,6 +33,29 @@ Both foreground and headless writes read the latest document inside an
 exclusive SQLite transaction. SQL contention fails safely and is retried on a
 later check.
 
+## Installment plans
+
+An expense schedule can be an installment plan (Israeli "תשלומים"): a total
+price spread over 1–72 monthly installments. `amount` stores the regular
+installment, rounded down to the cent; the first installment absorbs the
+rounding difference (1,000 in 3 is 333.34 + 333.33 + 333.33). The plan is always
+monthly and has no further occurrences after its last installment; `endAt`
+records that date for display. Every term stays editable. Payments already
+processed or skipped on the current schedule revision count as paid
+installments, so an existing monthly schedule can become a plan and a plan can
+be lengthened or repriced; the count can't drop below the payments already made.
+Changing the start begins a revised schedule that counts from zero.
+
+When `holdsCredit` is on and the payer is a credit card, the plan holds the part
+not yet charged: the total minus every processed or skipped installment. The
+card's available credit is its limit minus this billing cycle's spending minus
+these holds. An installment moves from the hold to the cycle's spending when it
+is recorded, so it is never counted twice. Paused plans keep holding the limit;
+deleting a plan releases it. A plan in another currency is converted with the
+latest stored rate and is listed but not deducted when no rate is stored.
+Account details list every plan that holds the card's limit, with its progress,
+remaining amount and last installment date.
+
 ## Conversion and totals
 
 At recording time the existing public exchange-rate service supplies a table

@@ -4,6 +4,12 @@ import {
   identity,
   references,
 } from "./category-record";
+import {
+  installmentAmount,
+  installmentAmounts,
+  isInstallmentCount,
+  readInstallmentPlan,
+} from "./installment-plan";
 import type { JsonObject } from "./json";
 
 export const RECURRING_PERIODS = [
@@ -36,6 +42,12 @@ export type RecurringDraft = {
   iconPath: string | null;
   color: string;
   reminderDays: number | null;
+  /** Monthly installments the purchase is spread over; null when it is not a plan. */
+  installmentCount: number | null;
+  /** The full purchase price, as typed, while `installmentCount` is set. */
+  installmentTotal: string;
+  /** The not-yet-charged part holds the paying credit card's limit. */
+  holdsCredit: boolean;
 };
 export function recurringDefaults(now = new Date()): RecurringDraft {
   return {
@@ -58,6 +70,9 @@ export function recurringDefaults(now = new Date()): RecurringDraft {
     iconPath: null,
     color: "#70d2eb",
     reminderDays: null,
+    installmentCount: null,
+    installmentTotal: "",
+    holdsCredit: false,
   };
 }
 export function normalizeRecurringRecord(record: JsonObject): JsonObject {
@@ -70,6 +85,9 @@ export function normalizeRecurringRecord(record: JsonObject): JsonObject {
     nextIndex: 0,
     scheduleRevision: 0,
     occurrences: [],
+    installmentCount: null,
+    installmentTotal: null,
+    holdsCredit: false,
     ...record,
   };
 }
@@ -89,6 +107,9 @@ export function occurrenceDate(record: JsonObject, index: number): Date | null {
     !isRecurringPeriod(record.period)
   )
     return null;
+  // An installment plan ends after its last installment, whatever its end date says.
+  const plan = readInstallmentPlan(record);
+  if (plan && index >= plan.count) return null;
   const anchor = new Date(String(record.scheduleStart ?? record.startAt ?? ""));
   if (!Number.isFinite(anchor.getTime())) return null;
   const result = new Date(anchor);
@@ -116,6 +137,11 @@ export function occurrenceDate(record: JsonObject, index: number): Date | null {
   )
     return null;
   return result;
+}
+/** The amount charged for occurrence `index`: the record amount, or that installment. */
+export function recurringOccurrenceAmount(record: JsonObject, index: number) {
+  const plan = readInstallmentPlan(record);
+  return plan ? installmentAmount(plan, index) : Number(record.amount ?? 0);
 }
 export function nextOccurrence(record: JsonObject) {
   return occurrenceDate(record, Number(record.nextIndex ?? 0));
@@ -162,13 +188,30 @@ export function saveRecurring(
     );
   if (existing && !belongsToProfile(document, existing, profileId))
     throw new Error("This payment belongs to another profile.");
-  const amount = Number(draft.amount.replace(",", "."));
   if (!draft.name.trim() || draft.name.trim().length > 100)
     throw new Error("Enter a name of up to 100 characters.");
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 1e12)
+  const installments = draft.installmentCount !== null;
+  if (installments && !isInstallmentCount(draft.installmentCount))
+    throw new Error("Choose between 1 and 72 monthly installments.");
+  if (installments && draft.type !== 0)
+    throw new Error("Installments are available for expenses only.");
+  const entered = Number(
+    (installments ? draft.installmentTotal : draft.amount).replace(",", "."),
+  );
+  if (!Number.isFinite(entered) || entered <= 0 || entered > 1e12)
     throw new Error(
       "Enter an amount greater than zero and no more than 1 trillion.",
     );
+  const plan = installments
+    ? { count: draft.installmentCount!, total: entered }
+    : null;
+  const amount = plan
+    ? installmentAmounts(plan.total, plan.count).regular
+    : entered;
+  if (amount <= 0)
+    throw new Error("Each installment must be at least 0.01.");
+  // A plan is always monthly; its end follows from the number of installments.
+  if (plan) draft = { ...draft, period: "Monthly", endAt: null };
   if (!isRecurringPeriod(draft.period) || ![0, 1].includes(draft.type))
     throw new Error("Select a valid frequency and payment type.");
   if (!/^[A-Z]{3}$/.test(draft.currencyCode))
@@ -209,6 +252,14 @@ export function saveRecurring(
   const history = Array.isArray(existing?.occurrences)
     ? existing.occurrences
     : [];
+  // Payments already recorded or skipped on this schedule count as paid
+  // installments, so a plan can't have fewer installments than that. A new
+  // start or frequency begins a revised schedule that counts from zero.
+  const resolved = changedSchedule ? 0 : Number(existing?.nextIndex ?? 0) || 0;
+  if (plan && plan.count < resolved)
+    throw new Error(
+      `${resolved} payments are already recorded. Choose at least ${resolved} installments.`,
+    );
   if (
     changedSchedule &&
     history.some(
@@ -237,9 +288,16 @@ export function saveRecurring(
     nextIndex: changedSchedule ? 0 : (existing?.nextIndex ?? 0),
     scheduleRevision:
       Number(existing?.scheduleRevision ?? 0) + (changedSchedule ? 1 : 0),
+    installmentCount: plan?.count ?? null,
+    installmentTotal: plan?.total ?? null,
+    holdsCredit: !!plan && draft.holdsCredit && account.accountType === "card",
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
+  if (plan) {
+    const last = occurrenceDate({ ...record, endAt: null }, plan.count - 1);
+    record.endAt = last ? last.toISOString() : null;
+  }
   return {
     ...document,
     recurrings: existing
@@ -262,7 +320,7 @@ export function completeOccurrence(
     status,
     recordedAt: now,
     transactionId,
-    amount: record.amount ?? 0,
+    amount: recurringOccurrenceAmount(record, Number(record.nextIndex ?? 0)),
     currencyCode: record.currencyCode ?? "USD",
     type: record.type ?? 0,
   };

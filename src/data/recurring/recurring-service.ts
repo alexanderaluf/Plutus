@@ -15,6 +15,7 @@ import {
   nextOccurrence,
   occurrenceKey,
   recurringCurrency,
+  recurringOccurrenceAmount,
   recurringOwner,
 } from "../model/recurring-record";
 import {
@@ -103,7 +104,11 @@ export function recordRecurringPayment(
     throw new Error(
       "An exchange rate for this currency is unavailable. The payment remains pending.",
     );
-  const originalAmount = Number(record.amount);
+  // An installment plan's first payment can differ by the rounding cent.
+  const originalAmount = recurringOccurrenceAmount(
+    record,
+    Number(record.nextIndex ?? 0),
+  );
   const draft = {
     ...createTransactionDraft(record.type === 1 ? 1 : 0),
     name: String(record.name ?? ""),

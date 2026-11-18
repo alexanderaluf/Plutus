@@ -64,7 +64,9 @@ function CreditStatus({ account }: { account: Account }) {
           : t("accounts.cards.daysLeft", { days });
   const soon = days !== null && days <= 3;
 
-  const used = limit > 0 ? account.currentSpent / limit : 0;
+  // Installment plans that hold the limit count as used until charged.
+  const used =
+    limit > 0 ? (account.currentSpent + account.creditHold) / limit : 0;
   const meterColor = account.isOverdraft
     ? theme.danger
     : used >= 0.8

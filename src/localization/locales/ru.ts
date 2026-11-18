@@ -210,6 +210,25 @@ export const ru = {
     approxMonthly: "≈ {{amount}} в месяц",
     showAll: "Показать все ({{count}})",
     showLess: "Свернуть",
+    installments: {
+      toggle: "Оплата в рассрочку",
+      toggleHint: "Разделить цену на равные ежемесячные платежи.",
+      total: "Полная стоимость",
+      count: "Количество платежей",
+      perInstallment: "{{count}} × {{amount}}",
+      firstInstallment: "Первый платёж {{amount}}",
+      lastInstallment: "Последний платёж {{date}}",
+      holdsCredit: "Занимает кредитный лимит",
+      holdsCreditHint:
+        "Невыплаченный остаток резервируется из лимита карты и освобождается с каждым платежом.",
+      holdsCreditCardOnly: "Выберите кредитную карту, чтобы занять её лимит.",
+      progress: "Оплачено {{paid}} из {{count}}",
+      remaining: "Осталось оплатить",
+      monthlyPayment: "Ежемесячный платёж",
+      endsOn: "Завершится {{date}}",
+      fewer: "Меньше платежей",
+      more: "Больше платежей",
+    },
     snapshot: {
       heading: "Регулярный платёж",
       due: "Срок",
@@ -580,6 +599,15 @@ export const ru = {
         savingsTitle: "Состав накоплений",
         monthlyFunding: "Ежемесячное пополнение",
         access: "Доступ к средствам",
+      },
+      creditHolds: {
+        title: "Что занимает лимит",
+        description:
+          "Покупки в рассрочку резервируют невыплаченный остаток, пока каждый платёж не будет списан.",
+        progress: "Оплачено {{paid}} из {{count}} · {{amount}} в месяц",
+        until: "До {{date}}",
+        noRate: "Нет курса для {{currency}}",
+        open: "Открыть {{name}}",
       },
       periods: {
         ...en.accounts.details.periods,

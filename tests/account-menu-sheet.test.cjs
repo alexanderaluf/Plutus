@@ -168,6 +168,9 @@ function mountScreen(
     "@/data/database/fast-store-client": {
       queryScopedTransactionsAsync: async () => [],
     },
+    "@/data/selectors/credit-hold-selectors": {
+      selectAccountCreditHolds: () => ({ items: [], total: 0 }),
+    },
     "@/data/model/account-record": {
       deleteAccountFromDocument: (document, id) => ({
         ...document,

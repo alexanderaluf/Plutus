@@ -1,8 +1,16 @@
 import { useAppDate } from "@/shared/lib/use-app-date";
 import { useLocalData } from "@/data/local-data-provider";
+import { references } from "@/data/model/category-record";
+import {
+  MAX_INSTALLMENTS,
+  QUICK_INSTALLMENT_COUNTS,
+  installmentAmounts,
+} from "@/data/model/installment-plan";
 import {
   RECURRING_PERIODS,
+  occurrenceDate,
   saveRecurring,
+  wallTime,
   type RecurringDraft,
 } from "@/data/model/recurring-record";
 import { requestRecurringReminderPermission } from "@/data/recurring/recurring-reminders";
@@ -32,6 +40,7 @@ import {
 } from "@/features/transactions/transaction-form-helpers";
 import { useAppLocalization } from "@/localization/localization-provider";
 import { colorForeground } from "@/shared/icons/colors";
+import { useCurrencyFormat } from "@/shared/lib/use-currency-format";
 import { colorWithAlpha, useAppThemeColors } from "@/shared/theme/app-theme";
 import { Text } from "@/shared/ui/app-text";
 import { DateTimePopover } from "@/shared/ui/date-time-popover";
@@ -145,7 +154,24 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
   };
   const startAt = new Date(draft.startAt);
   const typeTone = getTransactionTypeTone(draft.type, c);
-  const parsedAmount = Number(draft.amount.replace(",", "."));
+  // An installment plan is typed as its total price and split per month.
+  const isPlan = draft.installmentCount !== null;
+  // Payments already recorded on this schedule count as paid installments,
+  // unless a new start or frequency begins a revised schedule.
+  const paidSoFar =
+    existing &&
+    existing.record.startAt === draft.startAt &&
+    existing.record.period === (isPlan ? "Monthly" : draft.period)
+      ? Math.max(0, Number(existing.record.nextIndex ?? 0) || 0)
+      : 0;
+  const lastInstallmentCount = useRef(
+    draft.installmentCount ?? Math.max(10, paidSoFar + 1),
+  );
+  const payerIsCard =
+    document.accounts.find((item) => references(item, draft.account))
+      ?.accountType === "card";
+  const amountText = isPlan ? draft.installmentTotal : draft.amount;
+  const parsedAmount = Number(amountText.replace(",", "."));
   const hasAmount = Number.isFinite(parsedAmount) && parsedAmount > 0;
   const color = /^#[a-f\d]{6}$/i.test(draft.color) ? draft.color : "#70d2eb";
   const currency = currencies.find((item) => item.code === draft.currencyCode);
@@ -180,6 +206,47 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
     }
     change(field, next.toISOString());
     if (Platform.OS === "android") setDatePicker(null);
+  }
+  function setInstallments(on: boolean) {
+    update((current) =>
+      on
+        ? {
+            ...current,
+            installmentCount: lastInstallmentCount.current,
+            // An existing schedule holds one payment's amount, so its price is
+            // that payment times the installments; a new one holds the price.
+            installmentTotal:
+              existing && !existing.installment && current.amount
+                ? String(
+                    Math.round(
+                      Number(current.amount.replace(",", ".")) *
+                        lastInstallmentCount.current *
+                        100,
+                    ) / 100,
+                  )
+                : current.amount,
+            period: "Monthly",
+            endAt: null,
+            // Card issuers charge each installment on its own.
+            automatic: true,
+          }
+        : {
+            ...current,
+            installmentCount: null,
+            amount: existing?.installment
+              ? String(existing.installment.regular)
+              : current.installmentTotal,
+            holdsCredit: false,
+          },
+    );
+  }
+  function setInstallmentCount(count: number) {
+    const next = Math.min(
+      MAX_INSTALLMENTS,
+      Math.max(1, paidSoFar, Math.round(count)),
+    );
+    lastInstallmentCount.current = next;
+    change("installmentCount", next);
   }
   function chooseReminder(days: (typeof REMINDER_OPTIONS)[number]) {
     void (async () => {
@@ -267,9 +334,20 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
           { label: t("recurring.income"), value: 1 },
         ]}
         busy={busy}
-        onChange={(value) =>
-          update((d) => ({ ...d, type: value === 1 ? 1 : 0, category: "" }))
-        }
+        onChange={(value) => {
+          update((d) =>
+            value === 1 && d.installmentCount !== null
+              ? {
+                  ...d,
+                  type: 1,
+                  category: "",
+                  installmentCount: null,
+                  amount: d.installmentTotal,
+                  holdsCredit: false,
+                }
+              : { ...d, type: value === 1 ? 1 : 0, category: "" },
+          );
+        }}
         onBack={back}
         bottomOverlay={
           <RecurringAction
@@ -356,7 +434,11 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
               </View>
               <FormDivider />
               <View className="gap-1">
-                <FormLabel>{t("recurring.amount")}</FormLabel>
+                <FormLabel>
+                  {isPlan
+                    ? t("recurring.installments.total")
+                    : t("recurring.amount")}
+                </FormLabel>
                 <View className="flex-row items-center gap-2">
                   <Text
                     accessibilityElementsHidden
@@ -366,13 +448,19 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
                     {getTransactionTypeVisual(draft.type).symbol}
                   </Text>
                   <TextInput
-                    accessibilityLabel={t("recurring.amount")}
+                    accessibilityLabel={
+                      isPlan
+                        ? t("recurring.installments.total")
+                        : t("recurring.amount")
+                    }
                     placeholder="0.00"
                     placeholderTextColor={colorWithAlpha(c.foreground, 0.2)}
                     selectionColor={typeTone}
                     keyboardType="decimal-pad"
-                    value={draft.amount}
-                    onChangeText={(v) => change("amount", v)}
+                    value={amountText}
+                    onChangeText={(v) =>
+                      change(isPlan ? "installmentTotal" : "amount", v)
+                    }
                     style={[
                       styles.amount,
                       TABULAR,
@@ -460,17 +548,31 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
               onSwapAccounts={() => undefined}
             />
 
+            {draft.type === 0 ? (
+              <InstallmentsCard
+                draft={draft}
+                busy={busy}
+                paidSoFar={paidSoFar}
+                payerIsCard={payerIsCard}
+                onToggle={setInstallments}
+                onCount={setInstallmentCount}
+                onHoldsCredit={(value) => change("holdsCredit", value)}
+              />
+            ) : null}
+
             <FormCard title={t("recurring.period")} icon="event-repeat">
-              <View style={styles.wrap}>
-                {RECURRING_PERIODS.map((period) => (
-                  <Pill
-                    key={period}
-                    selected={draft.period === period}
-                    label={t(`recurring.periods.${period}`)}
-                    onPress={() => change("period", period)}
-                  />
-                ))}
-              </View>
+              {isPlan ? null : (
+                <View style={styles.wrap}>
+                  {RECURRING_PERIODS.map((period) => (
+                    <Pill
+                      key={period}
+                      selected={draft.period === period}
+                      label={t(`recurring.periods.${period}`)}
+                      onPress={() => change("period", period)}
+                    />
+                  ))}
+                </View>
+              )}
               <View className="flex-row gap-2">
                 {(["start", "time"] as const).map((key) => (
                   <Pressable
@@ -533,42 +635,44 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
                   </Pressable>
                 ))}
               </View>
-              <View className="gap-2">
-                <FormLabel>{t("recurring.end")}</FormLabel>
-                <View style={styles.wrap}>
-                  <Pill
-                    selected={!draft.endAt}
-                    label={t("recurring.noEnd")}
-                    onPress={() => change("endAt", null)}
-                  />
-                  <Pill
-                    selected={!!draft.endAt}
-                    label={
-                      draft.endAt
-                        ? formatDate(new Date(draft.endAt))
-                        : t("recurring.end")
-                    }
-                    icon="calendar"
-                    onPress={() => {
-                      Keyboard.dismiss();
-                      setDatePicker("end");
-                    }}
-                  >
-                    <DateTimePopover
-                      accentColor={c.accent}
-                      isDark={c.isDark}
-                      isPresented={datePicker === "end"}
-                      mode="date"
-                      title={t("recurring.end")}
-                      value={new Date(draft.endAt ?? draft.startAt)}
-                      onDismiss={() => {
-                        if (datePicker === "end") setDatePicker(null);
-                      }}
-                      onValueChange={(value) => updateDateTime("end", value)}
+              {isPlan ? null : (
+                <View className="gap-2">
+                  <FormLabel>{t("recurring.end")}</FormLabel>
+                  <View style={styles.wrap}>
+                    <Pill
+                      selected={!draft.endAt}
+                      label={t("recurring.noEnd")}
+                      onPress={() => change("endAt", null)}
                     />
-                  </Pill>
+                    <Pill
+                      selected={!!draft.endAt}
+                      label={
+                        draft.endAt
+                          ? formatDate(new Date(draft.endAt))
+                          : t("recurring.end")
+                      }
+                      icon="calendar"
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setDatePicker("end");
+                      }}
+                    >
+                      <DateTimePopover
+                        accentColor={c.accent}
+                        isDark={c.isDark}
+                        isPresented={datePicker === "end"}
+                        mode="date"
+                        title={t("recurring.end")}
+                        value={new Date(draft.endAt ?? draft.startAt)}
+                        onDismiss={() => {
+                          if (datePicker === "end") setDatePicker(null);
+                        }}
+                        onValueChange={(value) => updateDateTime("end", value)}
+                      />
+                    </Pill>
+                  </View>
                 </View>
-              </View>
+              )}
             </FormCard>
 
             <FormCard>
@@ -688,6 +792,212 @@ export function RecurringEditorScreen({ editId }: { editId?: string }) {
       ) : null}
       {androidDateTimePicker}
     </>
+  );
+}
+
+/**
+ * Paying a purchase in monthly installments: how many, what each one costs,
+ * when the last is charged, and whether the unpaid part holds the card's limit.
+ */
+function InstallmentsCard({
+  draft,
+  busy,
+  paidSoFar,
+  payerIsCard,
+  onToggle,
+  onCount,
+  onHoldsCredit,
+}: {
+  draft: RecurringDraft;
+  busy: boolean;
+  /** Payments already recorded or skipped on this schedule; they count as paid. */
+  paidSoFar: number;
+  payerIsCard: boolean;
+  onToggle: (on: boolean) => void;
+  onCount: (count: number) => void;
+  onHoldsCredit: (value: boolean) => void;
+}) {
+  const { t } = useTranslation();
+  const c = useAppThemeColors();
+  const { formatDate } = useAppDate();
+  const { formatCurrency } = useCurrencyFormat();
+  const count = draft.installmentCount;
+  const [countText, setCountText] = useState<string | null>(null);
+  const total = Number(draft.installmentTotal.replace(",", "."));
+  const split =
+    count !== null && Number.isFinite(total) && total > 0
+      ? installmentAmounts(total, count)
+      : null;
+  const start = new Date(draft.startAt);
+  const last =
+    count !== null && Number.isFinite(start.getTime())
+      ? occurrenceDate(
+          {
+            scheduleStart: wallTime(start),
+            startAt: draft.startAt,
+            period: "Monthly",
+          },
+          count - 1,
+        )
+      : null;
+  const minCount = Math.max(1, paidSoFar);
+
+  return (
+    <FormCard>
+      <SwitchRow
+        icon="receipt"
+        title={t("recurring.installments.toggle")}
+        description={t("recurring.installments.toggleHint")}
+        value={count !== null}
+        disabled={busy}
+        onChange={onToggle}
+      />
+      {count !== null ? (
+        <>
+          <FormDivider />
+          <View className="gap-3">
+            <FormLabel>{t("recurring.installments.count")}</FormLabel>
+            <View className="flex-row items-center gap-3">
+              <StepButton
+                glyph="−"
+                label={t("recurring.installments.fewer")}
+                disabled={busy || count <= minCount}
+                onPress={() => onCount(count - 1)}
+              />
+              <TextInput
+                accessibilityLabel={t("recurring.installments.count")}
+                keyboardType="number-pad"
+                maxLength={2}
+                editable={!busy}
+                selectTextOnFocus
+                value={countText ?? String(count)}
+                onChangeText={(value) => {
+                  const digits = value.replace(/\D/g, "");
+                  setCountText(digits);
+                  const parsed = Number(digits);
+                  if (digits && parsed >= minCount) onCount(parsed);
+                }}
+                onBlur={() => setCountText(null)}
+                style={[
+                  styles.countInput,
+                  TABULAR,
+                  {
+                    color: c.foreground,
+                    backgroundColor: c.surfaceSecondary,
+                    opacity: busy ? 0.55 : 1,
+                  },
+                ]}
+              />
+              <StepButton
+                glyph="+"
+                label={t("recurring.installments.more")}
+                disabled={busy || count >= MAX_INSTALLMENTS}
+                onPress={() => onCount(count + 1)}
+              />
+            </View>
+            <View style={styles.wrap}>
+              {QUICK_INSTALLMENT_COUNTS.filter(
+                (value) => value >= minCount,
+              ).map((value) => (
+                <Pill
+                  key={value}
+                  selected={count === value}
+                  label={String(value)}
+                  onPress={() => {
+                    setCountText(null);
+                    onCount(value);
+                  }}
+                />
+              ))}
+            </View>
+            <View
+              className="gap-1 rounded-2xl px-4 py-3"
+              style={{ backgroundColor: c.surfaceSecondary, ...CONTINUOUS }}
+            >
+              <Text
+                className="font-manrope-bold text-[17px] text-foreground"
+                style={TABULAR}
+              >
+                {t("recurring.installments.perInstallment", {
+                  count,
+                  amount: split
+                    ? formatCurrency(split.regular, draft.currencyCode)
+                    : "—",
+                })}
+              </Text>
+              {paidSoFar > 0 ? (
+                <FormHelp>
+                  {t("recurring.installments.progress", {
+                    paid: Math.min(paidSoFar, count),
+                    count,
+                  })}
+                </FormHelp>
+              ) : null}
+              {split && paidSoFar === 0 && split.first !== split.regular ? (
+                <FormHelp>
+                  {t("recurring.installments.firstInstallment", {
+                    amount: formatCurrency(split.first, draft.currencyCode),
+                  })}
+                </FormHelp>
+              ) : null}
+              {last ? (
+                <FormHelp>
+                  {t("recurring.installments.lastInstallment", {
+                    date: formatDate(last),
+                  })}
+                </FormHelp>
+              ) : null}
+            </View>
+          </View>
+          <FormDivider />
+          <SwitchRow
+            icon="credit-card-chip"
+            title={t("recurring.installments.holdsCredit")}
+            description={
+              payerIsCard
+                ? t("recurring.installments.holdsCreditHint")
+                : t("recurring.installments.holdsCreditCardOnly")
+            }
+            value={payerIsCard && draft.holdsCredit}
+            disabled={busy || !payerIsCard}
+            onChange={onHoldsCredit}
+          />
+        </>
+      ) : null}
+    </FormCard>
+  );
+}
+
+function StepButton({
+  glyph,
+  label,
+  disabled,
+  onPress,
+}: {
+  glyph: string;
+  label: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const c = useAppThemeColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      hitSlop={6}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.step,
+        {
+          backgroundColor: c.surfaceSecondary,
+          opacity: disabled ? 0.4 : pressed ? 0.72 : 1,
+        },
+      ]}
+    >
+      <Text style={[styles.stepGlyph, { color: c.foreground }]}>{glyph}</Text>
+    </Pressable>
   );
 }
 
@@ -866,6 +1176,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginStart: 6,
+  },
+  step: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepGlyph: {
+    fontFamily: "Huninn_400Regular",
+    fontSize: 26,
+    lineHeight: 30,
+    includeFontPadding: false,
+  },
+  countInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 48,
+    borderRadius: 16,
+    borderCurve: "continuous",
+    fontFamily: "Huninn_400Regular",
+    fontSize: 26,
+    textAlign: "center",
+    paddingVertical: 0,
   },
   notes: {
     height: "auto",

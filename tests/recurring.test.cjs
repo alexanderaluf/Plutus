@@ -540,7 +540,7 @@ test("migration defaults automatic off and atomic repository rolls back ledger a
       }),
     );
     assert.deepEqual(await readDocument(adapter), before);
-    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 25);
+    assert.equal(db.prepare("PRAGMA user_version").get().user_version, 26);
   } finally {
     db.close();
   }
@@ -766,4 +766,272 @@ test("upcoming payments read as today, tomorrow, or in N days within a week", ()
   });
   assert.equal(relativeDay(new Date(2026, 10, 21, 8), today), null);
   assert.equal(relativeDay(new Date(2026, 10, 13, 8), today), null);
+});
+
+// ---------------------------------------------------------------------------
+// Installment plans (תשלומים) and the credit limit they hold.
+// ---------------------------------------------------------------------------
+const {
+  installmentAmounts,
+  installmentRemaining,
+  readInstallmentPlan,
+} = require("../src/data/model/installment-plan.ts");
+const {
+  selectCardCreditHolds,
+  selectAccountCreditHolds,
+} = require("../src/data/selectors/credit-hold-selectors.ts");
+const { selectAccounts } = require("../src/data/selectors/document-selectors.ts");
+
+function withCard(d) {
+  d.accounts.push({
+    uuid: "visa",
+    user: owner,
+    name: "Visa",
+    accountType: "card",
+    currencyCode: "ILS",
+    amount: 0,
+    creditLimit: 10000,
+    paymentDay: 10,
+    cardCompany: "Visa",
+    cardLastFour: "1234",
+    linkedBankAccountId: "checking",
+    transactions: [],
+  });
+  return d;
+}
+function plan(d, changes = {}, id = "laptop") {
+  return add(
+    d,
+    {
+      name: "Laptop",
+      amount: "",
+      currencyCode: "ILS",
+      account: "visa",
+      automatic: true,
+      startAt: new Date(2026, 5, 15, 9).toISOString(),
+      installmentCount: 10,
+      installmentTotal: "5000",
+      holdsCredit: true,
+      ...changes,
+    },
+    id,
+  );
+}
+
+test("installments split evenly and the first absorbs the rounding cent", () => {
+  assert.deepEqual(installmentAmounts(5000, 10), { first: 500, regular: 500 });
+  assert.deepEqual(installmentAmounts(1000, 3), {
+    first: 333.34,
+    regular: 333.33,
+  });
+  const p = { count: 3, total: 1000, holdsCredit: false };
+  assert.equal(installmentRemaining(p, 0), 1000);
+  assert.equal(installmentRemaining(p, 1), 666.66);
+  assert.equal(installmentRemaining(p, 3), 0);
+  assert.equal(installmentRemaining(p, 9), 0);
+});
+
+test("an installment plan saves monthly, ends after its last installment and holds only card limits", () => {
+  const d = plan(withCard(fixture()));
+  const record = d.recurrings[0];
+  assert.equal(record.amount, 500);
+  assert.equal(record.installmentCount, 10);
+  assert.equal(record.installmentTotal, 5000);
+  assert.equal(record.holdsCredit, true);
+  assert.equal(record.period, "Monthly");
+  assert.deepEqual(readInstallmentPlan(record), {
+    count: 10,
+    total: 5000,
+    holdsCredit: true,
+  });
+  // June 15 + 9 months = March 15 of the next year, inclusive.
+  assert.equal(localDateKey(new Date(record.endAt)), "2027-03-15");
+  assert.equal(localDateKey(occurrenceDate(record, 9)), "2027-03-15");
+  assert.equal(occurrenceDate(record, 10), null);
+
+  // A bank account has no limit to hold.
+  const bank = plan(withCard(fixture()), { account: "checking" });
+  assert.equal(bank.recurrings[0].holdsCredit, false);
+
+  assert.throws(() => plan(withCard(fixture()), { type: 1 }), /expenses only/);
+  assert.throws(
+    () => plan(withCard(fixture()), { installmentCount: 73 }),
+    /between 1 and 72/,
+  );
+  assert.throws(
+    () =>
+      plan(withCard(fixture()), {
+        installmentTotal: "0.02",
+        installmentCount: 3,
+      }),
+    /at least 0\.01/,
+  );
+  // An ordinary schedule keeps its own amount and no plan fields.
+  const ordinary = add(fixture(), { currencyCode: "ILS" }).recurrings[0];
+  assert.equal(ordinary.amount, 20);
+  assert.equal(ordinary.installmentCount, null);
+  assert.equal(ordinary.installmentTotal, null);
+  assert.equal(ordinary.holdsCredit, false);
+});
+
+test("available credit drops by the uncharged installments and recovers as they are charged", async () => {
+  const d = plan(withCard(fixture()));
+  const before = selectCardCreditHolds(d, d.accounts[1], now);
+  assert.equal(before.total, 5000);
+  assert.equal(before.items[0].remaining, 5000);
+  assert.equal(before.items[0].resolved, 0);
+  const cardBefore = selectAccounts(d, now).find((a) => a.id === "visa");
+  assert.equal(cardBefore.creditHold, 5000);
+  assert.equal(cardBefore.availableCredit, 5000);
+
+  // June to September are due on October 2: four installments are charged.
+  const store = memory(d);
+  const result = await processDueRecurrings(store, owner, { now });
+  assert.equal(result.processed, 4);
+  const after = await store.read();
+  const charged = after.transactions.filter((t) => t.recurring === "laptop");
+  assert.equal(charged.length, 4);
+  assert.ok(charged.every((t) => t.amount === 500 && t.account === "visa"));
+
+  const holds = selectAccountCreditHolds(after, "visa", now);
+  assert.equal(holds.total, 3000);
+  assert.equal(holds.items[0].resolved, 4);
+  assert.equal(localDateKey(holds.items[0].endsAt), "2027-03-15");
+  const card = selectAccounts(after, now).find((a) => a.id === "visa");
+  assert.equal(card.creditHold, 3000);
+  assert.equal(card.availableCredit, 10000 - card.currentSpent - card.creditHold);
+
+  // Turning the hold off releases the limit; other accounts never hold.
+  const released = saveRecurring(
+    after,
+    { ...selectRecurrings(after, now)[0].draft, holdsCredit: false },
+    "laptop",
+    owner,
+    now.toISOString(),
+    true,
+  );
+  assert.equal(selectAccountCreditHolds(released, "visa", now).total, 0);
+  assert.equal(
+    selectAccountCreditHolds(after, "checking", now).items.length,
+    0,
+  );
+});
+
+test("the first installment records the rounding cent and the plan stops after its last one", async () => {
+  const d = plan(withCard(fixture()), {
+    installmentTotal: "1000",
+    installmentCount: 3,
+  });
+  const store = memory(d);
+  await processDueRecurrings(store, owner, { now });
+  const after = await store.read();
+  const amounts = after.transactions
+    .filter((t) => t.recurring === "laptop")
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+    .map((t) => t.amount);
+  assert.deepEqual(amounts, [333.34, 333.33, 333.33]);
+  const view = selectRecurrings(after, now)[0];
+  assert.equal(view.next, null);
+  assert.equal(view.archived, true);
+  assert.equal(view.installment.remaining, 0);
+  assert.deepEqual(
+    view.history.map((h) => h.amount),
+    [333.34, 333.33, 333.33],
+  );
+  assert.equal(selectAccountCreditHolds(after, "visa", now).items.length, 0);
+});
+
+test("editing a plan after payments keeps them as paid installments", async () => {
+  const store = memory(plan(withCard(fixture())));
+  await processDueRecurrings(store, owner, { now });
+  const after = await store.read();
+  const draft = selectRecurrings(after, now)[0].draft;
+  assert.equal(draft.installmentCount, 10);
+  assert.equal(draft.installmentTotal, "5000");
+  assert.equal(draft.holdsCredit, true);
+  const edit = (changes) =>
+    saveRecurring(
+      after,
+      { ...draft, ...changes },
+      "laptop",
+      owner,
+      now.toISOString(),
+      true,
+    );
+
+  // 10 -> 12 installments: the 4 charged stay paid, 8 remain at the new price.
+  const longer = edit({ installmentCount: 12, installmentTotal: "6000" });
+  const record = longer.recurrings[0];
+  assert.equal(record.nextIndex, 4);
+  assert.equal(record.amount, 500);
+  assert.equal(localDateKey(new Date(record.endAt)), "2027-05-15");
+  assert.equal(selectAccountCreditHolds(longer, "visa", now).total, 4000);
+
+  // Fewer installments than were already charged is not a plan.
+  assert.throws(() => edit({ installmentCount: 3 }), /at least 4 installments/);
+  // The plan can be turned back into an ordinary monthly payment.
+  const unplanned = edit({ installmentCount: null, amount: "500" });
+  assert.equal(unplanned.recurrings[0].installmentCount, null);
+  assert.equal(unplanned.recurrings[0].nextIndex, 4);
+  assert.equal(selectAccountCreditHolds(unplanned, "visa", now).total, 0);
+  assert.equal(edit({ name: "MacBook" }).recurrings[0].name, "MacBook");
+});
+
+test("an existing monthly recurring with recorded payments can become an installment plan", async () => {
+  const store = memory(
+    plan(withCard(fixture()), {
+      installmentCount: null,
+      installmentTotal: "",
+      holdsCredit: false,
+      amount: "500",
+    }),
+  );
+  await processDueRecurrings(store, owner, { now });
+  const after = await store.read();
+  const view = selectRecurrings(after, now)[0];
+  assert.equal(view.installment, null);
+  assert.equal(view.record.nextIndex, 4);
+
+  const converted = saveRecurring(
+    after,
+    {
+      ...view.draft,
+      installmentCount: 10,
+      installmentTotal: "5000",
+      holdsCredit: true,
+    },
+    "laptop",
+    owner,
+    now.toISOString(),
+    true,
+  );
+  const record = converted.recurrings[0];
+  assert.equal(record.nextIndex, 4);
+  assert.equal(record.scheduleRevision, 0);
+  assert.equal(localDateKey(new Date(record.endAt)), "2027-03-15");
+  const holds = selectAccountCreditHolds(converted, "visa", now);
+  assert.equal(holds.total, 3000);
+  assert.equal(holds.items[0].resolved, 4);
+});
+
+test("older recurring records normalize without a plan and plans survive backup round trips", () => {
+  const legacy = fixture();
+  legacy.recurrings = [
+    { uuid: "old", name: "Gym", amount: 100, period: "Monthly" },
+  ];
+  const normalized = normalizeBackupDocument(legacy).recurrings[0];
+  assert.equal(normalized.installmentCount, null);
+  assert.equal(normalized.installmentTotal, null);
+  assert.equal(normalized.holdsCredit, false);
+  assert.equal(readInstallmentPlan(normalized), null);
+
+  const d = plan(withCard(fixture()));
+  const restored = normalizeBackupDocument(
+    JSON.parse(JSON.stringify(createJsonBackupDocument(d))),
+  );
+  assert.deepEqual(readInstallmentPlan(restored.recurrings[0]), {
+    count: 10,
+    total: 5000,
+    holdsCredit: true,
+  });
 });

@@ -17,6 +17,7 @@ import {
   type HomeDateRow,
   type HomeTransactionRow,
 } from "@/data/selectors/home-section-selectors";
+import { selectAccountCreditHolds } from "@/data/selectors/credit-hold-selectors";
 import { selectTransactionProjector } from "@/data/selectors/transaction-selectors";
 import { TransactionDateHeader } from "@/features/home/components/transaction-date-header";
 import { IndexedTransactionRow } from "@/features/home/components/transaction-list";
@@ -68,6 +69,7 @@ import {
   useListEntrance,
 } from "@/shared/ui/page-entrance";
 import { AccountActivityCard } from "./components/details/account-activity-card";
+import { AccountCreditHoldsCard } from "./components/details/account-credit-holds-card";
 import { AccountDetailsHero } from "./components/details/account-details-hero";
 import { AccountPeriodNavigator } from "./components/details/account-period-navigator";
 import {
@@ -163,6 +165,11 @@ export function AccountDetailsScreen() {
   const [deleteError, setDeleteError] = useState("");
   const account = useMemo(
     () => selectAccounts(document, now).find((item) => item.id === id),
+    [document, id, now],
+  );
+  // Installment plans holding this card's limit; empty for other accounts.
+  const creditHolds = useMemo(
+    () => selectAccountCreditHolds(document, id, now),
     [document, id, now],
   );
   const transactionCount = useMemo(
@@ -503,6 +510,13 @@ export function AccountDetailsScreen() {
               <EntranceSections style={styles.sections}>
                 <AccountDetailsHero account={account} />
                 <AccountStatusCard account={account} />
+                {creditHolds.items.length ? (
+                  <AccountCreditHoldsCard
+                    items={creditHolds.items}
+                    total={creditHolds.total}
+                    currencyCode={account.currencyCode}
+                  />
+                ) : null}
                 <View style={styles.periodGroup}>
                   <AccountPeriodNavigator
                     title={periodTitle}

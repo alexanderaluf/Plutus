@@ -459,6 +459,9 @@ Recurring rules model predictable repeating income or expenses (e.g., Netflix, G
 | `nextIndex`        | `integer`           | `>= 0`                                                                                         | Sequence index of the next pending occurrence.                                                    |
 | `scheduleRevision` | `integer`           | `>= 0`                                                                                         | Increments whenever start time or frequency changes.                                              |
 | `occurrences`      | `OccurrenceEntry[]` | Array of logs                                                                                  | Historical audit log of all completed/skipped occurrences.                                        |
+| `installmentCount` | `integer \| null`  | `1`–`72` or `null`                                                                             | Monthly installments of an installment plan; `null` for an ordinary schedule.                     |
+| `installmentTotal` | `number \| null`   | `> 0` or `null`                                                                                | Full purchase price of the plan, in `currencyCode`. `amount` holds the regular installment.       |
+| `holdsCredit`      | `boolean`           | `true \| false`                                                                                | The uncharged part of the plan holds the paying credit card's limit. Only set for card accounts.  |
 | `user`             | `string`            | Profile UUID                                                                                   | Owning profile identifier.                                                                        |
 
 ### `OccurrenceEntry` Schema

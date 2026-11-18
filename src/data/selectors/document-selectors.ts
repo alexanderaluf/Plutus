@@ -12,6 +12,7 @@ import {
   type TransactionIndexEntry,
 } from "./transaction-selectors";
 import { memoizeForDocument } from "./document-memo";
+import { selectCardCreditHolds } from "./credit-hold-selectors";
 import { filterProjection, finishProjection } from "./cooperative";
 import { ACCOUNT_ICONS } from "@/features/accounts/account-options";
 import { isBrandIconName } from "@/shared/icons/brand-icon-registry";
@@ -346,17 +347,23 @@ export function selectAccounts(
         const currentSpent = isCredit
           ? Math.max(0, activity.cycleExpense - activity.cycleIncome)
           : 0;
+        // Installment plans that hold the limit keep their uncharged part
+        // reserved until each installment is charged.
+        const creditHold = isCredit
+          ? selectCardCreditHolds(document, record, now).total
+          : 0;
+        const committed = currentSpent + creditHold;
         const availableCredit =
-          isCredit && creditLimit != null ? creditLimit - currentSpent : null;
+          isCredit && creditLimit != null ? creditLimit - committed : null;
         const isOverdraft =
-          isCredit && creditLimit != null ? currentSpent > creditLimit : false;
+          isCredit && creditLimit != null ? committed > creditLimit : false;
         const overdraftAmount =
           isCredit && creditLimit != null
-            ? Math.max(0, currentSpent - creditLimit)
+            ? Math.max(0, committed - creditLimit)
             : 0;
         const creditUtilization =
           isCredit && creditLimit != null && creditLimit > 0
-            ? Math.round((currentSpent / creditLimit) * 100)
+            ? Math.round((committed / creditLimit) * 100)
             : 0;
 
         return {
@@ -412,6 +419,7 @@ export function selectAccounts(
           paymentDay,
           creditLimit,
           currentSpent,
+          creditHold,
           availableCredit,
           isOverdraft,
           overdraftAmount,

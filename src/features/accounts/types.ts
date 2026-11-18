@@ -32,6 +32,8 @@ export type Account = {
   savingsSummary: SavingsAccountSummary | null;
   creditLimit: number | null;
   currentSpent: number;
+  /** Uncharged installments that hold this card's credit limit. */
+  creditHold: number;
   availableCredit: number | null;
   isOverdraft: boolean;
   overdraftAmount: number;

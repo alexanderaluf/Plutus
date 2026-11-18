@@ -517,6 +517,15 @@ export const he = {
         monthlyFunding: "הפקדה חודשית",
         access: "נזילות",
       },
+      creditHolds: {
+        title: "מה תופס את המסגרת",
+        description:
+          "עסקאות בתשלומים תופסות את היתרה שטרם שולמה עד שכל תשלום מחויב.",
+        progress: "שולמו {{paid}} מתוך {{count}} · {{amount}} לחודש",
+        until: "עד {{date}}",
+        noRate: "אין שער המרה ל־{{currency}}",
+        open: "פתיחת {{name}}",
+      },
       periods: {
         accessibilityLabel: "תקופת עסקאות",
         daily: "יומי",

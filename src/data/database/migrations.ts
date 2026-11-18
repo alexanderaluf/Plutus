@@ -10,7 +10,7 @@ import { getSetupStatus } from "../model/onboarding";
 import { syncSqliteMonthIndexes } from "./month-index";
 import { withWriteLock } from "./write-transaction";
 
-export const DATABASE_VERSION = 25;
+export const DATABASE_VERSION = 26;
 export const STORAGE_RECOVERY_MESSAGE =
   "Your saved data could not be opened safely. Nothing has been reset. Keep this installation and export a recovery copy before seeking help.";
 
